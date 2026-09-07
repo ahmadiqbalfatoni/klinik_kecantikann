@@ -19,7 +19,7 @@ import { SignJWT } from "jose";
 import axios from "axios";
 import Joi from "joi";
 import DB from '../../../../core/config/knex.js'
-import { sanitizeString } from "./general.js";
+import { status, sanitizeString } from "./general.js";
 import { formatDateSystem } from "./date_tools.js";
 import crypto from 'crypto'
 
@@ -297,11 +297,16 @@ export const ChangesLog = async (
 
     const executeQuery = transaction || DB;
 
+    const validActions = ["CREATE", "UPDATE", "DELETE", "RESTORE"];
+    const normalizedAction = validActions.includes((action || "").toUpperCase())
+      ? (action || "").toUpperCase()
+      : "UPDATE";
+
     await executeQuery("log_perubahan").insert({
       keterangan: description || "",
       nama_tabel: tableName,
       kode_referensi: referenceCode,
-      aksi: action,
+      aksi: normalizedAction,
       data_sebelum: dataBefore ? JSON.stringify(dataBefore) : null,
       data_sesudah: dataAfter ? JSON.stringify(dataAfter) : null,
       tz: tz,

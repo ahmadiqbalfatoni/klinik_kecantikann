@@ -107,8 +107,26 @@ const handleGetKepemilikanPaket = async (req, res) => {
           "d.sesi_terpakai"
         );
 
+      const detailCodes = details.map((d) => d.kode_detail_kepemilikan_paket_layanan).filter(Boolean);
+      const activeBookingsMap = {};
+      if (detailCodes.length > 0) {
+        const activeRows = await DB("trx_detail_booking as db")
+          .join("trx_booking as b", "db.kode_booking", "b.kode_booking")
+          .whereIn("db.kode_detail_kepemilikan_paket_layanan", detailCodes)
+          .whereIn("b.status", ["dikonfirmasi", "menunggu_pembayaran"])
+          .groupBy("db.kode_detail_kepemilikan_paket_layanan")
+          .select("db.kode_detail_kepemilikan_paket_layanan", DB.raw("COUNT(db.id) as total_booked"));
+
+        activeRows.forEach((ar) => {
+          activeBookingsMap[ar.kode_detail_kepemilikan_paket_layanan] = parseInt(ar.total_booked || 0, 10);
+        });
+      }
+
       item.details = details.map((d) => {
         const sisaSesi = Math.max(0, parseInt(d.sesi_total || 0, 10) - parseInt(d.sesi_terpakai || 0, 10));
+        const sesiTerbooking = activeBookingsMap[d.kode_detail_kepemilikan_paket_layanan] || 0;
+        const sesiTersedia = Math.max(0, sisaSesi - sesiTerbooking);
+
         const finalTipe = item.tipe_paket || d.tipe_layanan || 'BEAUTY TREATMENT';
         let finalWajibKonsultasi = 'opsional';
         if (finalTipe === 'MEDICAL TREATMENT' || d.wajib_konsultasi === 'wajib') {
@@ -122,6 +140,8 @@ const handleGetKepemilikanPaket = async (req, res) => {
         return {
           ...d,
           sisa_sesi: sisaSesi,
+          sesi_terbooking: sesiTerbooking,
+          sesi_tersedia: sesiTersedia,
           tipe: finalTipe,
           wajib_konsultasi: finalWajibKonsultasi,
           kode_ruangan: d.kode_ruangan || item.kode_ruangan_paket || 'RNG-002',
@@ -132,10 +152,14 @@ const handleGetKepemilikanPaket = async (req, res) => {
 
       const totalSesi = details.reduce((sum, d) => sum + parseInt(d.sesi_total || 0, 10), 0);
       const totalTerpakai = details.reduce((sum, d) => sum + parseInt(d.sesi_terpakai || 0, 10), 0);
+      const totalTerbooking = item.details.reduce((sum, d) => sum + (d.sesi_terbooking || 0), 0);
+      const totalTersedia = item.details.reduce((sum, d) => sum + (d.sesi_tersedia || 0), 0);
 
       item.total_sesi = totalSesi;
       item.total_terpakai = totalTerpakai;
       item.sisa_sesi = Math.max(0, totalSesi - totalTerpakai);
+      item.total_terbooking = totalTerbooking;
+      item.total_tersedia = totalTersedia;
 
       // Auto update status to "habis" if remaining sessions are 0
       if (item.status === "aktif" && totalSesi > 0 && item.sisa_sesi === 0) {

@@ -1,46 +1,39 @@
 .layout-config-button {
-    display: block;
+    display: flex;
+    align-items: center;
+    justify-content: center;
     position: fixed;
-    width: 3rem;
-    height: 3rem;
-    line-height: 3rem;
+    width: 2.75rem;
+    height: 2.75rem;
     background: var(--primary-color);
     color: var(--primary-color-text);
-    text-align: center;
-    top: 50%;
-    right: 0;
-    margin-top: -1.5rem;
-    border-top-left-radius: var(--border-radius);
-    border-bottom-left-radius: var(--border-radius);
-    border-top-right-radius: 0;
-    border-bottom-right-radius: 0;
-    transition: background-color var(--transition-duration);
-    overflow: hidden;
+    bottom: 2rem;
+    right: 2rem;
+    border-radius: 50%;
+    transition: background-color var(--transition-duration), transform 0.2s;
     cursor: pointer;
     z-index: 999;
-    box-shadow: -.25rem 0 1rem rgba(0,0,0,.15);
-
+    box-shadow: 0 4px 14px rgba(0,0,0,.15);
+    border: none;
 
     &.config-link {
         font-size: 1rem;
-        font-family: -apple-system, BlinkMacSystemFont, "Segoe UI", Roboto, Helvetica, Arial, sans-serif, "Apple Color Emoji", "Segoe UI Emoji", "Segoe UI Symbol";
-        border: none;
-      }
-      .config-link:focus {
+        font-family: inherit;
+    }
+    .config-link:focus {
         outline: 0 none;
-        outline-offset: 0;
-        box-shadow: 0 0 0 1px var(--focus-ring);
-      }
+        box-shadow: 0 0 0 2px var(--focus-ring);
+    }
 
     i {
-        font-size: 2rem;
-        line-height: inherit;
+        font-size: 1.25rem;
         transform: rotate(0deg);
         transition: transform 1s;
     }
 
     &:hover {
-        background: var(--primary-400);
+        background: var(--primary-600, #059669);
+        transform: scale(1.08);
     }
 }
 

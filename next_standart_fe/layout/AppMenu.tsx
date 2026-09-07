@@ -93,13 +93,43 @@ const AppMenu = () => {
                     newItem.label = 'Antrean Pendaftaran';
                 }
                 if (newItem.items && newItem.items.length > 0) {
-                    newItem.items = newItem.items
+                    let subItems = newItem.items
                         .filter((sub) => {
                             const lbl = (sub.label || '').trim().toLowerCase();
                             const to = (sub.to || '').trim().toLowerCase();
                             return lbl !== 'antrean' && to !== '/pendaftaran-antrean/antrean';
                         })
                         .map(transformItem);
+
+                    const groupLabel = (newItem.label || '').toLowerCase();
+                    if (groupLabel.includes('pendaftaran') && groupLabel.includes('antrean')) {
+                        const hasBooking = subItems.some(
+                            (it) => (it.label || '').toLowerCase().includes('booking') || it.to === '/pendaftaran-antrean/booking'
+                        );
+                        if (!hasBooking) {
+                            const bookingItem: AppMenuItem = {
+                                label: 'Booking / Reservasi',
+                                to: '/pendaftaran-antrean/booking',
+                                icon: 'CalendarCheck',
+                            };
+                            const antreanIdx = subItems.findIndex(
+                                (it) => (it.label || '').toLowerCase().includes('antrean pendaftaran') || it.to === '/antrian-awal'
+                            );
+                            if (antreanIdx !== -1) {
+                                subItems.splice(antreanIdx + 1, 0, bookingItem);
+                            } else {
+                                subItems.splice(1, 0, bookingItem);
+                            }
+                        } else {
+                            subItems = subItems.map((it) => {
+                                if ((it.label || '').toLowerCase().includes('booking') || it.to === '/pendaftaran-antrean/booking') {
+                                    return { ...it, icon: 'CalendarCheck' };
+                                }
+                                return it;
+                            });
+                        }
+                    }
+                    newItem.items = subItems;
                 }
                 return newItem;
             };

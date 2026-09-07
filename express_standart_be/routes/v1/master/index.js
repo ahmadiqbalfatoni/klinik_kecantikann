@@ -213,4 +213,16 @@ router.use("/laporan", laporanRoutes);
 import dashboardRoutes from "./dashboard/dashboard_routes.js";
 router.use("/dashboard", dashboardRoutes);
 
+// Booking / Reservasi Aliases
+import bookingRouter from "../transaksi/booking/index.js";
+router.use("/booking", bookingRouter);
+router.use("/booking-slots", (await import("../transaksi/booking/booking_slots.js")).default);
+router.use("/booking-create", (await import("../transaksi/booking/booking_create.js")).default);
+router.use("/booking-data", (await import("../transaksi/booking/booking_data.js")).default);
+router.use("/booking-update-dp", (await import("../transaksi/booking/booking_update_dp.js")).default);
+router.use("/booking-cancel", (await import("../transaksi/booking/booking_cancel.js")).default);
+router.use("/booking-checkin", (await import("../transaksi/booking/booking_checkin.js")).default);
+router.use("/booking-tidak-hadir", (await import("../transaksi/booking/booking_tidak_hadir.js")).default);
+router.use("/booking-mark-no-show", (await import("../transaksi/booking/booking_tidak_hadir.js")).default);
+
 export default router;

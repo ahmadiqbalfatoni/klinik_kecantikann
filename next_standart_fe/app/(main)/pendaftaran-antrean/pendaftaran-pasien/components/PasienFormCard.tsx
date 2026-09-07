@@ -45,6 +45,7 @@ interface Props {
   onSuccess: (resultData: any) => void;
   onCancel?: () => void;
   toast: React.RefObject<Toast>;
+  submitLabel?: string;
 }
 
 const defaultFormData: PasienFormData = {
@@ -77,6 +78,7 @@ export const PasienFormCard: React.FC<Props> = ({
   onSuccess,
   onCancel,
   toast,
+  submitLabel,
 }) => {
   const [formData, setFormData] = useState<PasienFormData>(defaultFormData);
   const [loading, setLoading] = useState(false);
@@ -787,7 +789,7 @@ export const PasienFormCard: React.FC<Props> = ({
         <div className="flex gap-2">
           {onCancel && (
             <Button
-              label="Batal Edit"
+              label={formData.no_rm ? 'Batal Edit' : 'Batal'}
               icon="pi pi-times"
               outlined
               severity="secondary"
@@ -851,7 +853,7 @@ export const PasienFormCard: React.FC<Props> = ({
             </>
           ) : (
             <Button
-              label="Daftarkan Pasien Baru & Lanjut Pilih Layanan"
+              label={submitLabel || 'Daftarkan Pasien Baru & Lanjut Pilih Layanan'}
               icon="pi pi-check"
               className="p-button-success border-round-lg font-bold"
               onClick={() => {

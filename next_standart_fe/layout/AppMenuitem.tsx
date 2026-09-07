@@ -9,6 +9,7 @@ import { MenuContext } from './context/menucontext';
 import { usePathname, useSearchParams } from 'next/navigation'
 import { AppMenuItemProps } from '@/types';
 import { Skeleton } from 'primereact/skeleton';
+import { CalendarCheck } from 'lucide-react';
 
 /**
  * Komponen pembungkus label menu yang mendeteksi overflow 
@@ -147,7 +148,11 @@ const AppMenuitem = (props: AppMenuItemProps) => {
 
                     {(!item!.to || item!.items) && item!.visible !== false ? (
                         <a href={item!.url} onClick={(e) => itemClick(e)} className={classNames(item!.class, 'p-ripple')} target={item!.target} tabIndex={0}>
-                            <i className={classNames('layout-menuitem-icon', item!.icon)}></i>
+                            {item!.icon === 'CalendarCheck' || item!.icon === 'lucide-calendar-check' ? (
+                                <CalendarCheck className="layout-menuitem-icon" size={18} style={{ marginRight: '0.5rem' }} />
+                            ) : (
+                                <i className={classNames('layout-menuitem-icon', item!.icon)}></i>
+                            )}
                             <MenuLabel label={item!.label} />
                             <Ripple />
                         </a>
@@ -155,7 +160,11 @@ const AppMenuitem = (props: AppMenuItemProps) => {
 
                     {item!.to && !item!.items && item!.visible !== false ? (
                         <Link href={item!.to} replace={item!.replaceUrl} target={item!.target} onClick={(e) => itemClick(e)} className={classNames(item!.class, 'p-ripple', { 'active-route': isActiveRoute })} tabIndex={0}>
-                            <i className={classNames('layout-menuitem-icon', item!.icon)}></i>
+                            {item!.icon === 'CalendarCheck' || item!.icon === 'lucide-calendar-check' ? (
+                                <CalendarCheck className="layout-menuitem-icon" size={18} style={{ marginRight: '0.5rem' }} />
+                            ) : (
+                                <i className={classNames('layout-menuitem-icon', item!.icon)}></i>
+                            )}
                             <MenuLabel label={item!.label} />
                             <Ripple />
                         </Link>

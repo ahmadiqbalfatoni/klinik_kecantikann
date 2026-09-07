@@ -12,41 +12,12 @@ import postData from '@/lib/axios/postData';
 import { showError, showSuccess } from '@/lib/tools/generalTools';
 import { confirmDialog, ConfirmDialog } from 'primereact/confirmdialog';
 import { apiPasienLayananOptions, apiPasienAmbilAntrianLayanan, apiPasienKepemilikanPaket } from './endpoints';
-
-interface ServiceItem {
-  jenis: 'layanan' | 'paket' | 'klaim_paket';
-  kode_layanan: string;
-  kode_kategori: string;
-  nama_kategori: string;
-  nama: string;
-  harga: number;
-  harga_asal?: number;
-  is_promo?: boolean;
-  kode_promo?: string;
-  nama_promo?: string;
-  jenis_diskon?: 'persen' | 'nominal';
-  nilai_diskon?: number;
-  durasi_menit: number;
-  masa_berlaku_hari?: number;
-  total_sesi?: number;
-  kode_ruangan?: string;
-  nama_ruangan?: string;
-  wajib_konsultasi?: 'tidak' | 'opsional' | 'wajib';
-  kode_ruangan_konsultasi?: string;
-  is_konsultasi?: number;
-  tipe?: 'MEDICAL TREATMENT' | 'BEAUTY TREATMENT' | 'SERVICE TREATMENT' | string;
-  tipe_paket?: string; // Tipe PAKET induk — untuk klaim_paket, ini yang diutamakan
-  kode_kepemilikan_paket_layanan?: string;
-  nama_paket_asal?: string;
-  sisa_sesi?: number;
-}
-
-interface RuanganGroup {
-  kode_ruangan: string;
-  nama_ruangan: string;
-  deskripsi: string;
-  items: ServiceItem[];
-}
+import {
+  LayananCard,
+  ServiceItem,
+  RuanganGroup,
+  getItemConsultType,
+} from '@/app/(main)/pendaftaran-antrean/components/shared/LayananCard';
 
 interface PasienInfo {
   no_rm: string;
@@ -286,81 +257,17 @@ export const StepPilihLayanan: React.FC<Props> = ({
   const renderItemCard = (item: ServiceItem) => {
     const key = `${item.jenis}_${item.kode_layanan}`;
     const isSelected = !!selectedMap[key];
-    const isPaket = item.jenis === 'paket';
-    const isKlaim = item.jenis === 'klaim_paket';
     const isDisabled = activeRuangan !== null && activeRuangan !== item.kode_ruangan;
-    const { isWajib, isService, isOpsional } = getItemConsultType(item);
 
     return (
-      <div key={key} className="col-12 sm:col-6 lg:col-4 p-2">
-        <div
-          className={`h-full p-4 border-round-xl border-1 transition-all transition-duration-200 flex flex-column justify-content-between cursor-pointer ${
-            isSelected
-              ? isKlaim
-                ? 'surface-card border-amber-500 shadow-3 bg-amber-50'
-                : isPaket
-                ? 'surface-card border-amber-500 shadow-3 bg-amber-50'
-                : 'surface-card border-blue-600 shadow-3 bg-blue-50'
-              : isDisabled
-              ? 'surface-200 border-200 opacity-60 cursor-not-allowed'
-              : 'surface-card surface-border hover:border-blue-400 hover:shadow-2'
-          }`}
-          onClick={() => {
-            if (!isDisabled) handleToggleItem(item);
-          }}
-        >
-          <div>
-            <div className="flex align-items-center justify-content-between mb-2">
-              <div className="flex align-items-center gap-1 flex-wrap">
-                {isKlaim ? (
-                  <Tag value="🎁 KLAIM SESI PAKET" severity="warning" className="text-xs font-bold" />
-                ) : isPaket ? (
-                  <Tag value="PAKET TREATMENT" severity="warning" className="text-xs font-bold" />
-                ) : (
-                  <Tag value={item.nama_kategori || 'LAYANAN'} severity="info" className="text-xs font-medium" />
-                )}
-
-                {item.total_sesi && item.total_sesi > 0 && (
-                  <Tag value={`${item.total_sesi} SESI`} severity="success" className="text-xs font-bold" />
-                )}
-
-                {isWajib && <Tag value="Wajib Konsul" severity="danger" className="text-[10px] font-bold" />}
-                {isService && <Tag value="Tidak Perlu Konsul" severity="success" className="text-[10px] font-bold" />}
-                {isOpsional && <Tag value="Opsional Konsul" severity="info" className="text-[10px] font-bold" />}
-              </div>
-
-              <Checkbox
-                checked={isSelected}
-                disabled={isDisabled}
-                onChange={() => {
-                  if (!isDisabled) handleToggleItem(item);
-                }}
-              />
-            </div>
-
-            <h4 className="text-base font-bold text-900 m-0 mb-1 line-height-2">{item.nama}</h4>
-            {isKlaim && item.nama_paket_asal && (
-              <span className="text-xs text-amber-700 block font-semibold mb-1">Paket Asal: {item.nama_paket_asal}</span>
-            )}
-            <div className="flex align-items-center gap-3 text-xs text-500 mb-3">
-              <span className="flex align-items-center gap-1">
-                <i className="pi pi-clock text-xs" /> {item.durasi_menit} Menit
-              </span>
-              {isKlaim && item.sisa_sesi !== undefined && (
-                <span className="font-bold text-amber-700">Sisa {item.sisa_sesi} Sesi</span>
-              )}
-            </div>
-
-            <div>
-              <span className={`text-base font-extrabold ${isKlaim ? 'text-amber-700' : isPaket ? 'text-amber-700' : 'text-blue-600'}`}>
-                {isKlaim ? 'Rp 0 (Klaim Sesi)' : formatRupiah(item.harga_asal ?? item.harga)}
-              </span>
-            </div>
-
-            {/* Tidak ada inline pilihan — pilihan konsultasi ada di popup konfirmasi */}
-          </div>
-        </div>
-      </div>
+      <LayananCard
+        key={key}
+        item={item}
+        isSelected={isSelected}
+        isDisabled={isDisabled}
+        onToggle={handleToggleItem}
+        formatPrice={formatRupiah}
+      />
     );
   };
 

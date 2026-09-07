@@ -22,6 +22,7 @@ import Setup from "./setup/index.js";
 import Contoh from "./contoh/index.js";
 import Function from "./components/index.js";
 import Master from "./master/index.js";
+import Transaksi from "./transaksi/index.js";
 
 import {
   contextMiddleware,
@@ -47,7 +48,15 @@ router.use(
   [validateAccessToken, contextMiddleware],
   Master
 );
-// Setup
+
+// Transaksi
+router.use(
+  "/transaksi",
+  [validateAccessToken, contextMiddleware],
+  Transaksi
+);
+
+// Contoh
 router.use(
   "/contoh",
   [validateAccessToken, contextMiddleware],
