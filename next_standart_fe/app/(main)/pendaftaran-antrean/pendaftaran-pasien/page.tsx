@@ -3,9 +3,6 @@
 import React, { useRef, useState } from 'react';
 import { Toast } from 'primereact/toast';
 import { Button } from 'primereact/button';
-import { InputText } from 'primereact/inputtext';
-import { IconField } from 'primereact/iconfield';
-import { InputIcon } from 'primereact/inputicon';
 import { Dialog } from 'primereact/dialog';
 import { Divider } from 'primereact/divider';
 import { TabView, TabPanel } from 'primereact/tabview';
@@ -19,11 +16,6 @@ import { KarcisAntrianLayananModal } from './components/dialogs/KarcisAntrianLay
 const PendaftaranPasienPage = () => {
   const toast = useRef<Toast>(null);
   const [activeTab, setActiveTab] = useState<number>(0);
-
-  // Search Pasien Lama state (Separated & Large with Live Real-time Search)
-  const [searchVal, setSearchVal] = useState('');
-  const [appliedKeyword, setAppliedKeyword] = useState('');
-  const searchTimeoutRef = useRef<NodeJS.Timeout | null>(null);
 
   // Dialog & Refresh State
   const [dialogPasienBaruVisible, setDialogPasienBaruVisible] = useState(false);
@@ -39,26 +31,6 @@ const PendaftaranPasienPage = () => {
   const [ticketData, setTicketData] = useState<any>(null);
   const [antrianLayananModalVisible, setAntrianLayananModalVisible] = useState(false);
   const [antrianLayananData, setAntrianLayananData] = useState<any>(null);
-
-  const handleSearchChange = (val: string) => {
-    setSearchVal(val);
-    if (searchTimeoutRef.current) clearTimeout(searchTimeoutRef.current);
-    searchTimeoutRef.current = setTimeout(() => {
-      setAppliedKeyword(val);
-    }, 300);
-  };
-
-  const handleSearchSubmit = (e?: React.FormEvent) => {
-    if (e) e.preventDefault();
-    if (searchTimeoutRef.current) clearTimeout(searchTimeoutRef.current);
-    setAppliedKeyword(searchVal);
-  };
-
-  const handleClearSearch = () => {
-    if (searchTimeoutRef.current) clearTimeout(searchTimeoutRef.current);
-    setSearchVal('');
-    setAppliedKeyword('');
-  };
 
   const handleOpenPasienBaru = () => {
     setEditingPasien(null);
@@ -165,65 +137,20 @@ const PendaftaranPasienPage = () => {
             </span>
           }
         >
-          {/* 1. SEPARATED LARGE SEARCH CARD & PAGE HEADER */}
-          <div className="card p-4 mb-4 border-round-xl surface-card shadow-1 mt-3">
-            <div className="mb-4 pb-3 border-bottom-1 surface-border">
-              <h2 className="text-2xl font-bold flex align-items-center gap-2 mb-1 text-900">
-                <i className="pi pi-id-card text-blue-600 text-3xl" />
-                Pendaftaran Pasien
-              </h2>
-              <p className="text-color-secondary m-0 text-sm">
+          {/* CARD TABEL PASIEN LAMA DENGAN POLA KONSISTEN MASTER DATA */}
+          <div className="card border-round-xl p-4 shadow-1 surface-card mb-4 mt-3">
+            {/* Page Header */}
+            <div className="mb-4">
+              <h3 className="text-2xl font-bold text-900 flex align-items-center gap-2 mb-1">
+                <i className="pi pi-id-card text-blue-600 text-2xl" />
+                Pendaftaran Kunjungan Pasien
+              </h3>
+              <p className="text-500 text-sm m-0">
                 Cari data pasien terdaftar (Pasien Lama) atau buka registrasi rekam medis untuk Pasien Baru.
               </p>
             </div>
 
-            {/* COMPONENT CARI PASIEN LAMA DIPISAH & BESAR */}
-            <div className="surface-50 p-4 border-round-xl border-1 surface-border">
-              <label className="block text-base font-bold text-900 mb-2 flex align-items-center gap-2">
-                <i className="pi pi-search text-blue-600 text-xl" />
-                Cari Pasien Lama (RM / NIK / Nama / No. HP)
-              </label>
-              <form onSubmit={handleSearchSubmit} className="flex flex-column sm:flex-row gap-2 w-full">
-                <div className="flex-1">
-                  <IconField iconPosition="left" className="w-full">
-                    <InputIcon className="pi pi-search text-lg" />
-                    <InputText
-                      value={searchVal}
-                      onChange={(e) => handleSearchChange(e.target.value)}
-                      placeholder="Masukkan No. RM, NIK, Nama Pasien, atau No. HP..."
-                      className="w-full text-base p-inputtext-lg border-round-lg"
-                    />
-                  </IconField>
-                </div>
-                <div className="flex gap-2">
-                  <Button
-                    type="submit"
-                    label="Cari"
-                    icon="pi pi-search"
-                    severity="info"
-                    size="large"
-                    className="font-bold border-round-lg px-4 flex-1 sm:flex-initial text-base"
-                  />
-                  {searchVal && (
-                    <Button
-                      type="button"
-                      icon="pi pi-times"
-                      severity="secondary"
-                      outlined
-                      size="large"
-                      tooltip="Reset Pencarian"
-                      className="border-round-lg"
-                      onClick={handleClearSearch}
-                    />
-                  )}
-                </div>
-              </form>
-            </div>
-          </div>
-
-          {/* 2. TABEL PASIEN LAMA DENGAN FORMAT MASTER DATA */}
-          <div className="card border-round-xl p-4 shadow-1 surface-card mb-4">
-            {/* TOOLBAR KIRI ATAS TABEL */}
+            {/* Baris Tombol Aksi di bagian paling atas sebelum tabel */}
             <div className="flex flex-row flex-wrap align-items-center gap-2 mb-4">
               <Button
                 size="small"
@@ -250,7 +177,6 @@ const PendaftaranPasienPage = () => {
             <TabPendaftaranLama
               toast={toast}
               onEditPasien={handleEditPasien}
-              externalKeyword={appliedKeyword}
               refreshTrigger={refreshTrigger}
             />
           </div>

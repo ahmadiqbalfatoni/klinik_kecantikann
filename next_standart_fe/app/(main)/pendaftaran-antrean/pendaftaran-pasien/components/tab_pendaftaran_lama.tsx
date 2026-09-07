@@ -153,7 +153,7 @@ export const TabPendaftaranLama: React.FC<Props> = ({
   };
 
   const noRmBodyTemplate = (rowData: Pasien) => {
-    return <Tag value={rowData.no_rm} severity="info" className="font-bold text-xs" />;
+    return <span className="font-bold text-900">{rowData.no_rm}</span>;
   };
 
   const jenisKelaminBodyTemplate = (rowData: Pasien) => {
@@ -178,28 +178,66 @@ export const TabPendaftaranLama: React.FC<Props> = ({
           size="small"
           severity="success"
           className="border-round-md font-bold text-xs px-2 py-1"
-          onClick={() => handleSelectPasien(rowData)}
-          tooltip="Pilih pasien untuk daftarkan layanan / antrean"
-          tooltipOptions={{ position: 'top' }}
-        />
-        <Button
-          label="Detail"
-          icon="pi pi-eye"
-          size="small"
-          severity="info"
-          outlined
-          className="border-round-md font-medium text-xs px-2 py-1"
-          onClick={() => setDetailPasien(rowData)}
-          tooltip="Lihat detail & edit profil pasien"
+          onClick={(e) => {
+            e.stopPropagation();
+            setDetailPasien(rowData);
+          }}
+          tooltip="Pilih Pasien"
           tooltipOptions={{ position: 'top' }}
         />
       </div>
     );
   };
 
+  const handleSearchChange = (val: string) => {
+    setSearchVal(val);
+    if (searchTimeoutRef.current) clearTimeout(searchTimeoutRef.current);
+    searchTimeoutRef.current = setTimeout(() => {
+      setKeyword(val);
+      setPage(1);
+      setFirst(0);
+    }, 300);
+  };
+
+  const handleClearSearch = () => {
+    if (searchTimeoutRef.current) clearTimeout(searchTimeoutRef.current);
+    setSearchVal('');
+    setKeyword('');
+    setPage(1);
+    setFirst(0);
+  };
+
   const headerTemplate = (
-    <div className="flex align-items-center justify-content-between">
+    <div className="flex flex-wrap align-items-center justify-content-between gap-2">
       <span className="text-xl font-bold text-900">Data Pasien Terdaftar</span>
+      <div className="flex align-items-center gap-2 ml-auto w-full md:w-auto">
+        <IconField iconPosition="left" className="w-full md:w-20rem">
+          <InputIcon className="pi pi-search" />
+          <InputText
+            value={searchVal}
+            onChange={(e) => handleSearchChange(e.target.value)}
+            onKeyDown={(e) => {
+              if (e.key === 'Enter') {
+                if (searchTimeoutRef.current) clearTimeout(searchTimeoutRef.current);
+                setKeyword(searchVal);
+                setPage(1);
+                setFirst(0);
+              }
+            }}
+            placeholder="Cari Data..."
+            className="w-full text-sm"
+          />
+        </IconField>
+        <Button
+          type="button"
+          icon="pi pi-filter-slash"
+          outlined
+          severity="danger"
+          tooltip="Reset Filter"
+          tooltipOptions={{ position: 'bottom' }}
+          onClick={handleClearSearch}
+        />
+      </div>
     </div>
   );
 
@@ -261,6 +299,7 @@ export const TabPendaftaranLama: React.FC<Props> = ({
         <Column field="tanggal_lahir" header="Tgl Lahir" align="center" style={{ minWidth: '8rem' }} body={(r: Pasien) => r.tanggal_lahir || '-'} />
         <Column header="L/P" body={jenisKelaminBodyTemplate} align="center" style={{ minWidth: '7rem' }} />
         <Column field="kota_kabupaten" header="Kota / Alamat" style={{ minWidth: '12rem' }} body={(r: Pasien) => r.kota_kabupaten || r.provinsi || '-'} />
+        <Column header="Aksi" body={actionBodyTemplate} align="center" style={{ minWidth: '7rem' }} />
       </DataTable>
 
       {/* DIALOG DETAIL PASIEN */}

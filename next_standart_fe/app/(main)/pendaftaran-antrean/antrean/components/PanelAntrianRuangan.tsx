@@ -1,5 +1,5 @@
-import React, { useState, useEffect } from 'react';
-import { useSearchParams } from 'next/navigation';
+import React, { useState, useEffect, useRef } from 'react';
+import { useSearchParams, useRouter, usePathname } from 'next/navigation';
 import { Button } from 'primereact/button';
 import { confirmDialog, ConfirmDialog } from 'primereact/confirmdialog';
 import { Tag } from 'primereact/tag';
@@ -26,6 +26,9 @@ interface PanelAntrianRuanganProps {
     toast: React.RefObject<Toast>;
     getGridData: () => void;
     initialRuangan?: string;
+    selectedRuangan?: string;
+    setSelectedRuangan?: React.Dispatch<React.SetStateAction<string>>;
+    handleBackToList?: () => void;
 }
 
 interface RuanganItem {
@@ -135,9 +138,14 @@ export const PanelAntrianRuangan: React.FC<PanelAntrianRuanganProps> = ({
     toast,
     getGridData,
     initialRuangan,
+    selectedRuangan: propSelectedRuangan,
+    setSelectedRuangan: propSetSelectedRuangan,
+    handleBackToList: propHandleBackToList,
 }) => {
     const [ruanganList, setRuanganList] = useState<RuanganItem[]>([]);
-    const [selectedRuangan, setSelectedRuangan] = useState<string>('');
+    const [internalSelectedRuangan, setInternalSelectedRuangan] = useState<string>('');
+    const selectedRuangan = propSelectedRuangan !== undefined ? propSelectedRuangan : internalSelectedRuangan;
+    const setSelectedRuangan = propSetSelectedRuangan || setInternalSelectedRuangan;
     const [loadingRuangan, setLoadingRuangan] = useState<boolean>(true);
     const [statusFilter, setStatusFilter] = useState<string>('');
     const [queueSearch, setQueueSearch] = useState<string>('');
@@ -181,9 +189,38 @@ export const PanelAntrianRuangan: React.FC<PanelAntrianRuanganProps> = ({
 
     const [drawerRiwayatVisible, setDrawerRiwayatVisible] = useState<boolean>(false);
     const [selectedPatientForRiwayat, setSelectedPatientForRiwayat] = useState<AntrianLayananData | null>(null);
-
+    const detailSectionRef = useRef<HTMLDivElement>(null);
+    const router = useRouter();
+    const pathname = usePathname();
     const searchParams = useSearchParams();
     const typeParam = searchParams.get('type') || '';
+    const [clickedRoom, setClickedRoom] = useState<string>('');
+
+    const handleSelectRuangan = (kodeRuangan: string) => {
+        setClickedRoom(kodeRuangan);
+        setTimeout(() => {
+            setSelectedRuangan(kodeRuangan);
+            setClickedRoom('');
+            const params = new URLSearchParams(searchParams.toString());
+            params.set('ruangan', kodeRuangan);
+            router.push(`${pathname}?${params.toString()}`);
+        }, 180);
+    };
+
+    const handleBackToList = propHandleBackToList || (() => {
+        setSelectedRuangan('');
+        const params = new URLSearchParams(searchParams.toString());
+        params.delete('ruangan');
+        const queryString = params.toString();
+        router.push(queryString ? `${pathname}?${queryString}` : pathname);
+    });
+
+    useEffect(() => {
+        const rParam = searchParams.get('ruangan') || '';
+        if (rParam !== selectedRuangan) {
+            setSelectedRuangan(rParam);
+        }
+    }, [searchParams]);
 
     useEffect(() => {
         loadRuangan();
@@ -205,10 +242,9 @@ export const PanelAntrianRuangan: React.FC<PanelAntrianRuanganProps> = ({
             }
 
             setRuanganList(list);
-            if (initialRuangan && list.some((r) => r.kode_ruangan === initialRuangan)) {
-                setSelectedRuangan(initialRuangan);
-            } else if (list.length > 0) {
-                setSelectedRuangan(list[0].kode_ruangan);
+            const currentParam = searchParams.get('ruangan') || initialRuangan || '';
+            if (currentParam && list.some((r) => r.kode_ruangan === currentParam)) {
+                setSelectedRuangan(currentParam);
             } else {
                 setSelectedRuangan('');
             }
@@ -331,93 +367,333 @@ export const PanelAntrianRuangan: React.FC<PanelAntrianRuanganProps> = ({
     const sCount = roomAllItems.filter((i) => i.status === 'selesai').length;
     const bCount = roomAllItems.filter((i) => i.status === 'batal').length;
 
+    // Ringkasan Statistik Global (Semua Ruangan)
+    const totalMenungguSemua = allGridData.filter((i) => i.status === 'menunggu').length;
+    const totalDipanggilSemua = allGridData.filter((i) => i.status === 'dipanggil').length;
+    const totalRuanganAktif = ruanganList.length;
+
     return (
         <div className="flex flex-column gap-3">
             <ConfirmDialog />
 
-            {/* HEADER RUANGAN CARD SELECTOR — hanya tampil jika TIDAK dari sidebar spesifik */}
-            {!initialRuangan && (
-                <div className="surface-card border-round-xl border-1 surface-border shadow-1 p-3 md:p-4 mb-1">
-                    <div className="flex flex-column sm:flex-row align-items-start sm:align-items-center justify-content-between gap-3 mb-3 pb-2 border-bottom-1 surface-border">
-                        <div>
-                            <h4 className="text-lg font-bold text-900 m-0 flex align-items-center gap-2">
-                                <i className="pi pi-building text-teal-600" />
-                                Ruangan Tindakan & Konsultasi
-                            </h4>
-                            <p className="text-500 text-xs m-0 mt-0.5">
-                                Pilih ruangan untuk memantau dan memanggil nomor antrean pasien secara langsung.
-                            </p>
+            {/* TAMPILAN 1: DAFTAR RUANGAN — Hanya tampil saat belum ada ruangan yang dipilih */}
+            {!selectedRuangan ? (
+                <>
+                    {/* 1. RINGKASAN STATISTIK DI ATAS */}
+                    <div className="grid mb-1">
+                        {/* Stat 1: Total Menunggu */}
+                        <div className="col-12 sm:col-4">
+                            <div className="surface-card border-round-xl border-1 surface-border p-3 shadow-1 flex align-items-center justify-content-between transition-all hover:shadow-2">
+                                <div className="flex flex-column">
+                                    <span className="text-xs font-semibold text-500 uppercase tracking-wider mb-1">
+                                        Total Menunggu
+                                    </span>
+                                    <div className="flex align-items-baseline gap-2">
+                                        <span className="text-3xl font-extrabold text-amber-600">
+                                            {totalMenungguSemua}
+                                        </span>
+                                        <span className="text-xs text-500 font-medium">pasien antre</span>
+                                    </div>
+                                    <span className="text-xs text-400 mt-1">Seluruh ruangan tindakan</span>
+                                </div>
+                                <div
+                                    className="w-3rem h-3rem border-round-xl flex align-items-center justify-content-center flex-shrink-0"
+                                    style={{ backgroundColor: '#fef3c7', color: '#d97706' }}
+                                >
+                                    <i className="pi pi-hourglass text-xl" />
+                                </div>
+                            </div>
                         </div>
-                        <Button
-                            label="Refresh"
-                            icon="pi pi-refresh"
-                            outlined
-                            size="small"
-                            severity="secondary"
-                            onClick={getGridData}
-                            loading={state.loadGrid}
-                            className="font-semibold text-xs border-round-lg"
-                        />
+
+                        {/* Stat 2: Total Sedang Dipanggil */}
+                        <div className="col-12 sm:col-4">
+                            <div className="surface-card border-round-xl border-1 surface-border p-3 shadow-1 flex align-items-center justify-content-between transition-all hover:shadow-2">
+                                <div className="flex flex-column">
+                                    <span className="text-xs font-semibold text-500 uppercase tracking-wider mb-1">
+                                        Sedang Dipanggil
+                                    </span>
+                                    <div className="flex align-items-baseline gap-2">
+                                        <span className="text-3xl font-extrabold text-blue-600">
+                                            {totalDipanggilSemua}
+                                        </span>
+                                        <span className="text-xs text-500 font-medium">pasien dilayani</span>
+                                    </div>
+                                    <span className="text-xs text-400 mt-1">Sedang di dalam ruangan</span>
+                                </div>
+                                <div
+                                    className="w-3rem h-3rem border-round-xl flex align-items-center justify-content-center flex-shrink-0"
+                                    style={{ backgroundColor: '#dbeafe', color: '#2563eb' }}
+                                >
+                                    <i className="pi pi-megaphone text-xl" />
+                                </div>
+                            </div>
+                        </div>
+
+                        {/* Stat 3: Jumlah Ruangan Aktif */}
+                        <div className="col-12 sm:col-4">
+                            <div className="surface-card border-round-xl border-1 surface-border p-3 shadow-1 flex align-items-center justify-content-between transition-all hover:shadow-2">
+                                <div className="flex flex-column">
+                                    <span className="text-xs font-semibold text-500 uppercase tracking-wider mb-1">
+                                        Ruangan Aktif
+                                    </span>
+                                    <div className="flex align-items-baseline gap-2">
+                                        <span className="text-3xl font-extrabold text-teal-700">
+                                            {totalRuanganAktif}
+                                        </span>
+                                        <span className="text-xs text-500 font-medium">ruangan aktif</span>
+                                    </div>
+                                    <span className="text-xs text-400 mt-1">Tersedia untuk pelayanan</span>
+                                </div>
+                                <div
+                                    className="w-3rem h-3rem border-round-xl flex align-items-center justify-content-center flex-shrink-0"
+                                    style={{ backgroundColor: '#ccfbf1', color: '#0d9488' }}
+                                >
+                                    <i className="pi pi-building text-xl" />
+                                </div>
+                            </div>
+                        </div>
                     </div>
 
-                    {loadingRuangan ? (
-                        <div className="flex align-items-center justify-content-center py-4">
-                            <ProgressSpinner style={{ width: '30px', height: '30px' }} />
-                            <span className="ml-2 text-xs text-500">Memuat ruangan...</span>
+                    {/* DAFTAR RUANGAN TINDAKAN & KONSULTASI */}
+                    <div className="surface-card border-round-xl border-1 surface-border shadow-1 p-3 md:p-4 fadein animation-duration-300">
+                        <div className="flex flex-column sm:flex-row align-items-start sm:align-items-center justify-content-between gap-3 mb-3 pb-2 border-bottom-1 surface-border">
+                            <div>
+                                <h4 className="text-xl font-bold text-900 m-0 flex align-items-center gap-2">
+                                    <i className="pi pi-building text-teal-600 text-xl" />
+                                    Ruangan Tindakan & Konsultasi
+                                </h4>
+                                <p className="text-500 text-xs m-0 mt-1">
+                                    Pilih salah satu ruangan di bawah ini untuk membuka antrean dan mengelola pemanggilan pasien.
+                                </p>
+                            </div>
+                            <Button
+                                label="Refresh Data"
+                                icon="pi pi-refresh"
+                                outlined
+                                size="small"
+                                severity="secondary"
+                                onClick={getGridData}
+                                loading={state.loadGrid}
+                                className="font-semibold text-xs border-round-lg"
+                            />
                         </div>
-                    ) : (
-                        <div className="grid">
-                            {ruanganList.map((ruang) => {
-                                const isSelected = ruang.kode_ruangan === selectedRuangan;
-                                const roomItems = allGridData.filter((i) => i.kode_ruangan === ruang.kode_ruangan);
-                                const totalRuang = roomItems.length;
-                                const mRuang = roomItems.filter((i) => i.status === 'menunggu').length;
-                                const pRuang = roomItems.filter((i) => i.status === 'dipanggil').length;
 
-                                return (
-                                    <div key={ruang.kode_ruangan} className="col-12 sm:col-6 md:col-4 lg:col-3">
-                                        <div
-                                            className={`p-3 border-round-xl border-2 cursor-pointer transition-all transition-duration-200 relative overflow-hidden ${
-                                                isSelected
-                                                    ? 'border-teal-500 bg-teal-50 shadow-2'
-                                                    : 'surface-border surface-card hover:surface-50 shadow-1'
-                                            }`}
-                                            onClick={() => setSelectedRuangan(ruang.kode_ruangan)}
-                                        >
-                                            <div className="flex align-items-center justify-content-between mb-2">
-                                                <Tag value={ruang.kode_ruangan} severity={isSelected ? 'success' : 'info'} className="text-xs font-bold" />
-                                                {totalRuang > 0 && (
-                                                    <span className="text-xs font-bold text-teal-700 bg-teal-100 px-2 py-0.5 border-round-md">
-                                                        {totalRuang} Pasien
-                                                    </span>
-                                                )}
-                                            </div>
+                        {loadingRuangan ? (
+                            <div className="flex align-items-center justify-content-center py-6">
+                                <ProgressSpinner style={{ width: '36px', height: '36px' }} />
+                                <span className="ml-2 text-sm text-500">Memuat ruangan...</span>
+                            </div>
+                        ) : ruanganList.length === 0 ? (
+                            <div className="text-center py-6 text-500">
+                                <i className="pi pi-info-circle text-3xl mb-2 text-400 block" />
+                                <span className="text-sm font-semibold">Tidak ada ruangan yang tersedia.</span>
+                            </div>
+                        ) : (
+                            <div className="grid">
+                                {ruanganList.map((ruang) => {
+                                    const isClicked = clickedRoom === ruang.kode_ruangan;
+                                    const roomItems = allGridData.filter((i) => i.kode_ruangan === ruang.kode_ruangan);
+                                    const totalRuang = roomItems.length;
+                                    const mRuang = roomItems.filter((i) => i.status === 'menunggu').length;
+                                    const pRuang = roomItems.filter((i) => i.status === 'dipanggil').length;
+                                    const sRuang = roomItems.filter((i) => i.status === 'selesai').length;
 
-                                            <h4 className="font-bold text-sm text-900 m-0 mb-2 flex align-items-center gap-1.5 text-truncate">
-                                                <i className="pi pi-home text-teal-600 text-xs" />
-                                                {ruang.nama_ruangan}
-                                            </h4>
+                                    // TODO: Bila kelak ada endpoint status real-time khusus ruangan, sesuaikan pengambilan nomor antrean aktif
+                                    const servingPatient = roomItems.find((i) => i.status === 'dipanggil');
+                                    const waitingPatients = roomItems.filter((i) => i.status === 'menunggu');
+                                    const nextPatient = waitingPatients.length > 0 ? waitingPatients[0] : null;
+                                    const progressPercent = totalRuang > 0 ? Math.round((sRuang / totalRuang) * 100) : 0;
 
-                                            <div className="flex align-items-center gap-2 text-xs">
-                                                <span className="text-amber-700 font-semibold">⏳ Menunggu: {mRuang}</span>
-                                                <span className="text-blue-700 font-semibold">📢 Call: {pRuang}</span>
+                                    return (
+                                        <div key={ruang.kode_ruangan} className="col-12 sm:col-6 lg:col-4">
+                                            <div
+                                                className={`p-3 md:p-4 border-round-xl border-1 surface-card cursor-pointer flex flex-column justify-content-between h-full select-none transition-all ${
+                                                    isClicked
+                                                        ? 'border-teal-500 bg-teal-50 shadow-4'
+                                                        : 'surface-border hover:surface-50 hover:border-teal-400 shadow-1 hover:shadow-3'
+                                                }`}
+                                                style={{
+                                                    transform: isClicked ? 'scale(0.97)' : undefined,
+                                                    transition: 'all 0.18s cubic-bezier(0.16, 1, 0.3, 1)',
+                                                }}
+                                                onClick={() => handleSelectRuangan(ruang.kode_ruangan)}
+                                            >
+                                                <div>
+                                                    {/* Header Card: Tag Kode Ruangan & Total Pasien */}
+                                                    <div className="flex align-items-center justify-content-between mb-3">
+                                                        <Tag
+                                                            value={ruang.kode_ruangan}
+                                                            severity="info"
+                                                            className="text-xs font-bold line-height-1"
+                                                            style={{ padding: '6px 12px', borderRadius: '8px' }}
+                                                        />
+                                                        {totalRuang > 0 ? (
+                                                            <span
+                                                                className="text-xs font-bold text-teal-800 bg-teal-50 border-1 border-teal-200 border-round-lg inline-flex align-items-center gap-2 line-height-1"
+                                                                style={{ padding: '6px 12px', borderRadius: '8px' }}
+                                                            >
+                                                                <i className="pi pi-users text-teal-600 flex-shrink-0" style={{ fontSize: '13px' }} />
+                                                                <span>{totalRuang} Pasien</span>
+                                                            </span>
+                                                        ) : (
+                                                            <span
+                                                                className="text-xs text-500 font-medium bg-gray-50 border-1 border-gray-200 border-round-lg inline-flex align-items-center gap-2 line-height-1"
+                                                                style={{ padding: '6px 12px', borderRadius: '8px' }}
+                                                            >
+                                                                <i className="pi pi-users text-400 flex-shrink-0" style={{ fontSize: '13px' }} />
+                                                                <span>0 Pasien</span>
+                                                            </span>
+                                                        )}
+                                                    </div>
+
+                                                    {/* Nama Ruangan */}
+                                                    <h4
+                                                        className="font-bold text-base text-900 m-0 mb-3 flex align-items-center text-truncate"
+                                                        title={ruang.nama_ruangan}
+                                                    >
+                                                        <i
+                                                            className={`pi ${isClicked ? 'pi-spin pi-spinner text-teal-600' : 'pi-home text-teal-600'} flex-shrink-0`}
+                                                            style={{ fontSize: '18px', marginRight: '8px', lineHeight: 1 }}
+                                                        />
+                                                        <span className="text-truncate line-height-1">{ruang.nama_ruangan}</span>
+                                                    </h4>
+
+                                                    {/* 3. Elemen Fokus Utama: SEDANG DILAYANI */}
+                                                    <div
+                                                        className={`border-round-xl mb-3 flex flex-column transition-all ${
+                                                            servingPatient
+                                                                ? 'bg-blue-50 border-1 border-blue-200'
+                                                                : 'surface-50 border-1 border-dashed surface-border'
+                                                        }`}
+                                                        style={{ padding: '14px 16px' }}
+                                                    >
+                                                        {/* Baris 1: Label Status & Badge Dipanggil (Sejajar Vertikal & Rata Kiri) */}
+                                                        <div className="flex align-items-center justify-content-between mb-2">
+                                                            <span className="text-[11px] font-bold uppercase tracking-wider text-blue-800 line-height-1 m-0">
+                                                                SEDANG DILAYANI
+                                                            </span>
+                                                            {servingPatient && (
+                                                                <span className="inline-flex align-items-center gap-1.5 text-xs font-semibold text-blue-700 bg-blue-100 px-2 py-0.5 border-round-md line-height-1">
+                                                                    <span className="text-xs line-height-1">📢</span>
+                                                                    <span>Dipanggil</span>
+                                                                </span>
+                                                            )}
+                                                        </div>
+
+                                                        {/* Baris 2 & 3: Nomor Antrean & Nama Pasien (Rata Kiri 1 Garis Vertikal) */}
+                                                        {servingPatient ? (
+                                                            <div className="flex flex-column m-0 p-0">
+                                                                {/* Angka Nomor Antrean Besar */}
+                                                                <div className="text-3xl sm:text-4xl font-black text-blue-900 tracking-tight line-height-1 mb-2">
+                                                                    {servingPatient.nomor_antrian}
+                                                                </div>
+                                                                {/* Nama Pasien dengan Icon Orang Proporsional & Rata Kiri Presisi */}
+                                                                {servingPatient.nama_pasien && (
+                                                                    <div
+                                                                        className="text-xs text-blue-800 font-semibold text-truncate flex align-items-center gap-2 m-0"
+                                                                        title={servingPatient.nama_pasien}
+                                                                    >
+                                                                        <i
+                                                                            className="pi pi-user text-blue-600 flex-shrink-0"
+                                                                            style={{ fontSize: '13.5px' }}
+                                                                        />
+                                                                        <span className="text-truncate">{servingPatient.nama_pasien}</span>
+                                                                    </div>
+                                                                )}
+                                                            </div>
+                                                        ) : (
+                                                            <div className="flex flex-column m-0 p-0">
+                                                                <div className="text-xl font-bold text-400 line-height-1 mb-1">
+                                                                    Belum ada
+                                                                </div>
+                                                                <div className="text-xs text-400">
+                                                                    Ruangan tidak sedang memanggil
+                                                                </div>
+                                                            </div>
+                                                        )}
+                                                    </div>
+
+                                                    {/* Preview Antrean Berikutnya & Stat Chips */}
+                                                    <div className="surface-ground p-2.5 border-round-lg mb-3 flex flex-column gap-2 text-xs">
+                                                        {/* Preview Antrean Berikutnya */}
+                                                        <div className="flex align-items-center justify-content-between">
+                                                            <span className="text-600 font-medium flex align-items-center gap-1">
+                                                                <i className="pi pi-forward text-teal-600 text-xs" />
+                                                                Berikutnya:
+                                                            </span>
+                                                            {nextPatient ? (
+                                                                <span className="font-bold text-teal-800 bg-white border-1 border-teal-200 px-2.5 py-0.5 border-round shadow-sm">
+                                                                    {nextPatient.nomor_antrian}
+                                                                    {nextPatient.nama_pasien ? ` (${nextPatient.nama_pasien.split(' ')[0]})` : ''}
+                                                                </span>
+                                                            ) : (
+                                                                <span className="text-400 italic">Belum ada antrean</span>
+                                                            )}
+                                                        </div>
+
+                                                        {/* Status Chips (Menunggu & Selesai) */}
+                                                        <div className="flex align-items-center gap-2 pt-1 border-top-1 surface-border">
+                                                            <span className="text-amber-800 font-semibold bg-amber-50 border-1 border-amber-200 px-2 py-1 border-round flex-1 text-center">
+                                                                ⏳ Menunggu: {mRuang}
+                                                            </span>
+                                                            <span className="text-green-800 font-semibold bg-green-50 border-1 border-green-200 px-2 py-1 border-round flex-1 text-center">
+                                                                ✅ Selesai: {sRuang}
+                                                            </span>
+                                                        </div>
+                                                    </div>
+
+                                                    {/* Progress Bar Tipis Selesai vs Total */}
+                                                    <div className="mb-3">
+                                                        <div className="flex justify-content-between align-items-center text-xs text-500 mb-1">
+                                                            <span>Progress Pelayanan</span>
+                                                            <span className="font-semibold text-700">
+                                                                {sRuang}/{totalRuang} Selesai ({progressPercent}%)
+                                                            </span>
+                                                        </div>
+                                                        <div className="w-full surface-200 border-round overflow-hidden" style={{ height: '6px' }}>
+                                                            <div
+                                                                className="h-full border-round"
+                                                                style={{
+                                                                    width: `${progressPercent}%`,
+                                                                    backgroundColor: progressPercent === 100 && totalRuang > 0 ? '#10b981' : '#0d9488',
+                                                                    transition: 'width 0.4s ease-in-out',
+                                                                }}
+                                                            />
+                                                        </div>
+                                                    </div>
+                                                </div>
+
+                                                {/* 5. TOMBOL BUKA ANTREAN RUANGAN (CTA Menonjol) */}
+                                                <div className="pt-2 border-top-1 surface-border">
+                                                    <Button
+                                                        type="button"
+                                                        label={isClicked ? 'Membuka Antrean...' : 'Buka Antrean Ruangan'}
+                                                        icon={isClicked ? 'pi pi-spin pi-spinner' : 'pi pi-arrow-right'}
+                                                        iconPos="right"
+                                                        size="small"
+                                                        className="w-full font-bold text-xs py-2.5 border-round-lg shadow-1 transition-all"
+                                                        severity="info"
+                                                        onClick={(e) => {
+                                                            e.stopPropagation();
+                                                            handleSelectRuangan(ruang.kode_ruangan);
+                                                        }}
+                                                    />
+                                                </div>
                                             </div>
                                         </div>
-                                    </div>
-                                );
-                            })}
-                        </div>
-                    )}
-                </div>
-            )}
-
-            {/* DETAIL ANTREAN UNTUK RUANGAN TERPILIH */}
-            {selectedRuangan && (
-                <div className="flex flex-column gap-3">
+                                    );
+                                })}
+                            </div>
+                        )}
+                    </div>
+                </>
+            ) : (
+                /* TAMPILAN 2: PANEL ANTREAN RUANGAN TERPILIH (HANYA RUANGAN INI, TERPISAH DARI DAFTAR RUANGAN) */
+                <div ref={detailSectionRef} className="flex flex-column gap-3 fadein animation-duration-300">
                     {/* CONTAINER UTAMA ANTREAN RUANGAN */}
                     <div className="surface-card border-round-xl border-1 surface-border shadow-1 p-3 md:p-4">
                         {/* ── HEADER RUANGAN TERPILIH & SEARCH TOOLBAR ── */}
-                        <div className="flex flex-column md:flex-row align-items-start md:align-items-center justify-content-between gap-3 pb-3 border-bottom-1 surface-border">
+                        <div className="flex flex-column lg:flex-row align-items-start lg:align-items-center justify-content-between gap-3 pb-3 border-bottom-1 surface-border">
                             <div>
                                 <div className="flex align-items-center gap-2 mb-1">
                                     <Tag value={activeRoomObj?.kode_ruangan || selectedRuangan} severity="success" className="font-bold text-xs" />
@@ -434,9 +710,9 @@ export const PanelAntrianRuangan: React.FC<PanelAntrianRuanganProps> = ({
                                 </h3>
                             </div>
 
-                            {/* SEARCH & RESET TOOLBAR (FORMAT PERSIS MASTER DATA) */}
-                            <div className="flex align-items-center gap-2 w-full md:w-auto">
-                                <IconField iconPosition="left" className="flex-1 md:w-18rem">
+                            {/* SEARCH & RESET TOOLBAR */}
+                            <div className="flex align-items-center gap-2 w-full lg:w-auto">
+                                <IconField iconPosition="left" className="flex-1 lg:w-18rem">
                                     <InputIcon className="pi pi-search" />
                                     <InputText
                                         value={queueSearch}
@@ -819,8 +1095,11 @@ export const PanelAntrianRuangan: React.FC<PanelAntrianRuanganProps> = ({
                                             sortable
                                             headerStyle={{ fontWeight: 'bold', minWidth: '10rem' }}
                                             body={(r: AntrianLayananData) => (
-                                                <div className="flex align-items-center gap-1.5 text-xs text-700">
-                                                    <i className="pi pi-map-marker text-teal-600" style={{ fontSize: '12px' }} />
+                                                <div className="flex align-items-center text-xs text-700">
+                                                    <i
+                                                        className="pi pi-map-marker text-teal-600 flex-shrink-0"
+                                                        style={{ fontSize: '13px', marginRight: '8px' }}
+                                                    />
                                                     <span className="font-medium text-900" title={r.kelurahan_desa || '-'}>
                                                         {r.kelurahan_desa || '-'}
                                                     </span>

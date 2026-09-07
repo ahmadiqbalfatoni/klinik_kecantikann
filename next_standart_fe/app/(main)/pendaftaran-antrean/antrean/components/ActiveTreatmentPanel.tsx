@@ -19,6 +19,15 @@ import { RekomendasiTreatmentPanel, RekomendasiItem } from './RekomendasiTreatme
 import { DialogHasilTerbitAntrian } from './DialogHasilTerbitAntrian';
 import { HasilTreatmentPanel } from './HasilTreatmentPanel';
 import { DrawerRiwayatPasien } from './DrawerRiwayatPasien';
+import {
+    Briefcase,
+    Building2,
+    User,
+    History,
+    Volume2,
+    Ban,
+    CheckCircle2,
+} from 'lucide-react';
 
 interface ActiveTreatmentPanelProps {
     activePatient: AntrianLayananData | null;
@@ -424,109 +433,253 @@ export const ActiveTreatmentPanel: React.FC<ActiveTreatmentPanelProps> = ({
     }
 
     return (
-        <div className="card shadow-3 border-round-xl p-0 mb-4 surface-card overflow-hidden border-2 border-teal-500">
-            {/* ACTIVE PATIENT HEADER HERO */}
-            <div className="p-4 bg-teal-700 text-white">
-                <div className="flex flex-column md:flex-row align-items-start md:align-items-center gap-3 mb-3">
-                    <div className="bg-white text-teal-900 border-round-xl px-4 py-2 text-center shadow-2" style={{ minWidth: '80px' }}>
-                        <span className="text-xs font-bold block text-teal-600 white-space-nowrap">NO. ANTREAN</span>
-                        <span className="text-4xl font-black">{activePatient.nomor_antrian}</span>
-                    </div>
-
-                    <div className="flex-1">
-                        <div className="flex align-items-center gap-2 mb-1">
-                            <Tag value="PASIEN SEDANG DITANGANI" severity="success" className="text-xs font-bold px-2" />
-                            <span className="text-xs text-teal-200">Jam Datang: {activePatient.jam_datang || '-'}</span>
+        <>
+            {/* ═══════════════════════════════════════════════════════════════════ */}
+            {/* SATU CARD TERPADU: STATUS PASIEN + FORM PENANGANAN (MENYATU)        */}
+            {/* ═══════════════════════════════════════════════════════════════════ */}
+            <div className="card shadow-2 border-round-xl p-0 mb-4 surface-card overflow-hidden border-1 surface-border">
+                {/* SECTION 1: NO. ANTREAN & INFO PASIEN (SOLID TEAL-700 GRADIENT - SAMA DENGAN TAB FORM PENANGANAN) */}
+                <div
+                    className="p-4 sm:p-5 text-white"
+                    style={{
+                        background: 'linear-gradient(135deg, #0e8174 0%, #084a42 100%)',
+                        borderBottom: '1px solid rgba(255, 255, 255, 0.12)'
+                    }}
+                >
+                    {/* 1. TOP ROW: NO. ANTREAN WHITE CARD + PATIENT INFO */}
+                    <div className="flex flex-column sm:flex-row align-items-start sm:align-items-center gap-4 mb-4">
+                        {/* Nomor Antrean: KOTAK PUTIH SOLID (fokus utama kontras tinggi vs dark green) */}
+                        <div
+                            className="bg-white border-round-xl flex flex-column align-items-center justify-content-center px-4 py-3 shadow-3 flex-shrink-0"
+                            style={{ minWidth: '108px' }}
+                        >
+                            <span className="text-[10px] font-bold text-gray-500 uppercase tracking-wider mb-1">
+                                NO. ANTREAN
+                            </span>
+                            <span className="text-4xl sm:text-5xl font-black text-gray-900 line-height-1 tracking-tight">
+                                {activePatient.nomor_antrian}
+                            </span>
                         </div>
-                        <h2 className="text-xl font-black text-white m-0 mt-1">
-                            {activePatient.nama_pasien || 'Pasien'}
-                            <span className="text-sm font-normal text-teal-200 ml-2">(RM: {activePatient.no_rm})</span>
-                        </h2>
-                        <div className="flex align-items-center gap-2 mt-2 flex-wrap">
-                            <span className="inline-flex align-items-center gap-1 bg-teal-800 text-teal-100 text-xs font-semibold px-2 py-1 border-round-md">
-                                <i className="pi pi-briefcase text-xs" />
-                                {activePatient.nama_layanan}
-                            </span>
-                            <span className="inline-flex align-items-center gap-1 bg-teal-800 text-teal-100 text-xs font-semibold px-2 py-1 border-round-md">
-                                <i className="pi pi-building text-xs" />
-                                {namaRuangan}
-                            </span>
-                            {(activePatient.nama_petugas || karyawanOptions.find((k) => k.value === selectedPetugas)?.nama) && (
-                                <span className="inline-flex align-items-center gap-1 bg-teal-900 text-teal-100 text-xs font-semibold px-2 py-1 border-round-md border-1 border-teal-400">
-                                    <i className="pi pi-user text-xs" />
-                                    Petugas: {karyawanOptions.find((k) => k.value === selectedPetugas)?.nama || activePatient.nama_petugas}
+
+                        {/* Detail Pasien & Metadata */}
+                        <div className="flex-1 flex flex-column gap-1">
+                            {/* Status Badge (BENAR-BENAR TANPA BORDER / OUTLINE) */}
+                            <div className="flex align-items-center gap-2.5 flex-wrap mb-1">
+                                {/* Badge Status: Background hijau lebih terang dari card, BENAR-BENAR TANPA BORDER / OUTLINE */}
+                                <span
+                                    className="inline-flex align-items-center gap-2 text-xs font-bold px-3 py-1 border-none outline-none"
+                                    style={{
+                                        background: 'rgba(255, 255, 255, 0.22)',
+                                        color: '#ffffff',
+                                        border: 'none',
+                                        outline: 'none',
+                                        boxShadow: 'none',
+                                        borderRadius: '6px'
+                                    }}
+                                >
+                                    <span
+                                        className="w-2 h-2 border-round-circle inline-block flex-shrink-0 bg-white"
+                                        style={{ boxShadow: '0 0 6px rgba(255, 255, 255, 0.8)' }}
+                                    />
+                                    <span>SEDANG DITANGANI</span>
                                 </span>
-                            )}
+                            </div>
+
+                            {/* Nama Pasien & No. RM */}
+                            <div className="flex align-items-baseline gap-2.5 flex-wrap mt-0.5">
+                                <h2 className="text-2xl sm:text-3xl font-black text-white m-0 tracking-tight">
+                                    {activePatient.nama_pasien || 'Pasien'}
+                                </h2>
+                                <span
+                                    className="text-xs font-medium px-2 py-0.5"
+                                    style={{
+                                        background: 'rgba(255, 255, 255, 0.1)',
+                                        borderRadius: '4px',
+                                        color: '#a7f3d0'
+                                    }}
+                                >
+                                    RM: <strong className="text-white">{activePatient.no_rm}</strong>
+                                </span>
+                            </div>
+
+                            {/* Metadata Tags: Layanan, Ruangan, Petugas (Halus, Semi-transparan, Bebas dari Kotak Berat) */}
+                            <div className="flex align-items-center gap-2 flex-wrap text-xs mt-3">
+                                <span
+                                    className="inline-flex align-items-center gap-2 px-3 py-1.5 font-medium"
+                                    style={{
+                                        background: 'rgba(255, 255, 255, 0.08)',
+                                        border: '1px solid rgba(255, 255, 255, 0.14)',
+                                        borderRadius: '6px',
+                                        color: 'rgba(255, 255, 255, 0.92)'
+                                    }}
+                                >
+                                    <Briefcase size={14} style={{ color: '#a7f3d0' }} className="flex-shrink-0" />
+                                    <span>{activePatient.nama_layanan}</span>
+                                </span>
+                                <span
+                                    className="inline-flex align-items-center gap-2 px-3 py-1.5 font-medium"
+                                    style={{
+                                        background: 'rgba(255, 255, 255, 0.08)',
+                                        border: '1px solid rgba(255, 255, 255, 0.14)',
+                                        borderRadius: '6px',
+                                        color: 'rgba(255, 255, 255, 0.92)'
+                                    }}
+                                >
+                                    <Building2 size={14} style={{ color: '#a7f3d0' }} className="flex-shrink-0" />
+                                    <span>{namaRuangan}</span>
+                                </span>
+                                {(activePatient.nama_petugas || karyawanOptions.find((k) => k.value === selectedPetugas)?.nama) && (
+                                    <span
+                                        className="inline-flex align-items-center gap-2 px-3 py-1.5 font-medium"
+                                        style={{
+                                            background: 'rgba(255, 255, 255, 0.08)',
+                                            border: '1px solid rgba(255, 255, 255, 0.14)',
+                                            borderRadius: '6px',
+                                            color: 'rgba(255, 255, 255, 0.92)'
+                                        }}
+                                    >
+                                        <User size={14} style={{ color: '#a7f3d0' }} className="flex-shrink-0" />
+                                        <span>Petugas: <strong className="text-white">{karyawanOptions.find((k) => k.value === selectedPetugas)?.nama || activePatient.nama_petugas}</strong></span>
+                                    </span>
+                                )}
+                            </div>
+                        </div>
+                    </div>
+
+                    {/* 2. BOTTOM ROW: ACTION BUTTONS WITH CLEAR VISUAL HIERARCHY */}
+                    <div
+                        className="flex flex-column sm:flex-row align-items-stretch sm:align-items-center justify-content-between gap-3 pt-3 mt-1"
+                        style={{ borderTop: '1px solid rgba(255, 255, 255, 0.12)' }}
+                    >
+                        {/* Tombol Batalkan: Outline merah tipis di atas background gelap card */}
+                        <div>
+                            <Button
+                                type="button"
+                                size="small"
+                                className="text-xs font-semibold px-3 py-2 transition-all flex align-items-center gap-2 border-1"
+                                style={{
+                                    background: 'rgba(239, 68, 68, 0.12)',
+                                    borderColor: 'rgba(248, 113, 113, 0.35)',
+                                    color: '#fca5a5',
+                                    borderRadius: '8px'
+                                }}
+                                onClick={() => handleAksi(activePatient, 'batal')}
+                            >
+                                <Ban size={15} style={{ color: '#fca5a5' }} />
+                                <span>Batalkan</span>
+                            </Button>
+                        </div>
+
+                        {/* Tombol Sekunder & Utama: di ujung kanan dengan hierarki visual */}
+                        <div className="flex align-items-center gap-2.5 flex-wrap justify-content-end">
+                            {/* Tombol Sekunder 1: Riwayat Pasien (Outline putih tipis, semi-transparan gelap) */}
+                            <Button
+                                type="button"
+                                size="small"
+                                className="text-xs font-semibold px-3 py-2 transition-all flex align-items-center gap-2 border-1"
+                                style={{
+                                    background: 'rgba(255, 255, 255, 0.08)',
+                                    borderColor: 'rgba(255, 255, 255, 0.22)',
+                                    color: '#ffffff',
+                                    borderRadius: '8px'
+                                }}
+                                onClick={() => setDrawerRiwayatVisible(true)}
+                            >
+                                <History size={15} style={{ color: 'rgba(255, 255, 255, 0.75)' }} />
+                                <span>Riwayat Pasien</span>
+                            </Button>
+
+                            {/* Tombol Sekunder 2: Panggil Ulang (Outline putih tipis, semi-transparan gelap) */}
+                            <Button
+                                type="button"
+                                size="small"
+                                className="text-xs font-semibold px-3 py-2 transition-all flex align-items-center gap-2 border-1"
+                                style={{
+                                    background: 'rgba(255, 255, 255, 0.08)',
+                                    borderColor: 'rgba(255, 255, 255, 0.22)',
+                                    color: '#ffffff',
+                                    borderRadius: '8px'
+                                }}
+                                onClick={() => {
+                                    playChime();
+                                    speakNomorLayanan(activePatient.nomor_antrian, activePatient.nama_pasien, namaRuangan);
+                                }}
+                            >
+                                <Volume2 size={15} style={{ color: 'rgba(255, 255, 255, 0.75)' }} />
+                                <span>Panggil Ulang</span>
+                            </Button>
+
+                            {/* Tombol Utama (PRIMARY HERO CTA): Selesaikan Konsultasi / Tindakan (SATU-SATUNYA SOLID TERANG/PUTIH) */}
+                            <Button
+                                type="button"
+                                disabled={
+                                    isKonsultasi
+                                        ? (!isFormSaved && !activePatient?.hasil_form)
+                                        : ((!isFormSaved && !activePatient?.hasil_form) || !isHasilSaved)
+                                }
+                                className="text-xs font-bold px-4 py-2.5 transition-all flex align-items-center gap-2 border-1"
+                                style={
+                                    (isKonsultasi
+                                        ? (!isFormSaved && !activePatient?.hasil_form)
+                                        : ((!isFormSaved && !activePatient?.hasil_form) || !isHasilSaved))
+                                        ? {
+                                              background: 'rgba(255, 255, 255, 0.1)',
+                                              borderColor: 'rgba(255, 255, 255, 0.15)',
+                                              color: 'rgba(255, 255, 255, 0.4)',
+                                              borderRadius: '8px',
+                                              cursor: 'not-allowed'
+                                          }
+                                        : {
+                                              background: '#ffffff',
+                                              borderColor: '#ffffff',
+                                              color: '#064e3b',
+                                              borderRadius: '8px',
+                                              boxShadow: '0 4px 14px rgba(0, 0, 0, 0.22)',
+                                              fontWeight: 700,
+                                              cursor: 'pointer'
+                                          }
+                                }
+                                tooltip={
+                                    !isKonsultasi && !isHasilSaved
+                                        ? 'Tombol Selesaikan Tindakan baru bisa diklik setelah data Form Hasil Treatment (Step 2) disimpan'
+                                        : ''
+                                }
+                                tooltipOptions={{ position: 'bottom' }}
+                                onClick={() => {
+                                    if (!isKonsultasi && !isHasilSaved) {
+                                        showError(toast, 'Selesaikan Tindakan baru bisa diklik setelah data Form Hasil Treatment (Step 2) disimpan!');
+                                        return;
+                                    }
+                                    handleAksi(activePatient, 'selesai', true);
+                                }}
+                            >
+                                <CheckCircle2
+                                    size={16}
+                                    style={{
+                                        color: (isKonsultasi
+                                            ? (!isFormSaved && !activePatient?.hasil_form)
+                                            : ((!isFormSaved && !activePatient?.hasil_form) || !isHasilSaved))
+                                            ? 'rgba(255, 255, 255, 0.4)'
+                                            : '#064e3b'
+                                    }}
+                                />
+                                <span>{isKonsultasi ? "Selesaikan Konsultasi" : "Selesaikan Tindakan"}</span>
+                            </Button>
                         </div>
                     </div>
                 </div>
 
-                <div className="flex align-items-center justify-content-end gap-2 flex-wrap pt-2 border-top-1 border-teal-600">
-                    <Button
-                        label="Riwayat Pasien"
-                        icon="pi pi-history"
-                        size="small"
-                        className="text-xs font-semibold bg-white-alpha-20 text-white border-1 border-white-alpha-40 border-round-lg hover:bg-white-alpha-30"
-                        onClick={() => setDrawerRiwayatVisible(true)}
-                    />
-                    <Button
-                        label="Panggil Ulang"
-                        icon="pi pi-volume-up"
-                        size="small"
-                        className="text-xs font-semibold bg-white-alpha-20 text-white border-1 border-white-alpha-40 border-round-lg hover:bg-white-alpha-30"
-                        onClick={() => {
-                            playChime();
-                            speakNomorLayanan(activePatient.nomor_antrian, activePatient.nama_pasien, namaRuangan);
-                        }}
-                    />
-                    <Button
-                        label="Batalkan"
-                        icon="pi pi-times"
-                        size="small"
-                        className="text-xs font-semibold bg-red-500 text-white border-none border-round-lg hover:bg-red-600"
-                        onClick={() => handleAksi(activePatient, 'batal')}
-                    />
-                    <Button
-                        label={isKonsultasi ? "Selesaikan Konsultasi" : "Selesaikan Tindakan"}
-                        icon="pi pi-check"
-                        size="small"
-                        disabled={
-                            isKonsultasi
-                                ? (!isFormSaved && !activePatient?.hasil_form)
-                                : ((!isFormSaved && !activePatient?.hasil_form) || !isHasilSaved)
-                        }
-                        className={`text-xs font-bold border-none border-round-lg ${
-                            (isKonsultasi
-                                ? (!isFormSaved && !activePatient?.hasil_form)
-                                : ((!isFormSaved && !activePatient?.hasil_form) || !isHasilSaved))
-                                ? 'bg-gray-400 text-white cursor-not-allowed opacity-60'
-                                : 'bg-green-500 text-white hover:bg-green-600 shadow-2'
-                        }`}
-                        tooltip={
-                            !isKonsultasi && !isHasilSaved
-                                ? 'Tombol Selesaikan Tindakan baru bisa diklik setelah data Form Hasil Treatment (Step 2) disimpan'
-                                : ''
-                        }
-                        onClick={() => {
-                            if (!isKonsultasi && !isHasilSaved) {
-                                showError(toast, 'Selesaikan Tindakan baru bisa diklik setelah data Form Hasil Treatment (Step 2) disimpan!');
-                                return;
-                            }
-                            handleAksi(activePatient, 'selesai', true);
-                        }}
-                    />
-                </div>
-            </div>
-
-            {/* MAIN CONTENT VIEW BASED ON ROOM TYPE (NO 2-STEP TAB HEADER FOR CONSULTATION) */}
-            {isKonsultasi ? (
+                {/* ═══════════════════════════════════════════════════════════════════ */}
+                {/* 2. FORM PENANGANAN (FLOW MENYATU LANGSUNG DALAM 1 CARD CONTAINER)   */}
+                {/* ═══════════════════════════════════════════════════════════════════ */}
+                {isKonsultasi ? (
                 /* RUANG KONSULTASI DOKTER VIEW */
-                <div className="p-4 flex flex-column gap-4 surface-ground">
+                <div className="p-3 sm:p-4 flex flex-column gap-4 bg-white">
                     {/* SECTION PETUGAS / DOKTER PENANGGUNG JAWAB (SESUAI SIP) */}
-                    <div className="surface-card p-3 border-round-xl border-1 surface-border shadow-1">
+                    <div className="p-3 border-round-xl border-1 surface-border bg-white">
                         <div className="flex align-items-center justify-content-between mb-3 pb-2 border-bottom-1 surface-border">
-                            <label className="text-xs font-extrabold text-teal-800 uppercase tracking-wider flex align-items-center gap-2 m-0">
-                                <i className="pi pi-user text-teal-600 text-sm" />
+                            <label className="text-xs font-extrabold text-700 uppercase tracking-wider flex align-items-center gap-2 m-0">
+                                <i className="pi pi-user text-500 text-sm" />
                                 PETUGAS / DOKTER PENANGGUNG JAWAB (SESUAI SIP)
                             </label>
                             <span className="text-[10px] text-500 font-semibold">Tersimpan berdasar No. SIP</span>
@@ -546,7 +699,7 @@ export const ActiveTreatmentPanel: React.FC<ActiveTreatmentPanelProps> = ({
                                     if (option) {
                                         return (
                                             <div className="flex align-items-center gap-2">
-                                                <span className="font-bold text-teal-900">{option.nama || option.label}</span>
+                                                <span className="font-bold text-900">{option.nama || option.label}</span>
                                                 {option.value && (
                                                     <span className="text-xs text-500 font-normal">(No. SIP: {option.value})</span>
                                                 )}
@@ -558,7 +711,7 @@ export const ActiveTreatmentPanel: React.FC<ActiveTreatmentPanelProps> = ({
                                 itemTemplate={(option) => (
                                     <div className="flex align-items-center justify-content-between py-1">
                                         <div>
-                                            <span className="font-bold text-teal-900 block text-sm">{option.nama || option.label}</span>
+                                            <span className="font-bold text-900 block text-sm">{option.nama || option.label}</span>
                                             <span className="text-xs text-500 block">No. SIP: {option.value}</span>
                                         </div>
                                     </div>
@@ -567,287 +720,287 @@ export const ActiveTreatmentPanel: React.FC<ActiveTreatmentPanelProps> = ({
                         </div>
                     </div>
 
-                    {/* SECTION FOTO BEFORE (SEBELUM TREATMENT) & REKAM MEDIS */}
-                    <div className="surface-card p-4 border-round-xl border-1 surface-border shadow-1 flex flex-column gap-4">
-                        {/* FOTO BEFORE UPLOADER BOX */}
-                        <div className="p-3 surface-50 border-round-xl border-1 surface-border">
-                            <label className="block text-xs font-extrabold text-teal-800 uppercase tracking-wider mb-2 flex align-items-center gap-2">
-                                <i className="pi pi-camera text-teal-600 text-sm" />
-                                FOTO BEFORE (SEBELUM TREATMENT / KONSULTASI)
-                            </label>
-                            <div className="flex flex-column sm:flex-row align-items-center gap-3">
-                                {headerRMData.foto_before ? (
-                                    <div className="relative border-round-lg overflow-hidden border-1 surface-border" style={{ width: '120px', height: '120px' }}>
-                                        <img
-                                            src={headerRMData.foto_before}
-                                            alt="Foto Before"
-                                            className="w-full h-full object-cover"
+                    {/* SECTION FOTO BEFORE (SEBELUM TREATMENT / KONSULTASI) */}
+                    <div className="p-3 border-round-xl border-1 surface-border bg-white">
+                        <label className="block text-xs font-extrabold text-700 uppercase tracking-wider mb-2 flex align-items-center gap-2">
+                            <i className="pi pi-camera text-500 text-sm" />
+                            FOTO BEFORE (SEBELUM TREATMENT / KONSULTASI)
+                        </label>
+                        <div className="flex flex-column sm:flex-row align-items-center gap-3">
+                            {headerRMData.foto_before ? (
+                                <div className="relative border-round-lg overflow-hidden border-1 surface-border" style={{ width: '120px', height: '120px' }}>
+                                    <img
+                                        src={headerRMData.foto_before}
+                                        alt="Foto Before"
+                                        className="w-full h-full object-cover"
+                                    />
+                                    {!isFormSaved && (
+                                        <Button
+                                            icon="pi pi-trash"
+                                            severity="danger"
+                                            rounded
+                                            size="small"
+                                            className="absolute top-0 right-0 m-1 p-button-sm"
+                                            onClick={() => setHeaderRMData({ ...headerRMData, foto_before: '' })}
                                         />
-                                        {!isFormSaved && (
-                                            <Button
-                                                icon="pi pi-trash"
-                                                severity="danger"
-                                                rounded
-                                                size="small"
-                                                className="absolute top-0 right-0 m-1 p-button-sm"
-                                                onClick={() => setHeaderRMData({ ...headerRMData, foto_before: '' })}
-                                            />
-                                        )}
-                                    </div>
-                                ) : (
-                                    <div
-                                        className="border-2 border-dashed border-300 border-round-xl flex flex-column align-items-center justify-content-center p-3 text-center cursor-pointer hover:border-teal-500 bg-white"
-                                        style={{ width: '100%', maxWidth: '240px', minHeight: '100px' }}
-                                        onClick={() => !isFormSaved && document.getElementById('before_photo_input')?.click()}
-                                    >
-                                        <i className="pi pi-upload text-teal-600 text-2xl mb-1" />
-                                        <span className="text-xs font-bold text-700">Unggah Foto Before</span>
-                                        <span className="text-[10px] text-400">Format: JPG, PNG, WEBP</span>
-                                    </div>
-                                )}
-                                <input
-                                    id="before_photo_input"
-                                    type="file"
-                                    accept="image/*"
-                                    className="hidden"
-                                    onChange={handleBeforePhotoUpload}
-                                    disabled={isFormSaved || uploadingBefore}
+                                    )}
+                                </div>
+                            ) : (
+                                <div
+                                    className="border-2 border-dashed border-300 border-round-xl flex flex-column align-items-center justify-content-center p-3 text-center cursor-pointer hover:border-500 bg-white"
+                                    style={{ width: '100%', maxWidth: '240px', minHeight: '100px' }}
+                                    onClick={() => !isFormSaved && document.getElementById('before_photo_input')?.click()}
+                                >
+                                    <i className="pi pi-upload text-500 text-2xl mb-1" />
+                                    <span className="text-xs font-bold text-700">Unggah Foto Before</span>
+                                    <span className="text-[10px] text-400">Format: JPG, PNG, WEBP</span>
+                                </div>
+                            )}
+                            <input
+                                id="before_photo_input"
+                                type="file"
+                                accept="image/*"
+                                className="hidden"
+                                onChange={handleBeforePhotoUpload}
+                                disabled={isFormSaved || uploadingBefore}
+                            />
+                        </div>
+                    </div>
+
+                    {/* 1. ANAMNESIS & RIWAYAT PASIEN */}
+                    <div className="p-3 border-round-xl border-1 surface-border bg-white">
+                        <label className="block text-xs font-extrabold text-700 uppercase tracking-wider mb-2 pb-2 border-bottom-1 surface-border flex align-items-center gap-2">
+                            <i className="pi pi-book text-500 text-sm" />
+                            1. ANAMNESIS &amp; RIWAYAT PASIEN (REKAM MEDIS)
+                        </label>
+                        <div className="grid formgrid p-fluid text-sm">
+                            <div className="col-12 md:col-6 mb-3">
+                                <label className="block text-xs font-semibold mb-1">Keluhan Utama Pasien</label>
+                                <InputTextarea
+                                    value={headerRMData.keluhan}
+                                    onChange={(e) => setHeaderRMData({ ...headerRMData, keluhan: e.target.value })}
+                                    rows={2}
+                                    placeholder="Tuliskan keluhan utama pasien..."
+                                    disabled={isFormSaved}
+                                    className="w-full text-sm border-round-md"
+                                />
+                            </div>
+                            <div className="col-12 md:col-6 mb-3">
+                                <label className="block text-xs font-semibold mb-1">Durasi Keluhan</label>
+                                <InputText
+                                    value={headerRMData.durasi_keluhan}
+                                    onChange={(e) => setHeaderRMData({ ...headerRMData, durasi_keluhan: e.target.value })}
+                                    placeholder="Misal: 2 minggu, 1 bulan..."
+                                    disabled={isFormSaved}
+                                    className="w-full text-sm border-round-md"
+                                />
+                            </div>
+                            <div className="col-12 md:col-6 mb-3">
+                                <label className="block text-xs font-semibold mb-1">Riwayat Alergi Pasien</label>
+                                <InputTextarea
+                                    value={headerRMData.riwayat_alergi}
+                                    onChange={(e) => setHeaderRMData({ ...headerRMData, riwayat_alergi: e.target.value })}
+                                    rows={2}
+                                    placeholder="Riwayat alergi obat / kosmetik / bahan..."
+                                    disabled={isFormSaved}
+                                    className="w-full text-sm border-round-md"
+                                />
+                            </div>
+                            <div className="col-12 md:col-6 mb-3">
+                                <label className="block text-xs font-semibold mb-1">Riwayat Treatment Sebelumnya</label>
+                                <InputTextarea
+                                    value={headerRMData.riwayat_treatment}
+                                    onChange={(e) => setHeaderRMData({ ...headerRMData, riwayat_treatment: e.target.value })}
+                                    rows={2}
+                                    placeholder="Perawatan kulit/klinik yang pernah dikunjungi..."
+                                    disabled={isFormSaved}
+                                    className="w-full text-sm border-round-md"
                                 />
                             </div>
                         </div>
-
-                        {/* 1. ANAMNESIS & RIWAYAT PASIEN */}
-                        <div>
-                            <label className="block text-xs font-extrabold text-teal-800 uppercase tracking-wider mb-2 pb-2 border-bottom-1 surface-border">
-                                1. ANAMNESIS &amp; RIWAYAT PASIEN (REKAM MEDIS)
-                            </label>
-                            <div className="grid formgrid p-fluid text-sm">
-                                <div className="col-12 md:col-6 mb-3">
-                                    <label className="block text-xs font-semibold mb-1">Keluhan Utama Pasien</label>
-                                    <InputTextarea
-                                        value={headerRMData.keluhan}
-                                        onChange={(e) => setHeaderRMData({ ...headerRMData, keluhan: e.target.value })}
-                                        rows={2}
-                                        placeholder="Tuliskan keluhan utama pasien..."
-                                        disabled={isFormSaved}
-                                        className="w-full text-sm border-round-md"
-                                    />
-                                </div>
-                                <div className="col-12 md:col-6 mb-3">
-                                    <label className="block text-xs font-semibold mb-1">Durasi Keluhan</label>
-                                    <InputText
-                                        value={headerRMData.durasi_keluhan}
-                                        onChange={(e) => setHeaderRMData({ ...headerRMData, durasi_keluhan: e.target.value })}
-                                        placeholder="Misal: 2 minggu, 1 bulan..."
-                                        disabled={isFormSaved}
-                                        className="w-full text-sm border-round-md"
-                                    />
-                                </div>
-                                <div className="col-12 md:col-6 mb-3">
-                                    <label className="block text-xs font-semibold mb-1">Riwayat Alergi Pasien</label>
-                                    <InputTextarea
-                                        value={headerRMData.riwayat_alergi}
-                                        onChange={(e) => setHeaderRMData({ ...headerRMData, riwayat_alergi: e.target.value })}
-                                        rows={2}
-                                        placeholder="Riwayat alergi obat / kosmetik / bahan..."
-                                        disabled={isFormSaved}
-                                        className="w-full text-sm border-round-md"
-                                    />
-                                </div>
-                                <div className="col-12 md:col-6 mb-3">
-                                    <label className="block text-xs font-semibold mb-1">Riwayat Treatment Sebelumnya</label>
-                                    <InputTextarea
-                                        value={headerRMData.riwayat_treatment}
-                                        onChange={(e) => setHeaderRMData({ ...headerRMData, riwayat_treatment: e.target.value })}
-                                        rows={2}
-                                        placeholder="Perawatan kulit/klinik yang pernah dikunjungi..."
-                                        disabled={isFormSaved}
-                                        className="w-full text-sm border-round-md"
-                                    />
-                                </div>
-                            </div>
-                        </div>
-
-                        {/* 2. HASIL PEMERIKSAAN KULIT */}
-                        <div>
-                            <label className="block text-xs font-extrabold text-teal-800 uppercase tracking-wider mb-2 pb-2 border-bottom-1 surface-border">
-                                2. HASIL PEMERIKSAAN KULIT
-                            </label>
-                            <div className="grid formgrid p-fluid text-sm">
-                                <div className="col-12 md:col-4 mb-3">
-                                    <label className="block text-xs font-semibold mb-1">Pemeriksaan Acne</label>
-                                    <Dropdown
-                                        value={headerRMData.pemeriksaan_acne}
-                                        options={[
-                                            { label: 'Tidak Ada', value: 'Tidak Ada' },
-                                            { label: 'Ringan', value: 'Ringan' },
-                                            { label: 'Sedang', value: 'Sedang' },
-                                            { label: 'Berat', value: 'Berat' },
-                                        ]}
-                                        onChange={(e) => setHeaderRMData({ ...headerRMData, pemeriksaan_acne: e.value })}
-                                        disabled={isFormSaved}
-                                        className="w-full text-sm border-round-md"
-                                    />
-                                </div>
-                                <div className="col-12 md:col-4 mb-3">
-                                    <label className="block text-xs font-semibold mb-1">Pemeriksaan Inflammation</label>
-                                    <Dropdown
-                                        value={headerRMData.pemeriksaan_inflammation}
-                                        options={[
-                                            { label: 'Tidak Ada', value: 'Tidak Ada' },
-                                            { label: 'Ringan', value: 'Ringan' },
-                                            { label: 'Sedang', value: 'Sedang' },
-                                            { label: 'Berat', value: 'Berat' },
-                                        ]}
-                                        onChange={(e) => setHeaderRMData({ ...headerRMData, pemeriksaan_inflammation: e.value })}
-                                        disabled={isFormSaved}
-                                        className="w-full text-sm border-round-md"
-                                    />
-                                </div>
-                                <div className="col-12 md:col-4 mb-3">
-                                    <label className="block text-xs font-semibold mb-1">Jenis / Tipe Kulit</label>
-                                    <Dropdown
-                                        value={headerRMData.pemeriksaan_skin_type}
-                                        options={[
-                                            { label: 'Normal', value: 'Normal' },
-                                            { label: 'Kering', value: 'Kering' },
-                                            { label: 'Berminyak', value: 'Berminyak' },
-                                            { label: 'Kombinasi', value: 'Kombinasi' },
-                                            { label: 'Sensitif', value: 'Sensitif' },
-                                        ]}
-                                        onChange={(e) => setHeaderRMData({ ...headerRMData, pemeriksaan_skin_type: e.value })}
-                                        disabled={isFormSaved}
-                                        className="w-full text-sm border-round-md"
-                                    />
-                                </div>
-                                <div className="col-12 md:col-6 mb-3">
-                                    <label className="block text-xs font-semibold mb-1">Pemeriksaan Pigmentasi</label>
-                                    <Dropdown
-                                        value={headerRMData.pemeriksaan_pigmentation}
-                                        options={[
-                                            { label: 'Tidak Ada', value: 'Tidak Ada' },
-                                            { label: 'Melasma', value: 'Melasma' },
-                                            { label: 'PIH', value: 'PIH' },
-                                            { label: 'Freckles', value: 'Freckles' },
-                                            { label: 'Lentigo', value: 'Lentigo' },
-                                        ]}
-                                        onChange={(e) => setHeaderRMData({ ...headerRMData, pemeriksaan_pigmentation: e.value })}
-                                        disabled={isFormSaved}
-                                        className="w-full text-sm border-round-md"
-                                    />
-                                </div>
-                                <div className="col-12 md:col-6 mb-3">
-                                    <label className="block text-xs font-semibold mb-1">Sensitivitas Kulit</label>
-                                    <Dropdown
-                                        value={headerRMData.pemeriksaan_sensitivity}
-                                        options={[
-                                            { label: 'Rendah', value: 'Rendah' },
-                                            { label: 'Sedang', value: 'Sedang' },
-                                            { label: 'Tinggi', value: 'Tinggi' },
-                                        ]}
-                                        onChange={(e) => setHeaderRMData({ ...headerRMData, pemeriksaan_sensitivity: e.value })}
-                                        disabled={isFormSaved}
-                                        className="w-full text-sm border-round-md"
-                                    />
-                                </div>
-                            </div>
-                        </div>
-
-                        {/* 3. DIAGNOSIS DOKTER & SOAP MEDIS */}
-                        <div>
-                            <label className="block text-xs font-extrabold text-teal-800 uppercase tracking-wider mb-2 pb-2 border-bottom-1 surface-border">
-                                3. DIAGNOSIS DOKTER &amp; SOAP MEDIS
-                            </label>
-                            <div className="grid formgrid p-fluid text-sm">
-                                <div className="col-12 md:col-6 mb-3">
-                                    <label className="block text-xs font-semibold mb-1">Diagnosis Dokter</label>
-                                    <InputText
-                                        value={headerRMData.diagnosis}
-                                        onChange={(e) => setHeaderRMData({ ...headerRMData, diagnosis: e.target.value })}
-                                        placeholder="Diagnosis medis..."
-                                        disabled={isFormSaved}
-                                        className="w-full text-sm border-round-md"
-                                    />
-                                </div>
-                                <div className="col-12 md:col-6 mb-3">
-                                    <label className="block text-xs font-semibold mb-1">SOAP (Plan / Perencanaan)</label>
-                                    <InputText
-                                        value={headerRMData.plan}
-                                        onChange={(e) => setHeaderRMData({ ...headerRMData, plan: e.target.value })}
-                                        placeholder="Rencana penanganan / treatment..."
-                                        disabled={isFormSaved}
-                                        className="w-full text-sm border-round-md"
-                                    />
-                                </div>
-                                <div className="col-12 md:col-4 mb-3">
-                                    <label className="block text-xs font-semibold mb-1">SOAP (Subjective)</label>
-                                    <InputTextarea
-                                        value={headerRMData.subjective}
-                                        onChange={(e) => setHeaderRMData({ ...headerRMData, subjective: e.target.value })}
-                                        rows={2}
-                                        placeholder="Catatan subjektif pasien..."
-                                        disabled={isFormSaved}
-                                        className="w-full text-sm border-round-md"
-                                    />
-                                </div>
-                                <div className="col-12 md:col-4 mb-3">
-                                    <label className="block text-xs font-semibold mb-1">SOAP (Objective)</label>
-                                    <InputTextarea
-                                        value={headerRMData.objective}
-                                        onChange={(e) => setHeaderRMData({ ...headerRMData, objective: e.target.value })}
-                                        rows={2}
-                                        placeholder="Catatan objektif fisik..."
-                                        disabled={isFormSaved}
-                                        className="w-full text-sm border-round-md"
-                                    />
-                                </div>
-                                <div className="col-12 md:col-4 mb-3">
-                                    <label className="block text-xs font-semibold mb-1">SOAP (Assessment)</label>
-                                    <InputTextarea
-                                        value={headerRMData.assessment}
-                                        onChange={(e) => setHeaderRMData({ ...headerRMData, assessment: e.target.value })}
-                                        rows={2}
-                                        placeholder="Penilaian klinis dokter..."
-                                        disabled={isFormSaved}
-                                        className="w-full text-sm border-round-md"
-                                    />
-                                </div>
-                            </div>
-                        </div>
-
-                        {/* KONTROL UI: LANJUT KE TREATMENT? (HANYA JIKA BUKAN DARI KONSULTASI WAJIB) */}
-                        {!((activePatient as any)?.wajib_konsultasi === 'wajib' || (activePatient?.nama_layanan && !activePatient.nama_layanan.toLowerCase().includes('konsul'))) && (
-                            <div className="p-3 surface-100 border-round-lg border-1 surface-border flex align-items-center justify-content-between">
-                                <div>
-                                    <span className="font-bold text-sm text-900 block">Lanjut ke Treatment Sesi Ini?</span>
-                                    <span className="text-xs text-500">Jika Ya, sistem otomatis menerbitkan antrean di ruang tindakan pasien tanpa daftar ulang.</span>
-                                </div>
-                                <div className="flex align-items-center gap-3">
-                                    <div className="flex align-items-center gap-1">
-                                        <Checkbox
-                                            inputId="lanjut_ya_active"
-                                            checked={lanjutKeTindakan}
-                                            disabled={isFormSaved}
-                                            onChange={(e) => setLanjutKeTindakan(true)}
-                                        />
-                                        <label htmlFor="lanjut_ya_active" className="text-sm font-bold text-teal-800 cursor-pointer">Ya (Lanjut Treatment)</label>
-                                    </div>
-                                    <div className="flex align-items-center gap-1">
-                                        <Checkbox
-                                            inputId="lanjut_tidak_active"
-                                            checked={!lanjutKeTindakan}
-                                            disabled={isFormSaved}
-                                            onChange={(e) => {
-                                                setLanjutKeTindakan(false);
-                                                setRekomendasiItems((prev) => prev.filter((i) => ['produk', 'paket_produk'].includes(i.jenis)));
-                                            }}
-                                        />
-                                        <label htmlFor="lanjut_tidak_active" className="text-sm font-bold text-500 cursor-pointer">Tidak</label>
-                                    </div>
-                                </div>
-                            </div>
-                        )}
                     </div>
+
+                    {/* 2. HASIL PEMERIKSAAN KULIT */}
+                    <div className="p-3 border-round-xl border-1 surface-border bg-white">
+                        <label className="block text-xs font-extrabold text-700 uppercase tracking-wider mb-2 pb-2 border-bottom-1 surface-border flex align-items-center gap-2">
+                            <i className="pi pi-check-circle text-500 text-sm" />
+                            2. HASIL PEMERIKSAAN KULIT
+                        </label>
+                        <div className="grid formgrid p-fluid text-sm">
+                            <div className="col-12 md:col-4 mb-3">
+                                <label className="block text-xs font-semibold mb-1">Pemeriksaan Acne</label>
+                                <Dropdown
+                                    value={headerRMData.pemeriksaan_acne}
+                                    options={[
+                                        { label: 'Tidak Ada', value: 'Tidak Ada' },
+                                        { label: 'Ringan', value: 'Ringan' },
+                                        { label: 'Sedang', value: 'Sedang' },
+                                        { label: 'Berat', value: 'Berat' },
+                                    ]}
+                                    onChange={(e) => setHeaderRMData({ ...headerRMData, pemeriksaan_acne: e.value })}
+                                    disabled={isFormSaved}
+                                    className="w-full text-sm border-round-md"
+                                />
+                            </div>
+                            <div className="col-12 md:col-4 mb-3">
+                                <label className="block text-xs font-semibold mb-1">Pemeriksaan Inflammation</label>
+                                <Dropdown
+                                    value={headerRMData.pemeriksaan_inflammation}
+                                    options={[
+                                        { label: 'Tidak Ada', value: 'Tidak Ada' },
+                                        { label: 'Ringan', value: 'Ringan' },
+                                        { label: 'Sedang', value: 'Sedang' },
+                                        { label: 'Berat', value: 'Berat' },
+                                    ]}
+                                    onChange={(e) => setHeaderRMData({ ...headerRMData, pemeriksaan_inflammation: e.value })}
+                                    disabled={isFormSaved}
+                                    className="w-full text-sm border-round-md"
+                                />
+                            </div>
+                            <div className="col-12 md:col-4 mb-3">
+                                <label className="block text-xs font-semibold mb-1">Jenis / Tipe Kulit</label>
+                                <Dropdown
+                                    value={headerRMData.pemeriksaan_skin_type}
+                                    options={[
+                                        { label: 'Normal', value: 'Normal' },
+                                        { label: 'Kering', value: 'Kering' },
+                                        { label: 'Berminyak', value: 'Berminyak' },
+                                        { label: 'Kombinasi', value: 'Kombinasi' },
+                                        { label: 'Sensitif', value: 'Sensitif' },
+                                    ]}
+                                    onChange={(e) => setHeaderRMData({ ...headerRMData, pemeriksaan_skin_type: e.value })}
+                                    disabled={isFormSaved}
+                                    className="w-full text-sm border-round-md"
+                                />
+                            </div>
+                            <div className="col-12 md:col-6 mb-3">
+                                <label className="block text-xs font-semibold mb-1">Pemeriksaan Pigmentasi</label>
+                                <Dropdown
+                                    value={headerRMData.pemeriksaan_pigmentation}
+                                    options={[
+                                        { label: 'Tidak Ada', value: 'Tidak Ada' },
+                                        { label: 'Melasma', value: 'Melasma' },
+                                        { label: 'PIH', value: 'PIH' },
+                                        { label: 'Freckles', value: 'Freckles' },
+                                        { label: 'Lentigo', value: 'Lentigo' },
+                                    ]}
+                                    onChange={(e) => setHeaderRMData({ ...headerRMData, pemeriksaan_pigmentation: e.value })}
+                                    disabled={isFormSaved}
+                                    className="w-full text-sm border-round-md"
+                                />
+                            </div>
+                            <div className="col-12 md:col-6 mb-3">
+                                <label className="block text-xs font-semibold mb-1">Sensitivitas Kulit</label>
+                                <Dropdown
+                                    value={headerRMData.pemeriksaan_sensitivity}
+                                    options={[
+                                        { label: 'Rendah', value: 'Rendah' },
+                                        { label: 'Sedang', value: 'Sedang' },
+                                        { label: 'Tinggi', value: 'Tinggi' },
+                                    ]}
+                                    onChange={(e) => setHeaderRMData({ ...headerRMData, pemeriksaan_sensitivity: e.value })}
+                                    disabled={isFormSaved}
+                                    className="w-full text-sm border-round-md"
+                                />
+                            </div>
+                        </div>
+                    </div>
+
+                    {/* 3. DIAGNOSIS DOKTER & SOAP MEDIS */}
+                    <div className="p-3 border-round-xl border-1 surface-border bg-white">
+                        <label className="block text-xs font-extrabold text-700 uppercase tracking-wider mb-2 pb-2 border-bottom-1 surface-border flex align-items-center gap-2">
+                            <i className="pi pi-file-edit text-500 text-sm" />
+                            3. DIAGNOSIS DOKTER &amp; SOAP MEDIS
+                        </label>
+                        <div className="grid formgrid p-fluid text-sm">
+                            <div className="col-12 md:col-6 mb-3">
+                                <label className="block text-xs font-semibold mb-1">Diagnosis Dokter</label>
+                                <InputText
+                                    value={headerRMData.diagnosis}
+                                    onChange={(e) => setHeaderRMData({ ...headerRMData, diagnosis: e.target.value })}
+                                    placeholder="Diagnosis medis..."
+                                    disabled={isFormSaved}
+                                    className="w-full text-sm border-round-md"
+                                />
+                            </div>
+                            <div className="col-12 md:col-6 mb-3">
+                                <label className="block text-xs font-semibold mb-1">SOAP (Plan / Perencanaan)</label>
+                                <InputText
+                                    value={headerRMData.plan}
+                                    onChange={(e) => setHeaderRMData({ ...headerRMData, plan: e.target.value })}
+                                    placeholder="Rencana penanganan / treatment..."
+                                    disabled={isFormSaved}
+                                    className="w-full text-sm border-round-md"
+                                />
+                            </div>
+                            <div className="col-12 md:col-4 mb-3">
+                                <label className="block text-xs font-semibold mb-1">SOAP (Subjective)</label>
+                                <InputTextarea
+                                    value={headerRMData.subjective}
+                                    onChange={(e) => setHeaderRMData({ ...headerRMData, subjective: e.target.value })}
+                                    rows={2}
+                                    placeholder="Catatan subjektif pasien..."
+                                    disabled={isFormSaved}
+                                    className="w-full text-sm border-round-md"
+                                />
+                            </div>
+                            <div className="col-12 md:col-4 mb-3">
+                                <label className="block text-xs font-semibold mb-1">SOAP (Objective)</label>
+                                <InputTextarea
+                                    value={headerRMData.objective}
+                                    onChange={(e) => setHeaderRMData({ ...headerRMData, objective: e.target.value })}
+                                    rows={2}
+                                    placeholder="Catatan objektif fisik..."
+                                    disabled={isFormSaved}
+                                    className="w-full text-sm border-round-md"
+                                />
+                            </div>
+                            <div className="col-12 md:col-4 mb-3">
+                                <label className="block text-xs font-semibold mb-1">SOAP (Assessment)</label>
+                                <InputTextarea
+                                    value={headerRMData.assessment}
+                                    onChange={(e) => setHeaderRMData({ ...headerRMData, assessment: e.target.value })}
+                                    rows={2}
+                                    placeholder="Penilaian klinis dokter..."
+                                    disabled={isFormSaved}
+                                    className="w-full text-sm border-round-md"
+                                />
+                            </div>
+                        </div>
+                    </div>
+
+                    {/* KONTROL UI: LANJUT KE TREATMENT? (HANYA JIKA BUKAN DARI KONSULTASI WAJIB) */}
+                    {!((activePatient as any)?.wajib_konsultasi === 'wajib' || (activePatient?.nama_layanan && !activePatient.nama_layanan.toLowerCase().includes('konsul'))) && (
+                        <div className="p-3 surface-50 border-round-lg border-1 surface-border flex align-items-center justify-content-between">
+                            <div>
+                                <span className="font-bold text-sm text-900 block">Lanjut ke Treatment Sesi Ini?</span>
+                                <span className="text-xs text-500">Jika Ya, sistem otomatis menerbitkan antrean di ruang tindakan pasien tanpa daftar ulang.</span>
+                            </div>
+                            <div className="flex align-items-center gap-3">
+                                <div className="flex align-items-center gap-1">
+                                    <Checkbox
+                                        inputId="lanjut_ya_active"
+                                        checked={lanjutKeTindakan}
+                                        disabled={isFormSaved}
+                                        onChange={(e) => setLanjutKeTindakan(true)}
+                                    />
+                                    <label htmlFor="lanjut_ya_active" className="text-sm font-bold text-700 cursor-pointer">Ya (Lanjut Treatment)</label>
+                                </div>
+                                <div className="flex align-items-center gap-1">
+                                    <Checkbox
+                                        inputId="lanjut_tidak_active"
+                                        checked={!lanjutKeTindakan}
+                                        disabled={isFormSaved}
+                                        onChange={(e) => {
+                                            setLanjutKeTindakan(false);
+                                            setRekomendasiItems((prev) => prev.filter((i) => ['produk', 'paket_produk'].includes(i.jenis)));
+                                        }}
+                                    />
+                                    <label htmlFor="lanjut_tidak_active" className="text-sm font-bold text-500 cursor-pointer">Tidak</label>
+                                </div>
+                            </div>
+                        </div>
+                    )}
 
                     {/* SECTION INFORMASI TERDAFTAR TREATMENT ATAU PILIH REKOMENDASI */}
                     {lanjutKeTindakan && (
@@ -874,10 +1027,10 @@ export const ActiveTreatmentPanel: React.FC<ActiveTreatmentPanelProps> = ({
                         )
                     )}
 
-                    {/* SECTION CATATAN PETUGAS / OBSERVASI KONSULTASI */}
-                    <div className="p-3 border-round-xl border-1 surface-border bg-white shadow-1">
-                        <label className="block text-xs font-extrabold text-teal-800 uppercase tracking-wider mb-2 flex align-items-center gap-2">
-                            <i className="pi pi-pencil text-teal-600 text-sm" />
+                    {/* SECTION CATATAN DOKTER / OBSERVASI KONSULTASI */}
+                    <div className="p-3 border-round-xl border-1 surface-border bg-white">
+                        <label className="block text-xs font-extrabold text-700 uppercase tracking-wider mb-2 flex align-items-center gap-2">
+                            <i className="pi pi-pencil text-500 text-sm" />
                             CATATAN DOKTER &amp; OBSERVASI KONSULTASI
                         </label>
                         <InputTextarea
@@ -886,7 +1039,7 @@ export const ActiveTreatmentPanel: React.FC<ActiveTreatmentPanelProps> = ({
                             rows={4}
                             placeholder="Tuliskan rincian hasil konsultasi, resep, atau catatan khusus observasi pasien..."
                             disabled={isFormSaved}
-                            className="w-full text-sm border-round-md bg-white border-300 focus:border-teal-500"
+                            className="w-full text-sm border-round-md bg-white border-300"
                         />
                     </div>
 
@@ -909,10 +1062,9 @@ export const ActiveTreatmentPanel: React.FC<ActiveTreatmentPanelProps> = ({
                 </div>
             ) : (
                 /* RUANG TINDAKAN VIEW */
-                /* RUANG TINDAKAN VIEW */
                 <div className="flex flex-column gap-0">
                     {/* TAB HEADER FOR TREATMENT ROOM */}
-                    <div className="flex flex-column sm:flex-row align-items-center justify-content-between p-3 bg-teal-50 border-bottom-1 surface-border gap-2">
+                    <div className="flex flex-column sm:flex-row align-items-center justify-content-between p-3 bg-white border-bottom-1 surface-border gap-2">
                         <div className="flex align-items-center gap-2 w-full sm:w-auto">
                             <button
                                 type="button"
@@ -923,12 +1075,7 @@ export const ActiveTreatmentPanel: React.FC<ActiveTreatmentPanelProps> = ({
                                         : 'surface-card text-700 hover:surface-200 border-1 surface-border'
                                 }`}
                             >
-                                <span className={`w-1.5rem h-1.5rem border-circle flex align-items-center justify-content-center text-xs font-extrabold ${
-                                    activeStep === 'form' ? 'bg-white text-teal-800' : 'bg-teal-100 text-teal-800'
-                                }`}>
-                                    1
-                                </span>
-                                <span>Form Penanganan Ruangan</span>
+                                <span>1. Form Penanganan Ruangan</span>
                             </button>
 
                             <i className="pi pi-chevron-right text-400 text-sm hidden sm:inline-block" />
@@ -942,12 +1089,7 @@ export const ActiveTreatmentPanel: React.FC<ActiveTreatmentPanelProps> = ({
                                         : 'surface-card text-700 hover:surface-200 border-1 surface-border'
                                 }`}
                             >
-                                <span className={`w-1.5rem h-1.5rem border-circle flex align-items-center justify-content-center text-xs font-extrabold ${
-                                    activeStep === 'hasil' ? 'bg-white text-teal-800' : 'bg-teal-100 text-teal-800'
-                                }`}>
-                                    2
-                                </span>
-                                <span>Hasil Treatment (Foto After) &amp; Rekomendasi Produk</span>
+                                <span>2. Hasil Treatment (Foto After) &amp; Rekomendasi Produk</span>
                             </button>
                         </div>
 
@@ -966,12 +1108,12 @@ export const ActiveTreatmentPanel: React.FC<ActiveTreatmentPanelProps> = ({
 
                     {activeStep === 'form' ? (
                         /* TAB 1: FORM PENANGANAN RUANGAN TINDAKAN */
-                        <div className="p-4 flex flex-column gap-4 surface-ground">
+                        <div className="p-3 sm:p-4 flex flex-column gap-4 bg-white">
                             {/* SECTION PETUGAS / DOKTER PENANGGUNG JAWAB (SESUAI SIP) */}
-                            <div className="surface-card p-3 border-round-xl border-1 surface-border shadow-1">
+                            <div className="p-3 border-round-xl border-1 surface-border bg-white">
                                 <div className="flex align-items-center justify-content-between mb-3 pb-2 border-bottom-1 surface-border">
-                                    <label className="text-xs font-extrabold text-teal-800 uppercase tracking-wider flex align-items-center gap-2 m-0">
-                                        <i className="pi pi-user text-teal-600 text-sm" />
+                                    <label className="text-xs font-extrabold text-700 uppercase tracking-wider flex align-items-center gap-2 m-0">
+                                        <i className="pi pi-user text-500 text-sm" />
                                         PETUGAS / DOKTER PENANGGUNG JAWAB (SESUAI SIP)
                                     </label>
                                     <span className="text-[10px] text-500 font-semibold">Tersimpan berdasar No. SIP</span>
@@ -991,7 +1133,7 @@ export const ActiveTreatmentPanel: React.FC<ActiveTreatmentPanelProps> = ({
                                             if (option) {
                                                 return (
                                                     <div className="flex align-items-center gap-2">
-                                                        <span className="font-bold text-teal-900">{option.nama || option.label}</span>
+                                                        <span className="font-bold text-900">{option.nama || option.label}</span>
                                                         {option.value && (
                                                             <span className="text-xs text-500 font-normal">(No. SIP: {option.value})</span>
                                                         )}
@@ -1003,7 +1145,7 @@ export const ActiveTreatmentPanel: React.FC<ActiveTreatmentPanelProps> = ({
                                         itemTemplate={(option) => (
                                             <div className="flex align-items-center justify-content-between py-1">
                                                 <div>
-                                                    <span className="font-bold text-teal-900 block text-sm">{option.nama || option.label}</span>
+                                                    <span className="font-bold text-900 block text-sm">{option.nama || option.label}</span>
                                                     <span className="text-xs text-500 block">No. SIP: {option.value}</span>
                                                 </div>
                                             </div>
@@ -1014,10 +1156,10 @@ export const ActiveTreatmentPanel: React.FC<ActiveTreatmentPanelProps> = ({
 
                             {/* 1. DISPLAY FORM HASIL KONSULTASI DOKTER DI RUANG TINDAKAN (READ-ONLY) */}
                             {hasDataKonsul && (
-                                <div className="surface-card p-4 border-round-xl border-1 surface-border bg-blue-50/70 shadow-1">
-                                    <div className="flex align-items-center gap-2 mb-3 pb-2 border-bottom-1 border-blue-200">
-                                        <i className="pi pi-file-edit text-blue-600 text-lg" />
-                                        <span className="font-extrabold text-blue-900 text-sm uppercase">FORM HASIL KONSULTASI DOKTER (DARI SESI KONSULTASI)</span>
+                                <div className="p-3 border-round-xl border-1 surface-border bg-white">
+                                    <div className="flex align-items-center gap-2 mb-3 pb-2 border-bottom-1 surface-border">
+                                        <i className="pi pi-file-edit text-500 text-sm" />
+                                        <span className="font-extrabold text-700 text-xs uppercase tracking-wider">FORM HASIL KONSULTASI DOKTER (DARI SESI KONSULTASI)</span>
                                     </div>
                                     <div className="grid text-xs">
                                         {(dataKonsul.data_konsultasi_foto_before || dataKonsul.foto_before) && (
@@ -1033,7 +1175,7 @@ export const ActiveTreatmentPanel: React.FC<ActiveTreatmentPanelProps> = ({
                                         )}
                                         <div className="col-12 md:col-6 mb-3">
                                             <span className="font-semibold text-color-secondary block mb-1">Keluhan Utama Pasien:</span>
-                                            <span className="font-bold text-blue-900 text-sm block">{dataKonsul.data_konsultasi_keluhan || '-'}</span>
+                                            <span className="font-bold text-900 text-sm block">{dataKonsul.data_konsultasi_keluhan || '-'}</span>
                                         </div>
                                         <div className="col-12 md:col-6 mb-3">
                                             <span className="font-semibold text-color-secondary block mb-1">Riwayat Alergi:</span>
@@ -1041,22 +1183,20 @@ export const ActiveTreatmentPanel: React.FC<ActiveTreatmentPanelProps> = ({
                                         </div>
                                         <div className="col-12 md:col-6 mb-3">
                                             <span className="font-semibold text-color-secondary block mb-1">Diagnosis Dokter:</span>
-                                            <span className="font-bold text-blue-900 text-sm block">{dataKonsul.data_konsultasi_diagnosis || '-'}</span>
+                                            <span className="font-bold text-900 text-sm block">{dataKonsul.data_konsultasi_diagnosis || '-'}</span>
                                         </div>
                                         <div className="col-12 md:col-6 mb-3">
                                             <span className="font-semibold text-color-secondary block mb-1">Rencana Penanganan (SOAP Plan):</span>
-                                            <span className="font-bold text-blue-900 text-sm block">{dataKonsul.data_konsultasi_plan || dataKonsul.data_konsultasi_assessment || '-'}</span>
+                                            <span className="font-bold text-900 text-sm block">{dataKonsul.data_konsultasi_plan || dataKonsul.data_konsultasi_assessment || '-'}</span>
                                         </div>
 
-
-
                                         {extraFormFields.length > 0 && (
-                                            <div className="col-12 mt-2 pt-2 border-top-1 border-blue-200 grid">
-                                                <span className="font-bold text-blue-800 block col-12 mb-1">Catatan Isian Tambahan Konsultasi:</span>
+                                            <div className="col-12 mt-2 pt-2 border-top-1 surface-border grid">
+                                                <span className="font-bold text-700 block col-12 mb-1">Catatan Isian Tambahan Konsultasi:</span>
                                                 {extraFormFields.map((ef, idx) => (
                                                     <div key={idx} className="col-12 md:col-6 mb-1">
                                                         <span className="font-semibold text-color-secondary block">{ef.label}:</span>
-                                                        <span className="font-bold text-blue-900">{ef.value}</span>
+                                                        <span className="font-bold text-900">{ef.value}</span>
                                                     </div>
                                                 ))}
                                             </div>
@@ -1065,12 +1205,10 @@ export const ActiveTreatmentPanel: React.FC<ActiveTreatmentPanelProps> = ({
                                 </div>
                             )}
 
-
-
                             {/* SECTION CATATAN PETUGAS / OBSERVASI RUANGAN */}
-                            <div className="p-3 border-round-xl border-1 surface-border bg-white shadow-1">
-                                <label className="block text-xs font-extrabold text-teal-800 uppercase tracking-wider mb-2 flex align-items-center gap-2">
-                                    <i className="pi pi-pencil text-teal-600 text-sm" />
+                            <div className="p-3 border-round-xl border-1 surface-border bg-white">
+                                <label className="block text-xs font-extrabold text-700 uppercase tracking-wider mb-2 flex align-items-center gap-2">
+                                    <i className="pi pi-pencil text-500 text-sm" />
                                     CATATAN PETUGAS &amp; OBSERVASI TINDAKAN RUANGAN
                                 </label>
                                 <InputTextarea
@@ -1079,7 +1217,7 @@ export const ActiveTreatmentPanel: React.FC<ActiveTreatmentPanelProps> = ({
                                     rows={4}
                                     placeholder="Tuliskan rincian hasil tindakan, obat/alat yang digunakan, resep, atau catatan khusus observasi pasien saat berada di ruangan ini..."
                                     disabled={isFormSaved}
-                                    className="w-full text-sm border-round-md bg-white border-300 focus:border-teal-500"
+                                    className="w-full text-sm border-round-md bg-white border-300"
                                 />
                             </div>
 
@@ -1104,7 +1242,7 @@ export const ActiveTreatmentPanel: React.FC<ActiveTreatmentPanelProps> = ({
                         </div>
                     ) : (
                         /* TAB 2: PANEL HASIL TREATMENT & REKOMENDASI PRODUK KASIR */
-                        <div className="p-4 surface-ground">
+                        <div className="p-3 sm:p-4 bg-white">
                             <HasilTreatmentPanel
                                 activePatient={activePatient}
                                 toast={toast}
@@ -1121,6 +1259,7 @@ export const ActiveTreatmentPanel: React.FC<ActiveTreatmentPanelProps> = ({
                     )}
                 </div>
             )}
+            </div>
 
             {/* CONFIRM DIALOG & HASIL MODAL */}
             <Dialog
@@ -1201,6 +1340,6 @@ export const ActiveTreatmentPanel: React.FC<ActiveTreatmentPanelProps> = ({
                 excludeKodeKunjungan={activePatient?.kode_kunjungan || ''}
                 toast={toast}
             />
-        </div>
+        </>
     );
 };

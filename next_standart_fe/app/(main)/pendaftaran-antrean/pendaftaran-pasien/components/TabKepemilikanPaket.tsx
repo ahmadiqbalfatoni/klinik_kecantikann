@@ -1,6 +1,6 @@
 'use client';
 
-import React, { useEffect, useState, useCallback } from 'react';
+import React, { useEffect, useState, useCallback, useRef } from 'react';
 import { DataTable } from 'primereact/datatable';
 import { Column } from 'primereact/column';
 import { Button } from 'primereact/button';
@@ -106,14 +106,20 @@ export const TabKepemilikanPaket: React.FC<TabKepemilikanPaketProps> = ({ toast,
     loadData();
   }, [loadData, refreshTrigger]);
 
-  const handleSearchSubmit = (e?: React.FormEvent) => {
-    if (e) e.preventDefault();
-    setPage(1);
-    setFirst(0);
-    setAppliedKeyword(searchVal);
+  const searchTimeoutRef = useRef<NodeJS.Timeout | null>(null);
+
+  const handleSearchChange = (val: string) => {
+    setSearchVal(val);
+    if (searchTimeoutRef.current) clearTimeout(searchTimeoutRef.current);
+    searchTimeoutRef.current = setTimeout(() => {
+      setPage(1);
+      setFirst(0);
+      setAppliedKeyword(val);
+    }, 300);
   };
 
   const handleClearSearch = () => {
+    if (searchTimeoutRef.current) clearTimeout(searchTimeoutRef.current);
     setSearchVal('');
     setAppliedKeyword('');
     setPage(1);
@@ -197,9 +203,17 @@ export const TabKepemilikanPaket: React.FC<TabKepemilikanPaketProps> = ({ toast,
     }
   };
 
+  const getStatusColor = (status: string) => {
+    const st = (status || '').toLowerCase();
+    if (st === 'aktif') return '#22c55e';
+    if (st === 'habis') return '#f59e0b';
+    if (st === 'expired') return '#ef4444';
+    return '#94a3b8';
+  };
+
   // Column templates matching Pendaftaran Pasien table
   const noRmBodyTemplate = (rowData: KepemilikanPaket) => (
-    <Tag value={rowData.no_rm} severity="info" className="font-bold px-2 py-1 text-xs border-round-md" />
+    <span className="font-bold text-900">{rowData.no_rm}</span>
   );
 
   const pasienBodyTemplate = (rowData: KepemilikanPaket) => (
@@ -248,24 +262,7 @@ export const TabKepemilikanPaket: React.FC<TabKepemilikanPaketProps> = ({ toast,
     </div>
   );
 
-  const statusBodyTemplate = (rowData: KepemilikanPaket) => {
-    const st = (rowData.status || '').toLowerCase();
-    let severity: 'success' | 'warning' | 'danger' | 'info' = 'info';
-    let label = rowData.status;
 
-    if (st === 'aktif') {
-      severity = 'success';
-      label = 'Aktif';
-    } else if (st === 'habis') {
-      severity = 'warning';
-      label = 'Habis';
-    } else if (st === 'expired') {
-      severity = 'danger';
-      label = 'Expired';
-    }
-
-    return <Tag value={label.toUpperCase()} severity={severity} className="font-bold text-xs px-2 py-1 border-round-md" />;
-  };
 
   const actionBodyTemplate = (rowData: KepemilikanPaket) => (
     <div className="flex align-items-center justify-content-center gap-1">
@@ -307,64 +304,33 @@ export const TabKepemilikanPaket: React.FC<TabKepemilikanPaketProps> = ({ toast,
         data={antrianLayananData}
       />
 
-      {/* 1. SEPARATED LARGE SEARCH CARD */}
-      <div className="card p-4 mb-4 border-round-xl surface-card shadow-1 mt-3">
-        <div className="mb-4 pb-3 border-bottom-1 surface-border">
-          <h2 className="text-2xl font-bold flex align-items-center gap-2 mb-1 text-900">
-            <i className="pi pi-box text-blue-600 text-3xl" />
+      {/* CARD KEPEMILIKAN PAKET DENGAN POLA KONSISTEN MASTER DATA */}
+      <div className="card border-round-xl p-4 shadow-1 surface-card mb-4 mt-3">
+        {/* Page Header */}
+        <div className="mb-4">
+          <h3 className="text-2xl font-bold text-900 flex align-items-center gap-2 mb-1">
+            <i className="pi pi-box text-blue-600 text-2xl" />
             Data Kepemilikan Paket Pasien
-          </h2>
-          <p className="text-color-secondary m-0 text-sm">
+          </h3>
+          <p className="text-500 text-sm m-0">
             Cari data pasien terdaftar yang memiliki paket layanan aktif / multi-sesi beserta rincian sisa sesinya.
           </p>
         </div>
 
-        {/* SEARCH BAR CARD */}
-        <div className="surface-50 p-4 border-round-xl border-1 surface-border">
-          <label className="block text-base font-bold text-900 mb-2 flex align-items-center gap-2">
-            <i className="pi pi-search text-blue-600 text-xl" />
-            Cari Kepemilikan Paket (No. RM / NIK / Nama Pasien / Nama Paket)
-          </label>
-          <form onSubmit={handleSearchSubmit} className="flex flex-column sm:flex-row gap-2 w-full">
-            <div className="flex-1">
-              <IconField iconPosition="left" className="w-full">
-                <InputIcon className="pi pi-search text-lg" />
-                <InputText
-                  value={searchVal}
-                  onChange={(e) => setSearchVal(e.target.value)}
-                  placeholder="Masukkan No. RM, NIK, Nama Pasien, atau Nama Paket..."
-                  className="w-full text-base p-inputtext-lg border-round-lg"
-                />
-              </IconField>
-            </div>
-            <div className="flex gap-2">
-              <Button
-                type="submit"
-                label="Cari"
-                icon="pi pi-search"
-                severity="info"
-                size="large"
-                className="font-bold border-round-lg px-4 flex-1 sm:flex-initial text-base"
-              />
-              {searchVal && (
-                <Button
-                  type="button"
-                  icon="pi pi-times"
-                  severity="secondary"
-                  outlined
-                  size="large"
-                  tooltip="Reset Pencarian"
-                  className="border-round-lg"
-                  onClick={handleClearSearch}
-                />
-              )}
-            </div>
-          </form>
+        {/* Baris Tombol Aksi di bagian paling atas sebelum tabel */}
+        <div className="flex flex-row flex-wrap align-items-center gap-2 mb-4">
+          <Button
+            size="small"
+            label="Refresh"
+            icon="pi pi-refresh"
+            outlined
+            severity="success"
+            className="border-round-md font-medium px-3"
+            loading={loading}
+            onClick={loadData}
+          />
         </div>
-      </div>
 
-      {/* 2. DATATABLE CONTAINER CARD */}
-      <div className="card border-round-xl p-4 shadow-1 surface-card mb-4">
         {/* DATATABLE */}
         <DataTable
           value={dataList}
@@ -387,14 +353,84 @@ export const TabKepemilikanPaket: React.FC<TabKepemilikanPaketProps> = ({ toast,
           style={{ cursor: 'pointer' }}
           paginatorTemplate="FirstPageLink PrevPageLink PageLinks NextPageLink LastPageLink CurrentPageReport RowsPerPageDropdown"
           currentPageReportTemplate="Menampilkan {first} - {last} dari {totalRecords} data kepemilikan paket"
+          header={
+            <div className="flex flex-column gap-3">
+              <div className="flex flex-wrap align-items-center justify-content-between gap-2">
+                <span className="text-xl font-bold text-900">Data Kepemilikan Paket</span>
+                <div className="flex align-items-center gap-2 ml-auto w-full md:w-auto">
+                  <IconField iconPosition="left" className="w-full md:w-20rem">
+                    <InputIcon className="pi pi-search" />
+                    <InputText
+                      value={searchVal}
+                      onChange={(e) => handleSearchChange(e.target.value)}
+                      onKeyDown={(e) => {
+                        if (e.key === 'Enter') {
+                          if (searchTimeoutRef.current) clearTimeout(searchTimeoutRef.current);
+                          setPage(1);
+                          setFirst(0);
+                          setAppliedKeyword(searchVal);
+                        }
+                      }}
+                      placeholder="Cari Data..."
+                      className="w-full text-sm"
+                    />
+                  </IconField>
+                  <Button
+                    type="button"
+                    icon="pi pi-filter-slash"
+                    outlined
+                    severity="danger"
+                    tooltip="Reset Filter"
+                    tooltipOptions={{ position: 'bottom' }}
+                    onClick={handleClearSearch}
+                  />
+                </div>
+              </div>
+              <div className="flex flex-wrap align-items-center gap-3 px-2 py-2 border-round-md surface-100 text-xs font-medium text-color-secondary">
+                <span className="flex align-items-center gap-1">
+                  <i className="pi pi-info-circle" />
+                  <span className="font-semibold">KETERANGAN STATUS:</span>
+                </span>
+                <span className="flex align-items-center gap-1">
+                  <span style={{ display: 'inline-block', width: '12px', height: '12px', borderRadius: '3px', backgroundColor: '#22c55e', boxShadow: '0 1px 3px #22c55e55' }} />
+                  Aktif
+                </span>
+                <span className="flex align-items-center gap-1">
+                  <span style={{ display: 'inline-block', width: '12px', height: '12px', borderRadius: '3px', backgroundColor: '#f59e0b', boxShadow: '0 1px 3px #f59e0b55' }} />
+                  Habis
+                </span>
+                <span className="flex align-items-center gap-1">
+                  <span style={{ display: 'inline-block', width: '12px', height: '12px', borderRadius: '3px', backgroundColor: '#ef4444', boxShadow: '0 1px 3px #ef444455' }} />
+                  Expired
+                </span>
+              </div>
+            </div>
+          }
         >
-          <Column field="no_rm" header="No. RM" body={noRmBodyTemplate} align="center" sortable style={{ minWidth: '8rem' }} />
+          <Column
+            header=""
+            headerStyle={{ width: '3rem' }}
+            align="center"
+            body={(r: KepemilikanPaket) => (
+              <span
+                style={{
+                  display: 'inline-block',
+                  width: '14px',
+                  height: '14px',
+                  borderRadius: '3px',
+                  backgroundColor: getStatusColor(r.status),
+                  boxShadow: `0 1px 3px ${getStatusColor(r.status)}55`,
+                }}
+                title={`Status: ${(r.status || '').toUpperCase()}`}
+              />
+            )}
+          />
+          <Column field="no_rm" header="No. RM" body={noRmBodyTemplate} sortable headerStyle={{ fontWeight: 'bold' }} style={{ minWidth: '8rem' }} />
           <Column field="nama_pasien" header="Nama Pasien" body={pasienBodyTemplate} sortable style={{ minWidth: '12rem' }} />
           <Column field="nama_paket" header="Paket Layanan" body={paketBodyTemplate} sortable style={{ minWidth: '14rem' }} />
           <Column header="Progres Sesi" body={progresSesiTemplate} style={{ minWidth: '12rem' }} />
           <Column header="Sisa Sesi" body={sisaSesiTemplate} align="center" style={{ minWidth: '10rem' }} />
           <Column header="Masa Berlaku" body={tanggalBodyTemplate} align="center" style={{ minWidth: '11rem' }} />
-          <Column header="Status" body={statusBodyTemplate} align="center" style={{ minWidth: '8rem' }} />
           <Column header="Aksi" body={actionBodyTemplate} align="center" style={{ minWidth: '14rem' }} />
         </DataTable>
       </div>
@@ -525,7 +561,7 @@ export const TabKepemilikanPaket: React.FC<TabKepemilikanPaketProps> = ({ toast,
                 </div>
                 <div className="flex align-items-center justify-content-between">
                   <span className="text-500 font-medium text-xs">Tujuan Ruangan</span>
-                  <span className="font-semibold text-primary text-xs flex align-items-center gap-1"><i className="pi pi-map-marker text-xs" />{roomName}</span>
+                  <span className="font-semibold text-primary text-xs flex align-items-center"><i className="pi pi-map-marker text-xs mr-1.5" />{roomName}</span>
                 </div>
               </div>
               <div className="flex flex-column gap-2">
