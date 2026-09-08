@@ -19,8 +19,9 @@ router.post("/", async (req, res) => {
         hari: Joi.string().valid("senin", "selasa", "rabu", "kamis", "jumat", "sabtu", "minggu").required().label("Hari"),
         jam_mulai: Joi.string().required().label("Jam Mulai"),
         jam_selesai: Joi.string().required().label("Jam Selesai"),
-        kuota: Joi.number().integer().min(0).required().label("Kuota"),
-        status: Joi.string().valid("aktif", "nonaktif").required().label("Status")
+        kuota: Joi.number().integer().min(0).optional().allow(null).default(0).label("Kuota"),
+        status: Joi.string().valid("aktif", "nonaktif").required().label("Status"),
+        is_penanggung_jawab: Joi.alternatives().try(Joi.boolean(), Joi.number().valid(0, 1)).optional().label("Penanggung Jawab")
       },
       { "any.required": "{#label} wajib diisi", "any.only": "{#label} tidak valid" },
       oPayload,
@@ -29,8 +30,45 @@ router.post("/", async (req, res) => {
 
     if (cValidation) return res.status(422).json({ status: status.BAD_REQUEST, message: cValidation, datetime: formatDateSystem() });
 
+    const isPJ = oPayload.is_penanggung_jawab === true || oPayload.is_penanggung_jawab === 1 || oPayload.is_penanggung_jawab === "1" || oPayload.is_penanggung_jawab === "true";
+    let effectiveKuota = parseInt(oPayload.kuota) || 0;
+
     let kode = "";
     await DB.transaction(async (trx) => {
+      const targetJamMulai = (oPayload.jam_mulai || "").slice(0, 5);
+      const targetJamSelesai = (oPayload.jam_selesai || "").slice(0, 5);
+
+      if (isPJ && oPayload.kode_ruangan && oPayload.hari) {
+        // Unset PJ HANYA berlaku untuk baris lain dalam SESI YANG SAMA (jam_mulai & jam_selesai sama persis)
+        await trx("mst_jadwal_karyawan")
+          .where({
+            kode_ruangan: oPayload.kode_ruangan,
+            hari: oPayload.hari
+          })
+          .whereRaw("LEFT(jam_mulai, 5) = ?", [targetJamMulai])
+          .whereRaw("LEFT(jam_selesai, 5) = ?", [targetJamSelesai])
+          .update({
+            is_penanggung_jawab: 0,
+            kuota: effectiveKuota,
+            updated_by: username,
+            updated_at: formatDateSystem()
+          });
+      } else if (!isPJ && oPayload.kode_ruangan && oPayload.hari) {
+        // Cari PJ pada SESI YANG SAMA untuk mewarisi kuota
+        const pjRow = await trx("mst_jadwal_karyawan")
+          .where({
+            kode_ruangan: oPayload.kode_ruangan,
+            hari: oPayload.hari,
+            is_penanggung_jawab: 1
+          })
+          .whereRaw("LEFT(jam_mulai, 5) = ?", [targetJamMulai])
+          .whereRaw("LEFT(jam_selesai, 5) = ?", [targetJamSelesai])
+          .first();
+        if (pjRow && pjRow.kuota !== undefined) {
+          effectiveKuota = pjRow.kuota;
+        }
+      }
+
       const last = await trx("mst_jadwal_karyawan").orderBy("id", "desc").first();
       let n = 1;
       if (last?.kode_jadwal) {
@@ -42,10 +80,11 @@ router.post("/", async (req, res) => {
         kode_jadwal: kode,
         no_sip: oPayload.no_sip,
         kode_ruangan: oPayload.kode_ruangan || null,
+        is_penanggung_jawab: isPJ ? 1 : 0,
         hari: oPayload.hari,
         jam_mulai: oPayload.jam_mulai,
         jam_selesai: oPayload.jam_selesai,
-        kuota: oPayload.kuota,
+        kuota: effectiveKuota,
         status: oPayload.status,
         tz: oPayload.tz || "UTC",
         created_by: username,

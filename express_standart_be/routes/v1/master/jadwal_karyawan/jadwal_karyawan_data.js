@@ -26,6 +26,13 @@ router.post("/", async (req, res) => {
       });
     }
 
+    const hasIsPJ = await DB.schema.hasColumn("mst_jadwal_karyawan", "is_penanggung_jawab");
+    if (!hasIsPJ) {
+      await DB.schema.table("mst_jadwal_karyawan", (table) => {
+        table.tinyint("is_penanggung_jawab", 1).notNullable().defaultTo(0).after("kode_ruangan");
+      });
+    }
+
     const baseQuery = DB("mst_jadwal_karyawan as j")
       .leftJoin("mst_karyawan as k", "j.no_sip", "k.no_sip")
       .leftJoin("mst_ruangan as r", "j.kode_ruangan", "r.kode_ruangan")
@@ -50,6 +57,7 @@ router.post("/", async (req, res) => {
       "j.kode_jadwal",
       "j.no_sip",
       "j.kode_ruangan",
+      "j.is_penanggung_jawab",
       "r.nama_ruangan as nama_ruangan",
       "k.nama as nama_karyawan",
       "k.jabatan",
@@ -69,9 +77,23 @@ router.post("/", async (req, res) => {
       const offset = (page - 1) * perPage;
       const countResult = await baseQuery.clone().count("j.id as total").first();
       totalRecords = parseInt(countResult.total || 0);
-      vaData = await baseQuery.clone().select(selectFields).orderBy("j.created_at", "desc").limit(perPage).offset(offset);
+      vaData = await baseQuery
+        .clone()
+        .select(selectFields)
+        .orderByRaw("COALESCE(r.nama_ruangan, j.kode_ruangan, '') ASC")
+        .orderByRaw("FIELD(j.hari, 'senin','selasa','rabu','kamis','jumat','sabtu','minggu') ASC")
+        .orderBy("j.is_penanggung_jawab", "desc")
+        .orderBy("j.jam_mulai", "asc")
+        .limit(perPage)
+        .offset(offset);
     } else {
-      vaData = await baseQuery.clone().select(selectFields).orderBy("j.created_at", "desc");
+      vaData = await baseQuery
+        .clone()
+        .select(selectFields)
+        .orderByRaw("COALESCE(r.nama_ruangan, j.kode_ruangan, '') ASC")
+        .orderByRaw("FIELD(j.hari, 'senin','selasa','rabu','kamis','jumat','sabtu','minggu') ASC")
+        .orderBy("j.is_penanggung_jawab", "desc")
+        .orderBy("j.jam_mulai", "asc");
       totalRecords = vaData.length;
     }
 

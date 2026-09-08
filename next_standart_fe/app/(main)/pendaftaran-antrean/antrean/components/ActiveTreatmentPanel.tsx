@@ -1,6 +1,6 @@
 'use client';
 
-import React, { useState, useEffect } from 'react';
+import React, { useState, useEffect, useMemo } from 'react';
 import { Button } from 'primereact/button';
 import { InputText } from 'primereact/inputtext';
 import { InputTextarea } from 'primereact/inputtextarea';
@@ -55,6 +55,7 @@ export const ActiveTreatmentPanel: React.FC<ActiveTreatmentPanelProps> = ({
     handleAksi,
     playChime,
     speakNomorLayanan,
+    petugasJagaList,
 }) => {
     const [fields, setFields] = useState<RuanganFormField[]>([]);
     const [loadingFields, setLoadingFields] = useState<boolean>(false);
@@ -88,6 +89,24 @@ export const ActiveTreatmentPanel: React.FC<ActiveTreatmentPanelProps> = ({
     // Dropdown Petugas / Dokter (SIP) State
     const [karyawanOptions, setKaryawanOptions] = useState<any[]>([]);
     const [selectedPetugas, setSelectedPetugas] = useState<string>('');
+
+    // Hitung options petugas: prioritaskan petugas piket hari ini di ruangan ini
+    const availablePetugasOptions = useMemo(() => {
+        if (petugasJagaList && petugasJagaList.length > 0) {
+            return petugasJagaList.map((p: any) => {
+                const isPj = p.is_penanggung_jawab === 1 || p.is_penanggung_jawab === true;
+                return {
+                    label: `${p.nama_karyawan || p.nama}${p.jabatan ? ` (${p.jabatan.toUpperCase()})` : ''}${isPj ? ' ★ [PJ]' : ''}`,
+                    value: p.no_sip,
+                    nama: p.nama_karyawan || p.nama,
+                    jabatan: p.jabatan,
+                    no_sip: p.no_sip,
+                    is_penanggung_jawab: isPj,
+                };
+            });
+        }
+        return karyawanOptions;
+    }, [petugasJagaList, karyawanOptions]);
 
     // Step state: 'form' (Form Penanganan) vs 'hasil' (Hasil Treatment & Produk Kasir)
     const [activeStep, setActiveStep] = useState<'form' | 'hasil'>('form');
@@ -129,7 +148,12 @@ export const ActiveTreatmentPanel: React.FC<ActiveTreatmentPanelProps> = ({
                 }
                 setFormData(initialForm);
                 setCatatanPetugas(activePatient.catatan_petugas || '');
-                setSelectedPetugas(activePatient.kode_karyawan || '');
+                let defaultPetugas = activePatient.kode_karyawan || '';
+                if (!defaultPetugas && petugasJagaList && petugasJagaList.length > 0) {
+                    const pj = petugasJagaList.find((p: any) => p.is_penanggung_jawab === 1 || p.is_penanggung_jawab === true);
+                    defaultPetugas = pj?.no_sip || petugasJagaList[0]?.no_sip || '';
+                }
+                setSelectedPetugas(defaultPetugas);
 
                 const ap = activePatient as any;
                 setHeaderRMData({
@@ -161,6 +185,9 @@ export const ActiveTreatmentPanel: React.FC<ActiveTreatmentPanelProps> = ({
                 }
             } else if (activePatient.kode_karyawan && !selectedPetugas) {
                 setSelectedPetugas(activePatient.kode_karyawan);
+            } else if (!selectedPetugas && petugasJagaList && petugasJagaList.length > 0) {
+                const pj = petugasJagaList.find((p: any) => p.is_penanggung_jawab === 1 || p.is_penanggung_jawab === true);
+                setSelectedPetugas(pj?.no_sip || petugasJagaList[0]?.no_sip || '');
             }
         } else {
             setCurrentAntrianId('');
@@ -172,7 +199,15 @@ export const ActiveTreatmentPanel: React.FC<ActiveTreatmentPanelProps> = ({
             setIsFormSaved(false);
             setIsHasilSaved(false);
         }
-    }, [activePatient?.kode_antrian_layanan, isKonsultasi]);
+    }, [activePatient?.kode_antrian_layanan, isKonsultasi, petugasJagaList]);
+
+    useEffect(() => {
+        if (!selectedPetugas && petugasJagaList && petugasJagaList.length > 0) {
+            const pj = petugasJagaList.find((p: any) => p.is_penanggung_jawab === 1 || p.is_penanggung_jawab === true);
+            const chosen = pj?.no_sip || petugasJagaList[0]?.no_sip || '';
+            if (chosen) setSelectedPetugas(chosen);
+        }
+    }, [petugasJagaList, selectedPetugas]);
 
     const loadPendaftaranItems = async (kodeKunjungan?: string) => {
         if (!kodeKunjungan) return;
@@ -295,7 +330,7 @@ export const ActiveTreatmentPanel: React.FC<ActiveTreatmentPanelProps> = ({
 
             // Update local officer info so header badge displays doctor name immediately
             if (selectedPetugas) {
-                const foundKaryawan = karyawanOptions.find((k) => k.value === selectedPetugas);
+                const foundKaryawan = availablePetugasOptions.find((k) => k.value === selectedPetugas) || karyawanOptions.find((k) => k.value === selectedPetugas);
                 if (foundKaryawan) {
                     activePatient.nama_petugas = foundKaryawan.nama;
                     activePatient.kode_karyawan = selectedPetugas;
@@ -528,7 +563,7 @@ export const ActiveTreatmentPanel: React.FC<ActiveTreatmentPanelProps> = ({
                                     <Building2 size={14} style={{ color: '#a7f3d0' }} className="flex-shrink-0" />
                                     <span>{namaRuangan}</span>
                                 </span>
-                                {(activePatient.nama_petugas || karyawanOptions.find((k) => k.value === selectedPetugas)?.nama) && (
+                                {(activePatient.nama_petugas || availablePetugasOptions.find((k) => k.value === selectedPetugas)?.nama || karyawanOptions.find((k) => k.value === selectedPetugas)?.nama) && (
                                     <span
                                         className="inline-flex align-items-center gap-2 px-3 py-1.5 font-medium"
                                         style={{
@@ -539,7 +574,7 @@ export const ActiveTreatmentPanel: React.FC<ActiveTreatmentPanelProps> = ({
                                         }}
                                     >
                                         <User size={14} style={{ color: '#a7f3d0' }} className="flex-shrink-0" />
-                                        <span>Petugas: <strong className="text-white">{karyawanOptions.find((k) => k.value === selectedPetugas)?.nama || activePatient.nama_petugas}</strong></span>
+                                        <span>Petugas: <strong className="text-white">{availablePetugasOptions.find((k) => k.value === selectedPetugas)?.nama || karyawanOptions.find((k) => k.value === selectedPetugas)?.nama || activePatient.nama_petugas}</strong></span>
                                     </span>
                                 )}
                             </div>
@@ -677,17 +712,25 @@ export const ActiveTreatmentPanel: React.FC<ActiveTreatmentPanelProps> = ({
                 <div className="p-3 sm:p-4 flex flex-column gap-4 bg-white">
                     {/* SECTION PETUGAS / DOKTER PENANGGUNG JAWAB (SESUAI SIP) */}
                     <div className="p-3 border-round-xl border-1 surface-border bg-white">
-                        <div className="flex align-items-center justify-content-between mb-3 pb-2 border-bottom-1 surface-border">
+                        <div className="flex align-items-center justify-content-between mb-2 pb-2 border-bottom-1 surface-border">
                             <label className="text-xs font-extrabold text-700 uppercase tracking-wider flex align-items-center gap-2 m-0">
                                 <i className="pi pi-user text-500 text-sm" />
-                                PETUGAS / DOKTER PENANGGUNG JAWAB (SESUAI SIP)
+                                PETUGAS / DOKTER PELAKSANA TINDAKAN (SESUAI SIP)
                             </label>
-                            <span className="text-[10px] text-500 font-semibold">Tersimpan berdasar No. SIP</span>
+                            <span className="text-[10px] text-500 font-semibold">
+                                {petugasJagaList && petugasJagaList.length > 0 ? `${petugasJagaList.length} Petugas Piket` : 'Tersimpan berdasar No. SIP'}
+                            </span>
                         </div>
+                        {petugasJagaList && petugasJagaList.length > 1 && (
+                            <div className="mb-2 text-xs text-600 bg-amber-50 border-1 border-amber-200 border-round p-2 flex align-items-center gap-2">
+                                <i className="pi pi-info-circle text-amber-600 text-xs" />
+                                <span>Tersedia {petugasJagaList.length} petugas piket hari ini. Penanggung Jawab ruangan dipilih default; silakan ubah jika tindakan dilakukan oleh petugas pendamping.</span>
+                            </div>
+                        )}
                         <div className="p-fluid">
                             <Dropdown
                                 value={selectedPetugas}
-                                options={karyawanOptions}
+                                options={availablePetugasOptions}
                                 onChange={(e) => setSelectedPetugas(e.value)}
                                 placeholder="-- Pilih Nama Petugas / Dokter --"
                                 filter
@@ -700,6 +743,12 @@ export const ActiveTreatmentPanel: React.FC<ActiveTreatmentPanelProps> = ({
                                         return (
                                             <div className="flex align-items-center gap-2">
                                                 <span className="font-bold text-900">{option.nama || option.label}</span>
+                                                {option.is_penanggung_jawab && (
+                                                    <span className="text-[10px] bg-amber-100 text-amber-900 border-1 border-amber-400 font-extrabold px-1.5 py-0.5 border-round inline-flex align-items-center gap-1">
+                                                        <i className="pi pi-star-fill text-[9px] text-amber-600" />
+                                                        PJ
+                                                    </span>
+                                                )}
                                                 {option.value && (
                                                     <span className="text-xs text-500 font-normal">(No. SIP: {option.value})</span>
                                                 )}
@@ -709,10 +758,20 @@ export const ActiveTreatmentPanel: React.FC<ActiveTreatmentPanelProps> = ({
                                     return <span>-- Pilih Nama Petugas / Dokter --</span>;
                                 }}
                                 itemTemplate={(option) => (
-                                    <div className="flex align-items-center justify-content-between py-1">
+                                    <div className="flex align-items-center justify-content-between py-1 w-full">
                                         <div>
-                                            <span className="font-bold text-900 block text-sm">{option.nama || option.label}</span>
-                                            <span className="text-xs text-500 block">No. SIP: {option.value}</span>
+                                            <div className="flex align-items-center gap-2">
+                                                <span className="font-bold text-900 text-sm">{option.nama || option.label}</span>
+                                                {option.is_penanggung_jawab && (
+                                                    <span className="text-[10px] bg-amber-100 text-amber-900 border-1 border-amber-400 font-extrabold px-1.5 py-0.5 border-round inline-flex align-items-center gap-1">
+                                                        <i className="pi pi-star-fill text-[9px] text-amber-600" />
+                                                        PJ
+                                                    </span>
+                                                )}
+                                            </div>
+                                            <span className="text-xs text-500 block">
+                                                {option.jabatan ? `${option.jabatan.toUpperCase()} • ` : ''}No. SIP: {option.value || '-'}
+                                            </span>
                                         </div>
                                     </div>
                                 )}
@@ -1111,17 +1170,25 @@ export const ActiveTreatmentPanel: React.FC<ActiveTreatmentPanelProps> = ({
                         <div className="p-3 sm:p-4 flex flex-column gap-4 bg-white">
                             {/* SECTION PETUGAS / DOKTER PENANGGUNG JAWAB (SESUAI SIP) */}
                             <div className="p-3 border-round-xl border-1 surface-border bg-white">
-                                <div className="flex align-items-center justify-content-between mb-3 pb-2 border-bottom-1 surface-border">
+                                <div className="flex align-items-center justify-content-between mb-2 pb-2 border-bottom-1 surface-border">
                                     <label className="text-xs font-extrabold text-700 uppercase tracking-wider flex align-items-center gap-2 m-0">
                                         <i className="pi pi-user text-500 text-sm" />
-                                        PETUGAS / DOKTER PENANGGUNG JAWAB (SESUAI SIP)
+                                        PETUGAS / DOKTER PELAKSANA TINDAKAN (SESUAI SIP)
                                     </label>
-                                    <span className="text-[10px] text-500 font-semibold">Tersimpan berdasar No. SIP</span>
+                                    <span className="text-[10px] text-500 font-semibold">
+                                        {petugasJagaList && petugasJagaList.length > 0 ? `${petugasJagaList.length} Petugas Piket` : 'Tersimpan berdasar No. SIP'}
+                                    </span>
                                 </div>
+                                {petugasJagaList && petugasJagaList.length > 1 && (
+                                    <div className="mb-2 text-xs text-600 bg-amber-50 border-1 border-amber-200 border-round p-2 flex align-items-center gap-2">
+                                        <i className="pi pi-info-circle text-amber-600 text-xs" />
+                                        <span>Tersedia {petugasJagaList.length} petugas piket hari ini. Penanggung Jawab ruangan dipilih default; silakan ubah jika tindakan dilakukan oleh petugas pendamping.</span>
+                                    </div>
+                                )}
                                 <div className="p-fluid">
                                     <Dropdown
                                         value={selectedPetugas}
-                                        options={karyawanOptions}
+                                        options={availablePetugasOptions}
                                         onChange={(e) => setSelectedPetugas(e.value)}
                                         placeholder="-- Pilih Nama Petugas / Dokter --"
                                         filter
@@ -1134,6 +1201,12 @@ export const ActiveTreatmentPanel: React.FC<ActiveTreatmentPanelProps> = ({
                                                 return (
                                                     <div className="flex align-items-center gap-2">
                                                         <span className="font-bold text-900">{option.nama || option.label}</span>
+                                                        {option.is_penanggung_jawab && (
+                                                            <span className="text-[10px] bg-amber-100 text-amber-900 border-1 border-amber-400 font-extrabold px-1.5 py-0.5 border-round inline-flex align-items-center gap-1">
+                                                                <i className="pi pi-star-fill text-[9px] text-amber-600" />
+                                                                PJ
+                                                            </span>
+                                                        )}
                                                         {option.value && (
                                                             <span className="text-xs text-500 font-normal">(No. SIP: {option.value})</span>
                                                         )}
@@ -1143,10 +1216,20 @@ export const ActiveTreatmentPanel: React.FC<ActiveTreatmentPanelProps> = ({
                                             return <span>-- Pilih Nama Petugas / Dokter --</span>;
                                         }}
                                         itemTemplate={(option) => (
-                                            <div className="flex align-items-center justify-content-between py-1">
+                                            <div className="flex align-items-center justify-content-between py-1 w-full">
                                                 <div>
-                                                    <span className="font-bold text-900 block text-sm">{option.nama || option.label}</span>
-                                                    <span className="text-xs text-500 block">No. SIP: {option.value}</span>
+                                                    <div className="flex align-items-center gap-2">
+                                                        <span className="font-bold text-900 text-sm">{option.nama || option.label}</span>
+                                                        {option.is_penanggung_jawab && (
+                                                            <span className="text-[10px] bg-amber-100 text-amber-900 border-1 border-amber-400 font-extrabold px-1.5 py-0.5 border-round inline-flex align-items-center gap-1">
+                                                                <i className="pi pi-star-fill text-[9px] text-amber-600" />
+                                                                PJ
+                                                            </span>
+                                                        )}
+                                                    </div>
+                                                    <span className="text-xs text-500 block">
+                                                        {option.jabatan ? `${option.jabatan.toUpperCase()} • ` : ''}No. SIP: {option.value || '-'}
+                                                    </span>
                                                 </div>
                                             </div>
                                         )}

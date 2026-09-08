@@ -21,10 +21,40 @@ const handleRuanganDropdown = async (req, res) => {
   const username = req?.auth?.username || "";
 
   try {
-    const vaData = await DB("mst_ruangan")
-      .where("status", "aktif")
-      .select("kode_ruangan", "nama_ruangan", "is_konsultasi")
-      .orderBy("nama_ruangan", "asc");
+    const vaData = await DB("mst_ruangan as r")
+      .where("r.status", "aktif")
+      .select(
+        "r.kode_ruangan",
+        "r.nama_ruangan",
+        "r.is_konsultasi",
+        DB.raw(`(
+          SELECT COUNT(*) 
+          FROM mst_jadwal_karyawan j 
+          WHERE j.kode_ruangan = r.kode_ruangan 
+            AND j.status = 'aktif'
+        ) as total_jadwal`),
+        DB.raw(`(
+          SELECT COUNT(DISTINCT j.hari) 
+          FROM mst_jadwal_karyawan j 
+          WHERE j.kode_ruangan = r.kode_ruangan 
+            AND j.status = 'aktif'
+        ) as total_hari`),
+        DB.raw(`(
+          SELECT COUNT(DISTINCT j.hari) 
+          FROM mst_jadwal_karyawan j 
+          WHERE j.kode_ruangan = r.kode_ruangan 
+            AND j.status = 'aktif' 
+            AND j.is_penanggung_jawab = 1
+        ) as total_hari_pj`),
+        DB.raw(`(
+          SELECT CASE WHEN COUNT(*) > 0 THEN 1 ELSE 0 END 
+          FROM mst_jadwal_karyawan j 
+          WHERE j.kode_ruangan = r.kode_ruangan 
+            AND j.status = 'aktif' 
+            AND j.is_penanggung_jawab = 1
+        ) as has_pj`)
+      )
+      .orderBy("r.nama_ruangan", "asc");
 
     return res.status(200).json({
       status: status.SUKSES,
