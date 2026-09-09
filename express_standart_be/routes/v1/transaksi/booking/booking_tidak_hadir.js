@@ -16,9 +16,6 @@ import { status } from "../../components/tools/general.js";
 
 const router = express.Router();
 
-// Toleransi keterlambatan default: 30 menit
-const TOLERANSI_MENIT = 30;
-
 router.post("/", async (req, res) => {
   const { body } = req;
   const oPayload = body || {};
@@ -30,8 +27,14 @@ router.post("/", async (req, res) => {
 
     const nowFormatted = formatDateSystem();
     const now = new Date();
-    const todayYmd = now.toISOString().slice(0, 10);
-    const nowTimeStr = now.toTimeString().slice(0, 8); // HH:mm:ss
+    const todayYmd = `${now.getFullYear()}-${String(now.getMonth() + 1).padStart(2, '0')}-${String(now.getDate()).padStart(2, '0')}`;
+    const nowTimeStr = `${String(now.getHours()).padStart(2, '0')}:${String(now.getMinutes()).padStart(2, '0')}:${String(now.getSeconds()).padStart(2, '0')}`;
+
+    // Ambil konfigurasi toleransi keterlambatan dari tabel config (default: 30 menit)
+    const cfgToleransi = await DB("config")
+      .where("kode", "toleransi_keterlambatan_menit")
+      .first();
+    const toleransiMenit = parseInt(cfgToleransi?.keterangan || "30", 10) || 30;
 
     if (!isAutoScan && kodeBooking) {
       // 1. MODE SINGLE: Tandai 1 booking spesifik
@@ -96,14 +99,18 @@ router.post("/", async (req, res) => {
       });
     } else {
       // 2. MODE AUTO SCAN: Scan semua booking berstatus 'dikonfirmasi' yang telah melewati batas toleransi
-      // Batas toleransi: tanggal < hari ini ATAU (tanggal = hari ini AND jam_booking + 30 menit < sekarang)
+      // Batas toleransi: tanggal < hari ini ATAU (tanggal = hari ini AND jam_booking + toleransi < sekarang)
+      const hours = Math.floor(toleransiMenit / 60);
+      const mins = toleransiMenit % 60;
+      const addTimeStr = `${String(hours).padStart(2, "0")}:${String(mins).padStart(2, "0")}:00`;
+
       const expiredBookings = await DB("trx_booking")
         .where("status", "dikonfirmasi")
         .where(function () {
           this.where("tanggal_booking", "<", todayYmd).orWhere(function () {
             this.where("tanggal_booking", todayYmd).whereRaw(
               "ADDTIME(jam_booking, ?) < ?",
-              [`00:${String(TOLERANSI_MENIT).padStart(2, "0")}:00`, nowTimeStr]
+              [addTimeStr, nowTimeStr]
             );
           });
         })

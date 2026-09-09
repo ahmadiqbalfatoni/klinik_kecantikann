@@ -8,6 +8,8 @@ import { TabView, TabPanel } from 'primereact/tabview';
 import { SelectButton } from 'primereact/selectbutton';
 import { InputNumber } from 'primereact/inputnumber';
 import { InputTextarea } from 'primereact/inputtextarea';
+import { Checkbox } from 'primereact/checkbox';
+import { Dropdown } from 'primereact/dropdown';
 import { DataTable } from 'primereact/datatable';
 import { Column } from 'primereact/column';
 import { Tag } from 'primereact/tag';
@@ -17,6 +19,8 @@ import { Toast } from 'primereact/toast';
 import { IconField } from 'primereact/iconfield';
 import { InputIcon } from 'primereact/inputicon';
 import { Divider } from 'primereact/divider';
+import { Tooltip } from 'primereact/tooltip';
+import { OverlayPanel } from 'primereact/overlaypanel';
 import postData from '@/lib/axios/postData';
 import { showError, showSuccess } from '@/lib/tools/generalTools';
 import { DialogQuickAddPasien } from './DialogQuickAddPasien';
@@ -26,6 +30,7 @@ import {
   LayananCard,
   ServiceItem,
   RuanganGroup,
+  getItemConsultType,
 } from '@/app/(main)/pendaftaran-antrean/components/shared/LayananCard';
 import {
   User,
@@ -38,6 +43,7 @@ import {
   RotateCcw,
   Trash2,
   Info,
+  Users,
 } from 'lucide-react';
 
 interface Pasien {
@@ -54,6 +60,15 @@ interface SlotItem {
   no_sip: string;
   nama_petugas: string;
   jabatan_petugas: string;
+  is_penanggung_jawab?: boolean;
+  has_pj?: boolean;
+  petugas_pendamping?: Array<{
+    kode_jadwal?: string;
+    no_sip: string;
+    nama_petugas: string;
+    jabatan_petugas: string;
+  }>;
+  jumlah_pendamping?: number;
   kode_ruangan: string;
   nama_ruangan: string;
   hari: string;
@@ -65,6 +80,14 @@ interface SlotItem {
   sisa_kuota: number;
   is_available: boolean;
   booked_times?: string[];
+  booked_intervals?: Array<{
+    kode_booking?: string;
+    jam_mulai: string;
+    durasi_menit: number;
+    jam_selesai: string;
+    start_minutes?: number;
+    end_minutes?: number;
+  }>;
 }
 
 interface Props {
@@ -83,6 +106,18 @@ export const BuatBookingTab: React.FC<Props> = ({ toast, onSuccessCreated }) => 
 
   // 2. Tanggal & Layanan State (Pola Tab Ruangan & Multi-Select Card)
   const [tanggalBooking, setTanggalBooking] = useState<Date>(new Date());
+
+  // Cek apakah tanggal booking yang dipilih adalah hari ini
+  const isBookingToday = useMemo(() => {
+    if (!tanggalBooking) return false;
+    const today = new Date();
+    return (
+      tanggalBooking.getFullYear() === today.getFullYear() &&
+      tanggalBooking.getMonth() === today.getMonth() &&
+      tanggalBooking.getDate() === today.getDate()
+    );
+  }, [tanggalBooking]);
+
   const [ruangans, setRuangans] = useState<RuanganGroup[]>([]);
   const [loadingRuangan, setLoadingRuangan] = useState(true);
   const [activeTabIndex, setActiveTabIndex] = useState<number>(0);
@@ -100,13 +135,32 @@ export const BuatBookingTab: React.FC<Props> = ({ toast, onSuccessCreated }) => 
   const [isManualTime, setIsManualTime] = useState(false);
   const [manualTimeInput, setManualTimeInput] = useState('');
   const [manualTimeError, setManualTimeError] = useState('');
+  const [manualSuccessMsg, setManualSuccessMsg] = useState('');
+  const [suggestedSlot, setSuggestedSlot] = useState<{ time: string; endEst: string } | null>(null);
 
   // 4. DP & Catatan State
   const [dpPercentage, setDpPercentage] = useState<number>(20);
   const [dpNominal, setDpNominal] = useState<number>(0);
+  const [metodePembayaranDp, setMetodePembayaranDp] = useState<'cash' | 'transfer' | 'qris'>('cash');
+  const [konfirmasiDpDiterima, setKonfirmasiDpDiterima] = useState<boolean>(false);
+  const [alasanBebasDp, setAlasanBebasDp] = useState<string>('');
   const [sumber, setSumber] = useState<'staff' | 'whatsapp'>('staff');
   const [catatanPasien, setCatatanPasien] = useState('');
   const [globalConsultChoice, setGlobalConsultChoice] = useState<boolean>(true);
+
+  const METODE_DP_OPTIONS = [
+    { label: 'Cash / Tunai', value: 'cash' },
+    { label: 'Transfer Bank', value: 'transfer' },
+    { label: 'QRIS', value: 'qris' },
+  ];
+
+  const ALASAN_BEBAS_DP_OPTIONS = [
+    { label: 'Klaim Paket (Kepemilikan Aktif)', value: 'Klaim Paket (Kepemilikan Aktif)' },
+    { label: 'Pasien VIP / Prioritas', value: 'Pasien VIP / Prioritas' },
+    { label: 'Instruksi Dokter / Manajemen', value: 'Instruksi Dokter / Manajemen' },
+    { label: 'Kebijakan Promosi / Bebas DP', value: 'Kebijakan Promosi / Bebas DP' },
+    { label: 'Lainnya (Sesuai Kebijakan Klinik)', value: 'Lainnya (Sesuai Kebijakan Klinik)' },
+  ];
 
   // 5. Submit & Modal State
   const [loadingSubmit, setLoadingSubmit] = useState(false);
@@ -116,6 +170,37 @@ export const BuatBookingTab: React.FC<Props> = ({ toast, onSuccessCreated }) => 
   // 6. Dialog Jadwal Mingguan Ruangan State
   const [showJadwalRuanganDialog, setShowJadwalRuanganDialog] = useState(false);
   const [jadwalDialogRooms, setJadwalDialogRooms] = useState<RoomTabOption[]>([]);
+
+  // 7. Popover & Tooltip Pendamping State & Ref
+  const companionOpRef = useRef<OverlayPanel>(null);
+  const [activeCompanionData, setActiveCompanionData] = useState<{
+    pj: string;
+    jam: string;
+    ruangan: string;
+    companions: Array<{
+      nama_petugas: string;
+      jabatan_petugas?: string;
+      no_sip?: string;
+    }>;
+  } | null>(null);
+
+  // Helper ringkasan pendamping: 1 nama, 2 nama, atau 2 nama + sisa lainnya
+  const getCompanionSummary = (companions: Array<{ nama_petugas: string }>, total: number) => {
+    const count = total || (companions ? companions.length : 0);
+    if (count <= 0) return '';
+    if (count === 1) {
+      return companions[0]?.nama_petugas || '1 petugas';
+    }
+    if (count === 2) {
+      const n1 = companions[0]?.nama_petugas || '';
+      const n2 = companions[1]?.nama_petugas || '';
+      return `${n1}, ${n2}`;
+    }
+    const n1 = companions[0]?.nama_petugas || '';
+    const n2 = companions[1]?.nama_petugas || '';
+    const sisa = count - 2;
+    return `${n1}, ${n2}, +${sisa} lainnya`;
+  };
 
   const formatCurrency = (val: number) => {
     return new Intl.NumberFormat('id-ID', {
@@ -217,6 +302,11 @@ export const BuatBookingTab: React.FC<Props> = ({ toast, onSuccessCreated }) => 
     });
   }, [ownedPackages]);
 
+  // Reset activeTabIndex jika jumlah tab paket berubah agar tab yang dipilih selalu valid
+  useEffect(() => {
+    setActiveTabIndex(0);
+  }, [claimablePackages.length]);
+
   // Handler Perubahan Tanggal Booking dengan Validasi Expired Paket
   const handleDateChange = (newDate: Date | null) => {
     if (!newDate) return;
@@ -295,18 +385,9 @@ export const BuatBookingTab: React.FC<Props> = ({ toast, onSuccessCreated }) => 
   const hasOnlyKlaim = selectedList.length > 0 && selectedList.every((it) => it.jenis === 'klaim_paket');
   const hasKlaim = selectedList.some((it) => it.jenis === 'klaim_paket');
 
-  // Evaluasi Aturan Konsultasi Seluruh Booking
-  const hasWajibKonsul = selectedList.some((it) => {
-    const effTipe = (it.jenis === 'klaim_paket' && it.tipe_paket ? it.tipe_paket : it.tipe || '').toString().toUpperCase();
-    return effTipe === 'MEDICAL TREATMENT' || it.wajib_konsultasi === 'wajib';
-  });
-
-  const hasOpsionalKonsul = !hasWajibKonsul && selectedList.some((it) => {
-    const effTipe = (it.jenis === 'klaim_paket' && it.tipe_paket ? it.tipe_paket : it.tipe || '').toString().toUpperCase();
-    const isWajib = effTipe === 'MEDICAL TREATMENT' || it.wajib_konsultasi === 'wajib';
-    const isService = effTipe === 'SERVICE TREATMENT' || it.wajib_konsultasi === 'tidak';
-    return !isWajib && !isService;
-  });
+  // Evaluasi Aturan Konsultasi Seluruh Booking (Konsisten 100% dengan LayananCard)
+  const hasWajibKonsul = selectedList.some((it) => getItemConsultType(it).isWajib);
+  const hasOpsionalKonsul = !hasWajibKonsul && selectedList.some((it) => getItemConsultType(it).isOpsional);
 
   const effectiveButuhKonsul = hasWajibKonsul ? true : hasOpsionalKonsul ? globalConsultChoice : false;
 
@@ -349,16 +430,32 @@ export const BuatBookingTab: React.FC<Props> = ({ toast, onSuccessCreated }) => 
     if (hasOnlyKlaim) {
       setDpNominal(0);
       setDpPercentage(0);
+      setAlasanBebasDp('Klaim Paket (Kepemilikan Aktif)');
+      setKonfirmasiDpDiterima(false);
     } else {
-      setDpNominal(Math.round((totalHarga * dpPercentage) / 100));
+      const calculated = Math.round((totalHarga * dpPercentage) / 100);
+      setDpNominal(calculated);
+      if (calculated > 0) {
+        setAlasanBebasDp('');
+      }
     }
   }, [totalHarga, dpPercentage, hasOnlyKlaim]);
 
   const handlePercentageChange = (percent: number) => {
     if (hasOnlyKlaim) return;
     setDpPercentage(percent);
-    setDpNominal(Math.round((totalHarga * percent) / 100));
+    const calculated = Math.round((totalHarga * percent) / 100);
+    setDpNominal(calculated);
+    if (calculated > 0) {
+      setAlasanBebasDp('');
+    }
   };
+
+  const isDpValid = hasOnlyKlaim
+    ? true
+    : dpNominal > 0
+    ? !!metodePembayaranDp && konfirmasiDpDiterima
+    : !!alasanBebasDp;
 
   // Helper konversi jam "HH:mm" <-> menit dari tengah malam
   const timeToMinutes = (timeStr: string): number => {
@@ -387,7 +484,10 @@ export const BuatBookingTab: React.FC<Props> = ({ toast, onSuccessCreated }) => 
     const endMins = dokterKonsulList.map((d: any) => timeToMinutes((d.jam_selesai || '').slice(0, 5)));
     const docStartMin = Math.min(...startMins);
     const docEndMin = Math.max(...endMins);
+    const docCount = dokterKonsulList.length;
+    const firstDocName = dokterKonsulList[0]?.nama_dokter || 'Dokter';
     const dokterNames = dokterKonsulList.map((d: any) => d.nama_dokter).filter(Boolean).join(', ');
+    const dokterSummary = docCount > 1 ? `${firstDocName} dan tim` : firstDocName;
 
     return {
       docStartMin,
@@ -395,6 +495,7 @@ export const BuatBookingTab: React.FC<Props> = ({ toast, onSuccessCreated }) => 
       docStartStr: minutesToTime(docStartMin),
       docEndStr: minutesToTime(docEndMin),
       dokterNames,
+      dokterSummary,
     };
   }, [effectiveButuhKonsul, dokterKonsulList]);
 
@@ -436,28 +537,100 @@ export const BuatBookingTab: React.FC<Props> = ({ toast, onSuccessCreated }) => 
     };
   }, [selectedSlot, slots, consultWindow]);
 
-  // Generate daftar opsi slot jam interval 30 menit berdasarkan shift, durasi, dan irisan dokter
+  // Generate daftar opsi slot jam berdasarkan shift, durasi tindakan, bentrok janji temu lain, dan irisan dokter
   const timeSlots = useMemo(() => {
     if (!selectedSlot) return [];
     const startMin = timeToMinutes(selectedSlot.jam_mulai);
     const endMin = timeToMinutes(selectedSlot.jam_selesai);
     const durasi = totalDurasi || 30;
-    const bookedList = (selectedSlot.booked_times || []).map((t) => t.slice(0, 5));
+
+    // Hitung waktu saat ini jika booking untuk hari ini
+    const now = new Date();
+    const nowMinutes = now.getHours() * 60 + now.getMinutes();
+
+    // Buffer waktu persiapan minimal sebelum jam tindakan (dalam menit)
+    // TODO: Diskusikan dengan manajemen operasional klinik jika membutuhkan buffer persiapan booking (misal 30-60 menit sebelum tindakan)
+    const BOOKING_LEAD_TIME_BUFFER_MINUTES = 0;
+
+    // Ambil daftar booking yang sudah ada di sesi ini (lengkap dengan durasi)
+    const existingIntervals: { start: number; end: number; startStr: string; endStr: string }[] = [];
+
+    if (Array.isArray(selectedSlot.booked_intervals) && selectedSlot.booked_intervals.length > 0) {
+      for (const inv of selectedSlot.booked_intervals) {
+        const sStr = (inv.jam_mulai || '').slice(0, 5);
+        const sMin = inv.start_minutes ?? timeToMinutes(sStr);
+        const dMin = inv.durasi_menit || 30;
+        const eMin = inv.end_minutes ?? (sMin + dMin);
+        const eStr = inv.jam_selesai ? inv.jam_selesai.slice(0, 5) : minutesToTime(eMin);
+        existingIntervals.push({
+          start: sMin,
+          end: eMin,
+          startStr: sStr,
+          endStr: eStr,
+        });
+      }
+    } else if (Array.isArray(selectedSlot.booked_times)) {
+      for (const t of selectedSlot.booked_times) {
+        const sStr = t.slice(0, 5);
+        const sMin = timeToMinutes(sStr);
+        const dMin = 30;
+        existingIntervals.push({
+          start: sMin,
+          end: sMin + dMin,
+          startStr: sStr,
+          endStr: minutesToTime(sMin + dMin),
+        });
+      }
+    }
+
     const result: {
       time: string;
       exceedsShift: boolean;
       isBooked: boolean;
+      isDirectHit: boolean;
+      conflictReason?: string;
       isOutsideDoctor: boolean;
       doctorDisabledReason?: string;
+      isPast: boolean;
       endEst: string;
     }[] = [];
 
-    for (let m = startMin; m < endMin; m += 30) {
+    const step = durasi > 0 ? durasi : 30;
+
+    for (let m = startMin; m < endMin; m += step) {
       const time = minutesToTime(m);
-      const endEstMin = m + durasi;
-      const endEst = minutesToTime(endEstMin);
-      const exceedsShift = endEstMin > endMin;
-      const isBooked = bookedList.includes(time);
+      const candStartMin = m;
+      const candEndMin = m + durasi;
+      const endEst = minutesToTime(candEndMin);
+      const exceedsShift = candEndMin > endMin;
+
+      // Slot yang melebihi batas akhir shift TIDAK ditampilkan sesuai instruksi user
+      if (exceedsShift) {
+        break;
+      }
+
+      // Validasi waktu saat ini: jika booking hari ini, nonaktifkan slot yang jam mulai-nya sudah lewat
+      const isPast = isBookingToday && (candStartMin < nowMinutes + BOOKING_LEAD_TIME_BUFFER_MINUTES);
+
+      // Cek apakah rentang kandidat [candStartMin, candEndMin) bertabrakan dengan janji temu lain yang sudah ada
+      let isBooked = false;
+      let isDirectHit = false;
+      let conflictReason = '';
+
+      for (const ex of existingIntervals) {
+        // Dua interval [candStartMin, candEndMin) dan [ex.start, ex.end) saling bertabrakan jika:
+        // candStartMin < ex.end && ex.start < candEndMin
+        if (candStartMin < ex.end && ex.start < candEndMin) {
+          isBooked = true;
+          if (candStartMin === ex.start) {
+            isDirectHit = true;
+            conflictReason = `sudah dipesan oleh pasien lain (${ex.startStr} - ${ex.endStr} WIB)`;
+          } else {
+            conflictReason = `bertabrakan dengan janji temu pasien lain (${ex.startStr} - ${ex.endStr} WIB)`;
+          }
+          break;
+        }
+      }
 
       let isOutsideDoctor = false;
       let doctorDisabledReason = '';
@@ -476,20 +649,43 @@ export const BuatBookingTab: React.FC<Props> = ({ toast, onSuccessCreated }) => 
         time,
         exceedsShift,
         isBooked,
+        isDirectHit,
+        conflictReason,
         isOutsideDoctor,
         doctorDisabledReason,
+        isPast,
         endEst,
       });
     }
 
     return result;
-  }, [selectedSlot, totalDurasi, consultWindow]);
+  }, [selectedSlot, totalDurasi, consultWindow, isBookingToday]);
 
-  // Validasi input manual jam
-  const handleManualTimeChange = (val: string) => {
-    setManualTimeInput(val);
+  // Reset jamBooking jika durasi tindakan berubah di Step 2 atau slot menjadi tidak valid
+  useEffect(() => {
+    if (jamBooking && timeSlots.length > 0) {
+      const isStillInSlots = timeSlots.some(
+        (s) => s.time === jamBooking && !s.isBooked && !s.isOutsideDoctor && !s.isPast
+      );
+      if (!isStillInSlots) {
+        setJamBooking('');
+        setManualTimeInput('');
+        setManualTimeError('');
+        setManualSuccessMsg('');
+        setSuggestedSlot(null);
+      }
+    }
+  }, [totalDurasi, timeSlots]);
+
+  // Terapkan dan validasi input manual jam sesuai interval grid & kuota
+  const handleApplyManualTime = (customVal?: string) => {
+    const val = (customVal !== undefined ? customVal : manualTimeInput).trim();
+    setManualTimeError('');
+    setManualSuccessMsg('');
+    setSuggestedSlot(null);
+
     if (!val) {
-      setManualTimeError('Jam tidak boleh kosong');
+      setManualTimeError('Jam janji temu tidak boleh kosong.');
       return;
     }
     if (!selectedSlot) return;
@@ -498,40 +694,120 @@ export const BuatBookingTab: React.FC<Props> = ({ toast, onSuccessCreated }) => 
     const endMin = timeToMinutes(selectedSlot.jam_selesai);
     const inputMin = timeToMinutes(val);
     const durasi = totalDurasi || 30;
-    const endEstMin = inputMin + durasi;
 
+    // 1. Batasi rentang input manual sesuai jam operasional sesi
     if (inputMin < startMin || inputMin >= endMin) {
       setManualTimeError(
-        `Jam harus di dalam jam kerja shift (${selectedSlot.jam_mulai} - ${selectedSlot.jam_selesai} WIB)`
+        `Jam ${val} WIB berada di luar jam operasional sesi ini (${selectedSlot.jam_mulai} - ${selectedSlot.jam_selesai} WIB).`
       );
       return;
     }
 
-    if (consultWindow) {
-      if (inputMin < consultWindow.docStartMin || inputMin >= consultWindow.docEndMin) {
+    // 1b. Validasi waktu saat ini untuk booking hari ini
+    if (isBookingToday) {
+      const now = new Date();
+      const nowMinutes = now.getHours() * 60 + now.getMinutes();
+      const nowStr = `${String(now.getHours()).padStart(2, '0')}:${String(now.getMinutes()).padStart(2, '0')}`;
+      if (inputMin < nowMinutes) {
         setManualTimeError(
-          `Dokter konsultasi (${consultWindow.dokterNames || 'Dokter'}) bertugas pukul ${consultWindow.docStartStr} - ${consultWindow.docEndStr} WIB. Jam janji temu harus berada di dalam jam jaga dokter.`
+          `Jam ${val} WIB sudah melewati waktu saat ini (${nowStr} WIB) untuk booking hari ini.`
         );
         return;
       }
     }
 
-    if (endEstMin > endMin) {
-      const endEstStr = minutesToTime(endEstMin);
+    if (inputMin + durasi > endMin) {
+      const endEstStr = minutesToTime(inputMin + durasi);
       setManualTimeError(
-        `Tindakan selesai ${endEstStr} WIB, melebihi batas shift (${selectedSlot.jam_selesai} WIB). Total durasi: ${durasi} menit.`
+        `Waktu tindakan selesai (${endEstStr} WIB) melebihi batas shift (${selectedSlot.jam_selesai} WIB). Total durasi: ${durasi} menit.`
       );
       return;
     }
 
-    const bookedList = (selectedSlot.booked_times || []).map((t) => t.slice(0, 5));
-    if (bookedList.includes(val)) {
-      setManualTimeError(`Jam ${val} WIB sudah dipesan oleh pasien lain.`);
+    // 2. Bulatkan ke interval durasi tindakan terdekat sesuai pola grid sesi
+    const step = durasi > 0 ? durasi : 30;
+    const diff = inputMin - startMin;
+    const roundedDiff = Math.round(diff / step) * step;
+    const roundedMin = startMin + roundedDiff;
+    const roundedTime = minutesToTime(roundedMin);
+
+    // Cari slot pada timeSlots yang sesuai
+    let targetSlot = timeSlots.find((s) => s.time === roundedTime);
+    if (!targetSlot && timeSlots.length > 0) {
+      // Fallback ke slot di timeSlots dengan selisih waktu terdekat
+      targetSlot = timeSlots.reduce((prev, curr) =>
+        Math.abs(timeToMinutes(curr.time) - inputMin) < Math.abs(timeToMinutes(prev.time) - inputMin) ? curr : prev
+      );
+    }
+
+    if (!targetSlot) {
+      setManualTimeError('Tidak ada slot waktu yang tersedia pada sesi ini.');
       return;
     }
 
+    // 3. Cek ketersediaan kuota / slot persis seperti grid
+    const isAvailable = !targetSlot.isBooked && !targetSlot.exceedsShift && !targetSlot.isOutsideDoctor && !targetSlot.isPast;
+
+    if (isAvailable) {
+      // Input manual valid & tersedia -> Sinkronkan state ke grid
+      setJamBooking(targetSlot.time);
+      setManualTimeInput(targetSlot.time);
+      if (val !== targetSlot.time) {
+        setManualSuccessMsg(
+          `Jam yang dipilih (${val}) disesuaikan ke slot terdekat: ${targetSlot.time} - ${targetSlot.endEst} WIB`
+        );
+      } else {
+        setManualSuccessMsg(
+          `Slot ${targetSlot.time} - ${targetSlot.endEst} WIB berhasil dipilih.`
+        );
+      }
+      setManualTimeError('');
+      setSuggestedSlot(null);
+    } else {
+      // Slot hasil pembulatan tidak tersedia (penuh / bentrok / luar jam dokter / melebihi shift / sudah lewat)
+      let reasonMsg = '';
+      if (targetSlot.isPast) {
+        reasonMsg = `Slot ${targetSlot.time} - ${targetSlot.endEst} WIB sudah melewati waktu saat ini.`;
+      } else if (targetSlot.isBooked) {
+        reasonMsg = targetSlot.conflictReason
+          ? `Slot ${targetSlot.time} - ${targetSlot.endEst} WIB ${targetSlot.conflictReason}.`
+          : `Slot ${targetSlot.time} - ${targetSlot.endEst} WIB sudah penuh.`;
+      } else if (targetSlot.isOutsideDoctor) {
+        reasonMsg = `Slot ${targetSlot.time} - ${targetSlot.endEst} WIB tidak tersedia (${targetSlot.doctorDisabledReason || 'di luar jam jaga dokter'}).`;
+      } else if (targetSlot.exceedsShift) {
+        reasonMsg = `Slot ${targetSlot.time} - ${targetSlot.endEst} WIB melebihi batas shift (${selectedSlot.jam_selesai} WIB).`;
+      } else {
+        reasonMsg = `Slot ${targetSlot.time} - ${targetSlot.endEst} WIB tidak tersedia.`;
+      }
+
+      // Cari slot terdekat yang MASIH TERSEDIA
+      const availableSlots = timeSlots.filter(
+        (st) => !st.isBooked && !st.exceedsShift && !st.isOutsideDoctor && !st.isPast
+      );
+
+      if (availableSlots.length > 0) {
+        const sortedSlots = [...availableSlots].sort(
+          (a, b) => Math.abs(timeToMinutes(a.time) - inputMin) - Math.abs(timeToMinutes(b.time) - inputMin)
+        );
+        const nearest = sortedSlots[0];
+        setSuggestedSlot({ time: nearest.time, endEst: nearest.endEst });
+        setManualTimeError(
+          `${reasonMsg} Slot terdekat yang tersedia: ${nearest.time} - ${nearest.endEst} WIB`
+        );
+      } else {
+        setSuggestedSlot(null);
+        setManualTimeError(
+          `${reasonMsg} Tidak ada slot lain yang tersedia pada shift ini.`
+        );
+      }
+    }
+  };
+
+  const handleManualTimeChange = (val: string) => {
+    setManualTimeInput(val);
     setManualTimeError('');
-    setJamBooking(val);
+    setManualSuccessMsg('');
+    setSuggestedSlot(null);
   };
 
   // 5. Fetch Slot Jadwal saat ruangan aktif dan tanggal terpilih
@@ -544,10 +820,134 @@ export const BuatBookingTab: React.FC<Props> = ({ toast, onSuccessCreated }) => 
       setIsManualTime(false);
       setManualTimeInput('');
       setManualTimeError('');
+      setManualSuccessMsg('');
+      setSuggestedSlot(null);
       return;
     }
     fetchSlots();
   }, [tanggalBooking, activeRuangan]);
+
+  // Helper untuk memastikan slot jadwal dikelompokkan per SESI: (kode_ruangan + hari + jam_mulai + jam_selesai)
+  // Hanya 1 card yang ditampilkan per sesi, diwakili oleh PJ (atau karyawan pertama jika belum ada PJ)
+  const groupSlotsBySession = (rawSlots: SlotItem[]): SlotItem[] => {
+    const sessionMap = new Map<string, SlotItem[]>();
+
+    for (const slot of rawSlots) {
+      const jamMulaiClean = (slot.jam_mulai || '').slice(0, 5);
+      const jamSelesaiClean = (slot.jam_selesai || '').slice(0, 5);
+      const key = `${slot.kode_ruangan || ''}_${(slot.hari || '').toLowerCase()}_${jamMulaiClean}_${jamSelesaiClean}`;
+
+      if (!sessionMap.has(key)) {
+        sessionMap.set(key, []);
+      }
+      sessionMap.get(key)!.push({
+        ...slot,
+        jam_mulai: jamMulaiClean,
+        jam_selesai: jamSelesaiClean,
+      });
+    }
+
+    const result: SlotItem[] = [];
+
+    for (const items of sessionMap.values()) {
+      // Cari slot yang merupakan PJ; jika tidak ada, gunakan slot pertama
+      const pjSlot = items.find((s) => s.is_penanggung_jawab) || items[0];
+      const hasPJ = items.some((s) => s.is_penanggung_jawab);
+
+      const pjNoSip = String(pjSlot.no_sip || '').trim().toLowerCase();
+      const pjNama = String(pjSlot.nama_petugas || '').trim().toLowerCase();
+
+      // Kumpulkan semua pendamping dari seluruh item di sesi ini (KECUALIKAN PJ & DEDUPLIKASI)
+      const seenCompanion = new Set<string>();
+      if (pjNoSip) seenCompanion.add(pjNoSip);
+      if (pjNama) seenCompanion.add(pjNama);
+
+      const cleanCompanions: Array<{
+        kode_jadwal?: string;
+        no_sip: string;
+        nama_petugas: string;
+        jabatan_petugas: string;
+      }> = [];
+
+      const addCompanion = (c: {
+        kode_jadwal?: string;
+        no_sip: string;
+        nama_petugas: string;
+        jabatan_petugas?: string;
+      }) => {
+        const cNoSip = String(c.no_sip || '').trim().toLowerCase();
+        const cNama = String(c.nama_petugas || '').trim().toLowerCase();
+        if (c.kode_jadwal && c.kode_jadwal === pjSlot.kode_jadwal) return;
+        if (pjNoSip && cNoSip === pjNoSip) return;
+        if (pjNama && cNama === pjNama) return;
+
+        const dedupeKey = cNoSip || cNama;
+        if (dedupeKey && seenCompanion.has(dedupeKey)) return;
+        if (dedupeKey) seenCompanion.add(dedupeKey);
+
+        cleanCompanions.push({
+          kode_jadwal: c.kode_jadwal,
+          no_sip: c.no_sip,
+          nama_petugas: c.nama_petugas,
+          jabatan_petugas: c.jabatan_petugas || 'Terapis / Petugas',
+        });
+      };
+
+      for (const item of items) {
+        if (item.kode_jadwal !== pjSlot.kode_jadwal) {
+          addCompanion({
+            kode_jadwal: item.kode_jadwal,
+            no_sip: item.no_sip,
+            nama_petugas: item.nama_petugas,
+            jabatan_petugas: item.jabatan_petugas,
+          });
+        }
+        if (Array.isArray(item.petugas_pendamping)) {
+          for (const c of item.petugas_pendamping) {
+            addCompanion(c);
+          }
+        }
+      }
+
+      // Kumpulkan booked_times dan booked_intervals dari seluruh jadwal di sesi ini
+      const mergedBookedTimes = new Set<string>();
+      const mergedBookedIntervals: Array<{
+        kode_booking?: string;
+        jam_mulai: string;
+        durasi_menit: number;
+        jam_selesai: string;
+        start_minutes?: number;
+        end_minutes?: number;
+      }> = [];
+      const seenBookingCodes = new Set<string>();
+
+      for (const item of items) {
+        if (Array.isArray(item.booked_times)) {
+          item.booked_times.forEach((t) => mergedBookedTimes.add(t));
+        }
+        if (Array.isArray(item.booked_intervals)) {
+          for (const inv of item.booked_intervals) {
+            const key = inv.kode_booking || `${inv.jam_mulai}_${inv.durasi_menit}`;
+            if (!seenBookingCodes.has(key)) {
+              seenBookingCodes.add(key);
+              mergedBookedIntervals.push(inv);
+            }
+          }
+        }
+      }
+
+      result.push({
+        ...pjSlot,
+        has_pj: hasPJ,
+        petugas_pendamping: cleanCompanions,
+        jumlah_pendamping: cleanCompanions.length,
+        booked_times: Array.from(mergedBookedTimes),
+        booked_intervals: mergedBookedIntervals,
+      });
+    }
+
+    return result;
+  };
 
   const fetchSlots = async () => {
     if (!activeRuangan) return;
@@ -568,7 +968,8 @@ export const BuatBookingTab: React.FC<Props> = ({ toast, onSuccessCreated }) => 
 
       if (res.data?.status === 200 || res.status === 200) {
         const d = res.data?.data;
-        setSlots(d?.slots || []);
+        const rawSlots: SlotItem[] = d?.slots || [];
+        setSlots(groupSlotsBySession(rawSlots));
         setDokterKonsulList(d?.dokter_konsul || []);
       } else {
         setSlots([]);
@@ -610,6 +1011,19 @@ export const BuatBookingTab: React.FC<Props> = ({ toast, onSuccessCreated }) => 
       return;
     }
 
+    if (isBookingToday) {
+      const now = new Date();
+      const nowMin = now.getHours() * 60 + now.getMinutes();
+      const inputMin = timeToMinutes(jamBooking);
+      if (inputMin < nowMin) {
+        showError(
+          toast,
+          `Jam janji temu ${jamBooking} WIB sudah melewati waktu saat ini untuk booking hari ini. Harap pilih slot jam yang masih tersedia.`
+        );
+        return;
+      }
+    }
+
     if (effectiveButuhKonsul && consultWindow && selectedSlot) {
       if (slotOverlap && !slotOverlap.hasOverlap) {
         showError(
@@ -628,6 +1042,23 @@ export const BuatBookingTab: React.FC<Props> = ({ toast, onSuccessCreated }) => 
       }
     }
 
+    // Validasi DP baru
+    if (dpNominal > 0) {
+      if (!metodePembayaranDp) {
+        showError(toast, 'Harap pilih metode pembayaran DP (Cash / Transfer / QRIS)!');
+        return;
+      }
+      if (!konfirmasiDpDiterima) {
+        showError(toast, 'Harap centang konfirmasi bahwa pembayaran DP telah diterima dari pasien!');
+        return;
+      }
+    } else {
+      if (!hasOnlyKlaim && !alasanBebasDp) {
+        showError(toast, 'Harap pilih alasan bebas DP (Rp 0)!');
+        return;
+      }
+    }
+
     setLoadingSubmit(true);
     try {
       const payload = {
@@ -638,6 +1069,9 @@ export const BuatBookingTab: React.FC<Props> = ({ toast, onSuccessCreated }) => 
         jam_booking: jamBooking,
         catatan_pasien: catatanPasien.trim() || undefined,
         dp_nominal: dpNominal,
+        metode_pembayaran_dp: dpNominal > 0 ? metodePembayaranDp : undefined,
+        konfirmasi_dp_diterima: dpNominal > 0 ? konfirmasiDpDiterima : undefined,
+        alasan_bebas_dp: dpNominal === 0 ? (hasOnlyKlaim ? 'Klaim Paket (Kepemilikan Aktif)' : alasanBebasDp) : undefined,
         sumber: sumber,
         butuh_konsul: effectiveButuhKonsul,
         items: selectedList.map((it) => ({
@@ -674,6 +1108,8 @@ export const BuatBookingTab: React.FC<Props> = ({ toast, onSuccessCreated }) => 
           nama_petugas: selectedSlot.nama_petugas,
           butuh_konsul: effectiveButuhKonsul,
           items: selectedList,
+          metode_pembayaran_dp: dpNominal > 0 ? metodePembayaranDp : null,
+          alasan_bebas_dp: dpNominal === 0 ? (hasOnlyKlaim ? 'Klaim Paket (Kepemilikan Aktif)' : alasanBebasDp) : null,
         });
         setShowDetailDialog(true);
 
@@ -706,11 +1142,17 @@ export const BuatBookingTab: React.FC<Props> = ({ toast, onSuccessCreated }) => 
     setIsManualTime(false);
     setManualTimeInput('');
     setManualTimeError('');
+    setManualSuccessMsg('');
+    setSuggestedSlot(null);
     setCatatanPasien('');
     setSlots([]);
     setTanggalBooking(new Date());
     setOwnedPackages([]);
     setGlobalConsultChoice(true);
+    setActiveTabIndex(0);
+    setMetodePembayaranDp('cash');
+    setKonfirmasiDpDiterima(false);
+    setAlasanBebasDp('');
   };
 
   return (
@@ -942,116 +1384,124 @@ export const BuatBookingTab: React.FC<Props> = ({ toast, onSuccessCreated }) => 
                 activeIndex={activeTabIndex}
                 onTabChange={(e) => setActiveTabIndex(e.index)}
               >
-                {/* TAB KHUSUS: PAKET YANG SUDAH DIMILIKI PASIEN */}
-                {claimablePackages.length > 0 && (
-                  <TabPanel
-                    key="owned_packages_tab"
-                    header={`🎁 Paket Dimiliki Pasien (${claimablePackages.length})`}
-                    leftIcon="pi pi-gift mr-2 text-amber-600 font-bold"
-                  >
-                    <div className="p-3 bg-amber-50 border-round-lg border-1 border-amber-200 mb-3 flex align-items-center gap-2">
-                      <i className="pi pi-info-circle text-amber-600 text-lg" />
-                      <span className="text-sm text-amber-900 font-semibold">
-                        Pasien memiliki paket aktif! Pilih sesi treatment di bawah ini untuk mereservasi sesi lanjutan tanpa biaya DP / biaya tambahan (Rp 0).
-                      </span>
-                    </div>
+                {(() => {
+                  const panels: React.ReactNode[] = [];
 
-                    <div className="grid">
-                      {claimablePackages.map((pkg: any) => {
-                        return (pkg.details || [])
-                          .filter((det: any) => (det.sisa_sesi || 0) > 0)
-                          .map((det: any) => {
-                            const claimItem: ServiceItem = {
-                              jenis: 'klaim_paket',
-                              kode_layanan: det.kode_layanan,
-                              kode_kategori: 'KLAIM PAKET',
-                              nama_kategori: `Klaim Paket`,
-                              nama: `${det.nama_layanan || det.kode_layanan}`,
-                              harga: 0,
-                              harga_asal: 0,
-                              durasi_menit: det.durasi_menit || 45,
-                              total_sesi: det.sesi_total,
-                              sisa_sesi: det.sisa_sesi,
-                              sesi_terbooking: det.sesi_terbooking || 0,
-                              sesi_tersedia: det.sesi_tersedia ?? det.sisa_sesi,
-                              tanggal_expired: pkg.tanggal_expired,
-                              kode_ruangan: det.kode_ruangan || pkg.kode_ruangan_paket || 'RNG-002',
-                              nama_ruangan: det.nama_ruangan || pkg.nama_ruangan_paket || 'Ruangan Treatment',
-                              tipe: pkg.tipe_paket || 'BEAUTY TREATMENT',
-                              tipe_paket: pkg.tipe_paket || 'BEAUTY TREATMENT',
-                              wajib_konsultasi: (pkg.tipe_paket === 'MEDICAL TREATMENT' ? 'wajib' : pkg.tipe_paket === 'SERVICE TREATMENT' ? 'tidak' : 'opsional'),
-                              kode_kepemilikan_paket_layanan: pkg.kode_kepemilikan_paket_layanan,
-                              kode_detail_kepemilikan_paket_layanan: det.kode_detail_kepemilikan_paket_layanan,
-                              nama_paket_asal: pkg.nama_paket,
-                            };
+                  {/* TAB KHUSUS: PAKET YANG SUDAH DIMILIKI PASIEN */}
+                  if (claimablePackages.length > 0) {
+                    panels.push(
+                      <TabPanel
+                        key="owned_packages_tab"
+                        header={`🎁 Paket Dimiliki Pasien (${claimablePackages.length})`}
+                        leftIcon="pi pi-gift mr-2 text-amber-600 font-bold"
+                      >
+                        <div className="p-3 bg-amber-50 border-round-lg border-1 border-amber-200 mb-3 flex align-items-center gap-2">
+                          <i className="pi pi-info-circle text-amber-600 text-lg" />
+                          <span className="text-sm text-amber-900 font-semibold">
+                            Pasien memiliki paket aktif! Pilih sesi treatment di bawah ini untuk mereservasi sesi lanjutan tanpa biaya DP / biaya tambahan (Rp 0).
+                          </span>
+                        </div>
 
-                            const itemKey = `klaim_${det.kode_detail_kepemilikan_paket_layanan || det.kode_layanan}`;
-                            const isRuangDisabled = activeRuangan !== null && activeRuangan !== claimItem.kode_ruangan;
+                        <div className="grid">
+                          {claimablePackages.map((pkg: any) => {
+                            return (pkg.details || [])
+                              .filter((det: any) => (det.sisa_sesi || 0) > 0)
+                              .map((det: any) => {
+                                const claimItem: ServiceItem = {
+                                  jenis: 'klaim_paket',
+                                  kode_layanan: det.kode_layanan,
+                                  kode_kategori: 'KLAIM PAKET',
+                                  nama_kategori: `Klaim Paket`,
+                                  nama: `${det.nama_layanan || det.kode_layanan}`,
+                                  harga: 0,
+                                  harga_asal: 0,
+                                  durasi_menit: det.durasi_menit || 45,
+                                  total_sesi: det.sesi_total,
+                                  sisa_sesi: det.sisa_sesi,
+                                  sesi_terbooking: det.sesi_terbooking || 0,
+                                  sesi_tersedia: det.sesi_tersedia ?? det.sisa_sesi,
+                                  tanggal_expired: pkg.tanggal_expired,
+                                  kode_ruangan: det.kode_ruangan || pkg.kode_ruangan_paket || 'RNG-002',
+                                  nama_ruangan: det.nama_ruangan || pkg.nama_ruangan_paket || 'Ruangan Treatment',
+                                  tipe: pkg.tipe_paket || 'BEAUTY TREATMENT',
+                                  tipe_paket: pkg.tipe_paket || 'BEAUTY TREATMENT',
+                                  wajib_konsultasi: (pkg.tipe_paket === 'MEDICAL TREATMENT' ? 'wajib' : pkg.tipe_paket === 'SERVICE TREATMENT' ? 'tidak' : 'opsional'),
+                                  kode_kepemilikan_paket_layanan: pkg.kode_kepemilikan_paket_layanan,
+                                  kode_detail_kepemilikan_paket_layanan: det.kode_detail_kepemilikan_paket_layanan,
+                                  nama_paket_asal: pkg.nama_paket,
+                                };
 
-                            return (
+                                const itemKey = `klaim_${det.kode_detail_kepemilikan_paket_layanan || det.kode_layanan}`;
+                                const isRuangDisabled = activeRuangan !== null && activeRuangan !== claimItem.kode_ruangan;
+
+                                return (
+                                  <LayananCard
+                                    key={itemKey}
+                                    item={claimItem}
+                                    isSelected={!!selectedMap[itemKey]}
+                                    isDisabled={isRuangDisabled}
+                                    onToggle={handleToggleItem}
+                                    formatPrice={formatCurrency}
+                                  />
+                                );
+                              });
+                          })}
+                        </div>
+                      </TabPanel>
+                    );
+                  }
+
+                  ruangans.forEach((ruang) => {
+                    const isRuangActive = activeRuangan === ruang.kode_ruangan;
+                    const isRuangDisabled = activeRuangan !== null && activeRuangan !== ruang.kode_ruangan;
+                    const ruangSelectedCount = (ruang.items || []).filter(
+                      (item) => !!selectedMap[`${item.jenis}_${item.kode_layanan}`]
+                    ).length;
+                    const roomTitle = ruang.nama_ruangan || `Ruangan ${ruang.kode_ruangan}`;
+                    const countSuffix = ruangSelectedCount > 0 ? ` (${ruangSelectedCount})` : '';
+
+                    panels.push(
+                      <TabPanel
+                        key={ruang.kode_ruangan}
+                        header={`${roomTitle}${countSuffix}`}
+                        leftIcon={`pi ${isRuangActive ? 'pi-check-circle' : 'pi-building'} mr-2`}
+                      >
+                        {isRuangDisabled && (
+                          <div className="flex align-items-center gap-2 p-3 mb-3 bg-orange-50 border-round-lg border-1 border-orange-200">
+                            <i className="pi pi-info-circle text-orange-500" />
+                            <span className="text-sm text-orange-700">
+                              Ruangan ini tidak bisa dipilih karena Anda sudah memilih layanan/paket dari ruangan <strong>{activeRoomName}</strong>.
+                              Batalkan pilihan sebelumnya terlebih dahulu jika ingin berpindah ruangan.
+                            </span>
+                          </div>
+                        )}
+
+                        {!ruang.items || ruang.items.length === 0 ? (
+                          <div className="flex flex-column align-items-center justify-content-center p-5 surface-card border-round-xl border-1 surface-border my-3 text-center">
+                            <i className="pi pi-inbox text-400 text-4xl mb-2" />
+                            <span className="text-700 font-bold block text-base">{roomTitle}</span>
+                            <span className="text-500 text-sm mt-1">Belum ada layanan atau paket yang tersedia di ruangan ini.</span>
+                          </div>
+                        ) : (
+                          <div className="grid">
+                            {ruang.items.map((item) => (
                               <LayananCard
-                                key={itemKey}
-                                item={claimItem}
-                                isSelected={!!selectedMap[itemKey]}
+                                key={`${item.jenis}_${item.kode_layanan}`}
+                                item={item}
+                                isSelected={!!selectedMap[`${item.jenis}_${item.kode_layanan}`]}
                                 isDisabled={isRuangDisabled}
                                 onToggle={handleToggleItem}
                                 formatPrice={formatCurrency}
                               />
-                            );
-                          });
-                      })}
-                    </div>
-                  </TabPanel>
-                )}
+                            ))}
+                          </div>
+                        )}
+                      </TabPanel>
+                    );
+                  });
 
-                {ruangans.map((ruang) => {
-                  const isRuangActive = activeRuangan === ruang.kode_ruangan;
-                  const isRuangDisabled = activeRuangan !== null && activeRuangan !== ruang.kode_ruangan;
-                  const ruangSelectedCount = (ruang.items || []).filter(
-                    (item) => !!selectedMap[`${item.jenis}_${item.kode_layanan}`]
-                  ).length;
-                  const roomTitle = ruang.nama_ruangan || `Ruangan ${ruang.kode_ruangan}`;
-                  const countSuffix = ruangSelectedCount > 0 ? ` (${ruangSelectedCount})` : '';
-
-                  return (
-                    <TabPanel
-                      key={ruang.kode_ruangan}
-                      header={`${roomTitle}${countSuffix}`}
-                      leftIcon={`pi ${isRuangActive ? 'pi-check-circle' : 'pi-building'} mr-2`}
-                    >
-                      {isRuangDisabled && (
-                        <div className="flex align-items-center gap-2 p-3 mb-3 bg-orange-50 border-round-lg border-1 border-orange-200">
-                          <i className="pi pi-info-circle text-orange-500" />
-                          <span className="text-sm text-orange-700">
-                            Ruangan ini tidak bisa dipilih karena Anda sudah memilih layanan/paket dari ruangan <strong>{activeRoomName}</strong>.
-                            Batalkan pilihan sebelumnya terlebih dahulu jika ingin berpindah ruangan.
-                          </span>
-                        </div>
-                      )}
-
-                      {!ruang.items || ruang.items.length === 0 ? (
-                        <div className="flex flex-column align-items-center justify-content-center p-5 surface-card border-round-xl border-1 surface-border my-3 text-center">
-                          <i className="pi pi-inbox text-400 text-4xl mb-2" />
-                          <span className="text-700 font-bold block text-base">{roomTitle}</span>
-                          <span className="text-500 text-sm mt-1">Belum ada layanan atau paket yang tersedia di ruangan ini.</span>
-                        </div>
-                      ) : (
-                        <div className="grid">
-                          {ruang.items.map((item) => (
-                            <LayananCard
-                              key={`${item.jenis}_${item.kode_layanan}`}
-                              item={item}
-                              isSelected={!!selectedMap[`${item.jenis}_${item.kode_layanan}`]}
-                              isDisabled={isRuangDisabled}
-                              onToggle={handleToggleItem}
-                              formatPrice={formatCurrency}
-                            />
-                          ))}
-                        </div>
-                      )}
-                    </TabPanel>
-                  );
-                })}
+                  return panels;
+                })()}
               </TabView>
             )}
 
@@ -1296,15 +1746,20 @@ export const BuatBookingTab: React.FC<Props> = ({ toast, onSuccessCreated }) => 
               <div>
                 <div className="text-xs text-500 mb-3 pt-1 flex align-items-center gap-1.5">
                   <Clock size={13} className="text-400" />
-                  <span>Pilih salah satu jadwal terapis di bawah ini. Slot yang penuh tidak dapat dipilih.</span>
+                  <span>Pilih salah satu sesi jadwal petugas di bawah ini. Setiap sesi diwakili oleh Petugas Penanggung Jawab (PJ).</span>
                 </div>
                 <div className="grid">
                   {slots.map((slot) => {
                     const isSelected = selectedSlot?.kode_jadwal === slot.kode_jadwal;
                     const isFull = !slot.is_available;
+                    const companions = slot.petugas_pendamping || [];
+                    const totalCompanions = slot.jumlah_pendamping || companions.length;
+                    const hasCompanions = totalCompanions > 0;
+                    const companionSummary = getCompanionSummary(companions, totalCompanions);
+                    const fullCompanionNames = companions.map((c) => c.nama_petugas).join(', ');
 
                     return (
-                      <div key={slot.kode_jadwal} className="col-12 sm:col-6">
+                      <div key={slot.kode_jadwal} className="col-12 sm:col-6 flex">
                         <div
                           onClick={() => {
                             if (!isFull) {
@@ -1313,9 +1768,11 @@ export const BuatBookingTab: React.FC<Props> = ({ toast, onSuccessCreated }) => 
                               setIsManualTime(false);
                               setManualTimeInput('');
                               setManualTimeError('');
+                              setManualSuccessMsg('');
+                              setSuggestedSlot(null);
                             }
                           }}
-                          className={`border-round-xl p-3 border-2 transition-all transition-duration-200 ${
+                          className={`w-full flex flex-column justify-content-between border-round-xl p-3 border-2 transition-all transition-duration-200 ${
                             isFull
                               ? 'surface-100 border-300 opacity-60 cursor-not-allowed'
                               : isSelected
@@ -1323,29 +1780,103 @@ export const BuatBookingTab: React.FC<Props> = ({ toast, onSuccessCreated }) => 
                               : 'surface-card border-200 hover:border-primary-300 hover:shadow-1 cursor-pointer'
                           }`}
                         >
-                          <div className="flex justify-content-between align-items-start mb-2">
-                            <div className="flex align-items-center gap-2">
-                              <Clock size={16} className={isSelected ? 'text-primary' : 'text-500'} />
-                              <span className="font-bold text-900 text-base">
-                                {slot.jam_mulai} - {slot.jam_selesai} WIB
-                              </span>
+                          <div>
+                            {/* Header: Jam & Status */}
+                            <div className="flex justify-content-between align-items-start mb-2">
+                              <div className="flex align-items-center gap-2">
+                                <Clock size={16} className={isSelected ? 'text-primary' : 'text-500'} />
+                                <span className="font-bold text-900 text-base">
+                                  {slot.jam_mulai} - {slot.jam_selesai} WIB
+                                </span>
+                              </div>
+                              {isSelected ? (
+                                <CheckCircle2 size={20} className="text-primary flex-shrink-0" />
+                              ) : isFull ? (
+                                <Tag value="PENUH" severity="danger" className="flex-shrink-0" />
+                              ) : (
+                                <Tag value="TERSEDIA" severity="success" className="flex-shrink-0" />
+                              )}
                             </div>
-                            {isSelected ? (
-                              <CheckCircle2 size={20} className="text-primary" />
-                            ) : isFull ? (
-                              <Tag value="PENUH" severity="danger" />
-                            ) : (
-                              <Tag value="TERSEDIA" severity="success" />
-                            )}
+
+                            {/* Info Petugas Utama (PJ) */}
+                            <div className="flex align-items-center justify-content-between gap-1 mb-1.5">
+                              <div className="flex align-items-center gap-1.5 min-w-0 flex-1">
+                                <User size={14} className="text-primary flex-shrink-0" />
+                                <span
+                                  className="text-sm font-bold text-900 text-overflow-ellipsis overflow-hidden white-space-nowrap"
+                                  title={slot.nama_petugas}
+                                >
+                                  {slot.has_pj !== false ? slot.nama_petugas : (slot.nama_petugas || 'Petugas belum ditentukan')}
+                                </span>
+                              </div>
+                              {slot.is_penanggung_jawab ? (
+                                <Tag value="PJ" severity="warning" className="text-[10px] font-bold py-0 px-1.5 flex-shrink-0" />
+                              ) : slot.has_pj === false ? (
+                                <Tag value="Belum Ada PJ" severity="secondary" className="text-[10px] py-0 px-1.5 flex-shrink-0" />
+                              ) : null}
+                            </div>
+
+                            {/* Info Petugas Pendamping — Tinggi Konsisten 24px, 1 Baris Elegan */}
+                            <div className="flex align-items-center mb-1.5" style={{ minHeight: '24px' }}>
+                              {hasCompanions ? (
+                                <div className="flex align-items-center gap-1.5 min-w-0 w-full">
+                                  <div
+                                    className="companion-tooltip-target inline-flex align-items-center gap-1.5 text-[11px] min-w-0 cursor-pointer overflow-hidden p-1 border-round hover:surface-100 transition-colors"
+                                    data-pr-tooltip={`Pendamping: ${fullCompanionNames}`}
+                                    data-pr-position="top"
+                                    onClick={(e) => {
+                                      e.stopPropagation();
+                                      setActiveCompanionData({
+                                        pj: slot.nama_petugas,
+                                        jam: `${slot.jam_mulai} - ${slot.jam_selesai} WIB`,
+                                        ruangan: slot.nama_ruangan,
+                                        companions: companions,
+                                      });
+                                      companionOpRef.current?.toggle(e);
+                                    }}
+                                  >
+                                    <span className="font-semibold text-primary-700 bg-primary-50 px-1.5 py-0.5 border-round flex-shrink-0 text-[11px]">
+                                      + {totalCompanions} petugas pendamping
+                                    </span>
+                                    <span
+                                      className="text-500 text-overflow-ellipsis overflow-hidden white-space-nowrap min-w-0 text-[11px]"
+                                      title={fullCompanionNames}
+                                    >
+                                      ({companionSummary})
+                                    </span>
+                                    <button
+                                      type="button"
+                                      className="p-0 border-none bg-transparent text-primary hover:text-primary-700 flex align-items-center flex-shrink-0 cursor-pointer ml-0.5"
+                                      title="Lihat daftar lengkap pendamping"
+                                      onClick={(e) => {
+                                        e.stopPropagation();
+                                        setActiveCompanionData({
+                                          pj: slot.nama_petugas,
+                                          jam: `${slot.jam_mulai} - ${slot.jam_selesai} WIB`,
+                                          ruangan: slot.nama_ruangan,
+                                          companions: companions,
+                                        });
+                                        companionOpRef.current?.toggle(e);
+                                      }}
+                                    >
+                                      <Info size={13} />
+                                    </button>
+                                  </div>
+                                </div>
+                              ) : (
+                                <span className="text-[11px] text-400 italic">Tanpa petugas pendamping</span>
+                              )}
+                            </div>
+
+                            {/* Lokasi Ruangan */}
+                            <div className="text-xs text-500 mb-2 flex align-items-center gap-1 text-overflow-ellipsis overflow-hidden white-space-nowrap">
+                              <MapPin size={13} className="flex-shrink-0" />
+                              <span className="text-overflow-ellipsis overflow-hidden white-space-nowrap">{slot.nama_ruangan}</span>
+                            </div>
                           </div>
 
-                          <div className="text-sm font-semibold text-800 mb-1">{slot.nama_petugas}</div>
-                          <div className="text-xs text-500 mb-2 flex align-items-center gap-1">
-                            <MapPin size={13} /> {slot.nama_ruangan}
-                          </div>
-
-                          {/* Progress Kuota */}
-                          <div className="mt-2">
+                          {/* Progress Kuota Sesi (Milik PJ) */}
+                          <div className="mt-2 pt-2 border-top-1 surface-border">
                             <div className="flex justify-content-between text-xs mb-1">
                               <span className="text-600">Sisa Kuota:</span>
                               <span className={`font-bold ${isFull ? 'text-red-500' : 'text-green-600'}`}>
@@ -1380,16 +1911,17 @@ export const BuatBookingTab: React.FC<Props> = ({ toast, onSuccessCreated }) => 
                           )}
                         </div>
                         <div className="text-xs text-600 mt-1">
-                          Shift: <strong>{selectedSlot.jam_mulai} - {selectedSlot.jam_selesai} WIB</strong> ({selectedSlot.nama_petugas}) · Total durasi tindakan:{' '}
+                          Shift: <strong>{selectedSlot.jam_mulai} - {selectedSlot.jam_selesai} WIB</strong> ({selectedSlot.nama_petugas}
+                          {selectedSlot.jumlah_pendamping ? ` + ${selectedSlot.jumlah_pendamping} pendamping` : ''}) · Total durasi tindakan:{' '}
                           <strong>{totalDurasi || 30} menit</strong>
                         </div>
                       </div>
 
-                      {/* Switcher Chip vs Manual */}
+                      {/* Switcher / Toggle Box Manual */}
                       <Button
                         type="button"
-                        label={isManualTime ? 'Pilih dari Chip Interval' : 'Input Jam Khusus (Manual)'}
-                        icon={isManualTime ? 'pi pi-th-large' : 'pi pi-pencil'}
+                        label={isManualTime ? 'Tutup Input Manual' : 'Input Jam Khusus (Manual)'}
+                        icon={isManualTime ? 'pi pi-times' : 'pi pi-pencil'}
                         className="p-button-outlined p-button-secondary p-button-sm text-xs"
                         onClick={() => {
                           const nextManual = !isManualTime;
@@ -1397,82 +1929,136 @@ export const BuatBookingTab: React.FC<Props> = ({ toast, onSuccessCreated }) => 
                           if (nextManual) {
                             setManualTimeInput(jamBooking || selectedSlot.jam_mulai);
                             setManualTimeError('');
+                            setManualSuccessMsg('');
+                            setSuggestedSlot(null);
                           }
                         }}
                       />
                     </div>
 
-                    {!isManualTime ? (
-                      <div>
-                        <div className="text-xs text-500 mb-2">
-                          Klik salah satu jam kedatangan yang tersedia (interval 30 menit):
-                        </div>
-                        <div className="flex flex-wrap gap-2">
-                          {timeSlots.map((st) => {
-                            const isSelected = jamBooking === st.time;
-                            const isDisabled = st.exceedsShift || st.isBooked || st.isOutsideDoctor;
-
-                            return (
-                              <button
-                                key={st.time}
-                                type="button"
-                                disabled={isDisabled}
-                                onClick={() => setJamBooking(st.time)}
-                                title={
-                                  st.isOutsideDoctor
-                                    ? st.doctorDisabledReason
-                                    : st.exceedsShift
-                                    ? `Estimasi selesai (${st.endEst} WIB) melebihi batas shift (${selectedSlot.jam_selesai} WIB)`
-                                    : st.isBooked
-                                    ? 'Slot jam ini sudah dibooking pasien lain'
-                                    : `Pilih jam ${st.time} WIB`
-                                }
-                                className={`p-2 border-round-lg text-center transition-all transition-duration-150 flex flex-column align-items-center justify-content-center ${
-                                  isSelected
-                                    ? 'bg-primary text-white border-primary shadow-2 ring-2 ring-primary-300 cursor-pointer font-bold'
-                                    : isDisabled
-                                    ? 'surface-100 text-400 border-200 cursor-not-allowed opacity-50'
-                                    : 'surface-card text-800 border-1 border-300 hover:border-primary-400 hover:surface-50 cursor-pointer shadow-1'
-                                }`}
-                                style={{ minWidth: '84px', borderStyle: 'solid' }}
-                              >
-                                <span className="text-sm font-bold">{st.time}</span>
-                                {st.isBooked ? (
-                                  <span className="text-[10px] text-red-500 font-semibold uppercase mt-0.5">
-                                    Terisi
-                                  </span>
-                                ) : !isDisabled ? (
-                                  <span className={`text-[10px] ${isSelected ? 'text-white' : 'text-500'} mt-0.5`}>
-                                    s/d {st.endEst}
-                                  </span>
-                                ) : null}
-                              </button>
-                            );
-                          })}
-                        </div>
-
-                        {timeSlots.some((s) => s.isOutsideDoctor) && (
-                          <div className="text-xs text-600 mt-2.5 flex align-items-center gap-1.5">
-                            <span className="inline-block w-2 h-2 border-circle bg-gray-400 flex-shrink-0"></span>
-                            <span>
-                              Slot jam pudar sebelum pukul <strong>{consultWindow?.docStartStr} WIB</strong> dinonaktifkan karena dokter jaga Ruang Konsultasi ({consultWindow?.dokterNames}) baru bertugas pukul <strong>{consultWindow?.docStartStr} WIB</strong>.
-                            </span>
-                          </div>
-                        )}
-
-                        {timeSlots.some((s) => s.exceedsShift) && (
-                          <div className="text-xs text-500 mt-1 flex align-items-center gap-1.5">
-                            <span className="inline-block w-2 h-2 border-circle bg-gray-400 flex-shrink-0"></span>
-                            <span>
-                              Slot jam pudar di akhir shift dinonaktifkan karena durasi tindakan ({totalDurasi || 30} mnt) melebihi batas shift ({selectedSlot.jam_selesai} WIB).
-                            </span>
-                          </div>
-                        )}
+                    {/* Grid Pilihan Jam (Jarak antar pilihan mengikuti durasi tindakan) */}
+                    <div>
+                      <div className="text-xs text-500 mb-2">
+                        Pilih jam kedatangan yang tersedia (jarak antar pilihan jam mengikuti durasi tindakan: <strong>{totalDurasi || 30} menit</strong>):
                       </div>
-                    ) : (
-                      <div className="surface-50 border-1 surface-border border-round-lg p-3">
-                        <div className="font-semibold text-sm text-900 mb-2">
-                          Masukkan Jam Spesifik (Contoh: 10:15):
+                      <div className="flex flex-wrap gap-2">
+                        {timeSlots.map((st) => {
+                          const isSelected = jamBooking === st.time;
+                          const isDisabled = st.exceedsShift || st.isBooked || st.isOutsideDoctor || st.isPast;
+
+                          return (
+                            <button
+                              key={st.time}
+                              type="button"
+                              disabled={isDisabled}
+                              onClick={() => {
+                                setJamBooking(st.time);
+                                setManualTimeInput(st.time);
+                                setManualTimeError('');
+                                setManualSuccessMsg('');
+                                setSuggestedSlot(null);
+                              }}
+                              title={
+                                st.isPast
+                                  ? `Slot jam ${st.time} WIB sudah melewati waktu saat ini`
+                                  : st.isOutsideDoctor
+                                  ? st.doctorDisabledReason
+                                  : st.exceedsShift
+                                  ? `Estimasi selesai (${st.endEst} WIB) melebihi batas shift (${selectedSlot.jam_selesai} WIB)`
+                                  : st.isBooked
+                                  ? (st.conflictReason ? `Slot tidak dapat dipilih: ${st.conflictReason}` : 'Slot jam ini sudah dibooking pasien lain')
+                                  : `Pilih jam ${st.time} WIB (selesai ${st.endEst} WIB)`
+                              }
+                              className={`p-2 border-round-lg text-center transition-all transition-duration-150 flex flex-column align-items-center justify-content-center ${
+                                isSelected
+                                  ? 'bg-primary text-white border-primary shadow-2 ring-2 ring-primary-300 cursor-pointer font-bold'
+                                  : isDisabled
+                                  ? 'surface-100 text-400 border-200 cursor-not-allowed opacity-50'
+                                  : 'surface-card text-800 border-1 border-300 hover:border-primary-400 hover:surface-50 cursor-pointer shadow-1'
+                              }`}
+                              style={{ minWidth: '84px', borderStyle: 'solid' }}
+                            >
+                              <span className="text-sm font-bold">{st.time}</span>
+                              {st.isPast ? (
+                                <span className="text-[10px] text-400 font-semibold uppercase mt-0.5">
+                                  Lewat
+                                </span>
+                              ) : st.isBooked ? (
+                                <span className="text-[10px] text-red-500 font-semibold uppercase mt-0.5">
+                                  {st.isDirectHit ? 'Terisi' : 'Bentrok'}
+                                </span>
+                              ) : !isDisabled ? (
+                                <span className={`text-[10px] ${isSelected ? 'text-white' : 'text-500'} mt-0.5`}>
+                                  s/d {st.endEst}
+                                </span>
+                              ) : null}
+                            </button>
+                          );
+                        })}
+                      </div>
+
+                      {/* Daftar Keterangan / Catatan Ketersediaan Jam */}
+                      {(() => {
+                        const hasPastSlots = isBookingToday && timeSlots.some((s) => s.isPast);
+                        const hasBookedSlots = timeSlots.some((s) => s.isBooked);
+                        const hasDoctorCutoff = timeSlots.some((s) => s.isOutsideDoctor);
+
+                        return (
+                          <div className="mt-2.5 pt-2 border-top-1 surface-border flex flex-column gap-1.5 text-[11px]">
+                            {/* Peringatan penting: Hanya Terisi / Bentrok yang berwarna merah */}
+                            {hasBookedSlots && (
+                              <div className="flex align-items-start gap-1.5 text-red-500 font-medium">
+                                <Info size={13} className="flex-shrink-0 mt-0.5 text-red-400" />
+                                <span>
+                                  Slot bertanda <strong>Terisi / Bentrok</strong> dinonaktifkan karena telah dipesan pasien lain.
+                                </span>
+                              </div>
+                            )}
+
+                            {/* Info kondisional: Hanya tampil untuk hari ini jika ada slot yang sudah lewat waktu */}
+                            {hasPastSlots && (
+                              <div className="flex align-items-start gap-1.5 text-500">
+                                <Info size={13} className="flex-shrink-0 mt-0.5 text-400" />
+                                <span>
+                                  Slot yang telah melewati waktu saat ini otomatis dinonaktifkan untuk booking hari ini.
+                                </span>
+                              </div>
+                            )}
+
+                            {/* Info kondisional: Hanya tampil jika ada irisan jam di luar dokter jaga */}
+                            {hasDoctorCutoff && (
+                              <div className="flex align-items-start gap-1.5 text-500">
+                                <Info size={13} className="flex-shrink-0 mt-0.5 text-400" />
+                                <span>
+                                  Slot sebelum pukul <strong>{consultWindow?.docStartStr} WIB</strong> tidak aktif (menyesuaikan jam mulai dokter jaga).
+                                </span>
+                              </div>
+                            )}
+
+                            {/* Info umum batas shift: Muted grey netral */}
+                            {selectedSlot && (
+                              <div className="flex align-items-start gap-1.5 text-500">
+                                <Info size={13} className="flex-shrink-0 mt-0.5 text-400" />
+                                <span>
+                                  Slot melebihi batas akhir shift (pukul <strong>{selectedSlot.jam_selesai} WIB</strong>) otomatis tidak ditampilkan.
+                                </span>
+                              </div>
+                            )}
+                          </div>
+                        );
+                      })()}
+                    </div>
+
+                    {/* Kotak Input Jam Khusus (Manual) */}
+                    {isManualTime && (
+                      <div className="surface-50 border-1 surface-border border-round-lg p-3 mt-3">
+                        <div className="flex flex-column sm:flex-row justify-content-between align-items-start sm:align-items-center gap-1 mb-2">
+                          <div className="font-semibold text-sm text-900">
+                            Input Jam Khusus (Manual):
+                          </div>
+                          <span className="text-xs text-500">
+                            *Akan dibulatkan ke interval durasi tindakan ({totalDurasi || 30} menit)
+                          </span>
                         </div>
                         <div className="flex flex-wrap align-items-center gap-3">
                           <div className="flex align-items-center gap-2">
@@ -1482,6 +2068,12 @@ export const BuatBookingTab: React.FC<Props> = ({ toast, onSuccessCreated }) => 
                               min={selectedSlot.jam_mulai}
                               max={selectedSlot.jam_selesai}
                               onChange={(e) => handleManualTimeChange(e.target.value)}
+                              onKeyDown={(e) => {
+                                if (e.key === 'Enter') {
+                                  e.preventDefault();
+                                  handleApplyManualTime();
+                                }
+                              }}
                               className="p-inputtext p-component p-inputtext-sm font-bold text-base"
                               style={{ padding: '6px 12px' }}
                             />
@@ -1490,31 +2082,50 @@ export const BuatBookingTab: React.FC<Props> = ({ toast, onSuccessCreated }) => 
 
                           <Button
                             type="button"
-                            label="Gunakan Jam Ini"
+                            label="Terapkan Jam Ini"
                             icon="pi pi-check"
                             className="p-button-primary p-button-sm"
-                            disabled={!manualTimeInput || !!manualTimeError}
-                            onClick={() => {
-                              if (manualTimeInput && !manualTimeError) {
-                                setJamBooking(manualTimeInput);
-                              }
-                            }}
+                            disabled={!manualTimeInput}
+                            onClick={() => handleApplyManualTime()}
                           />
                         </div>
 
-                        {manualTimeError ? (
-                          <div className="text-xs text-red-600 font-semibold mt-2 flex align-items-center gap-1">
-                            <AlertCircle size={14} />
-                            <span>{manualTimeError}</span>
+                        {/* Tampilan Error & Saran Slot Terdekat */}
+                        {manualTimeError && (
+                          <div className="mt-2.5 p-2.5 border-round surface-0 border-1 border-red-200">
+                            <div className="text-xs text-red-600 font-semibold flex align-items-start gap-1.5">
+                              <AlertCircle size={15} className="flex-shrink-0 mt-0.5" />
+                              <span>{manualTimeError}</span>
+                            </div>
+                            {suggestedSlot && (
+                              <div className="mt-2 pl-4">
+                                <Button
+                                  type="button"
+                                  label={`Pilih Slot Terdekat (${suggestedSlot.time} - ${suggestedSlot.endEst} WIB)`}
+                                  icon="pi pi-arrow-right"
+                                  className="p-button-sm p-button-outlined p-button-danger text-xs font-semibold py-1 px-2.5"
+                                  onClick={() => {
+                                    setJamBooking(suggestedSlot.time);
+                                    setManualTimeInput(suggestedSlot.time);
+                                    setManualSuccessMsg(
+                                      `Slot terdekat ${suggestedSlot.time} - ${suggestedSlot.endEst} WIB berhasil dipilih.`
+                                    );
+                                    setManualTimeError('');
+                                    setSuggestedSlot(null);
+                                  }}
+                                />
+                              </div>
+                            )}
                           </div>
-                        ) : manualTimeInput && jamBooking === manualTimeInput ? (
-                          <div className="text-xs text-green-700 font-semibold mt-2 flex align-items-center gap-1">
-                            <CheckCircle2 size={14} />
-                            <span>
-                              Jam {manualTimeInput} WIB terpilih (perkiraan selesai {getEstimatedEndTime(manualTimeInput, totalDurasi || 30)} WIB).
-                            </span>
+                        )}
+
+                        {/* Tampilan Sukses / Info Penyesuaian ke Slot Terdekat */}
+                        {manualSuccessMsg && (
+                          <div className="text-xs text-green-700 font-semibold mt-2.5 p-2.5 border-round surface-0 border-1 border-green-200 flex align-items-center gap-1.5">
+                            <CheckCircle2 size={15} className="text-green-600 flex-shrink-0" />
+                            <span>{manualSuccessMsg}</span>
                           </div>
-                        ) : null}
+                        )}
                       </div>
                     )}
                   </div>
@@ -1567,11 +2178,21 @@ export const BuatBookingTab: React.FC<Props> = ({ toast, onSuccessCreated }) => 
                   ) : !jamBooking ? (
                     <span className="text-orange-600">
                       {selectedSlot.nama_petugas}{' '}
+                      {selectedSlot.jumlah_pendamping ? (
+                        <span className="text-xs text-500 font-normal">
+                          (+{selectedSlot.jumlah_pendamping} pendamping){' '}
+                        </span>
+                      ) : null}
                       <span className="text-xs font-normal underline block">(Pilih jam janji temu...)</span>
                     </span>
                   ) : (
                     <span className="text-900">
                       {selectedSlot.nama_petugas}{' '}
+                      {selectedSlot.jumlah_pendamping ? (
+                        <span className="text-xs text-500 font-normal">
+                          (+{selectedSlot.jumlah_pendamping} pendamping){' '}
+                        </span>
+                      ) : null}
                       <strong className="text-primary">({jamBooking} WIB)</strong>
                     </span>
                   )}
@@ -1655,10 +2276,11 @@ export const BuatBookingTab: React.FC<Props> = ({ toast, onSuccessCreated }) => 
               </label>
               {hasOnlyKlaim ? (
                 <div className="p-3 bg-green-50 border-1 border-green-200 border-round-lg text-xs text-green-900 flex align-items-center gap-2">
-                  <i className="pi pi-check-circle text-green-600 text-base" />
-                  <span>
-                    <strong>Bebas DP (Rp 0):</strong> Seluruh item merupakan klaim paket yang sudah dibayar di awal.
-                  </span>
+                  <i className="pi pi-check-circle text-green-600 text-base flex-shrink-0" />
+                  <div>
+                    <strong className="block">Bebas DP (Rp 0)</strong>
+                    <span>Seluruh item merupakan klaim paket aktif.</span>
+                  </div>
                 </div>
               ) : (
                 <>
@@ -1678,7 +2300,16 @@ export const BuatBookingTab: React.FC<Props> = ({ toast, onSuccessCreated }) => 
                     <div className="col-7">
                       <InputNumber
                         value={dpNominal}
-                        onValueChange={(e) => setDpNominal(e.value || 0)}
+                        onValueChange={(e) => {
+                          const val = e.value || 0;
+                          setDpNominal(val);
+                          if (totalHarga > 0) {
+                            setDpPercentage(Math.round((val / totalHarga) * 100));
+                          }
+                          if (val === 0 && !alasanBebasDp) {
+                            setAlasanBebasDp('Pasien VIP / Prioritas');
+                          }
+                        }}
                         mode="currency"
                         currency="IDR"
                         locale="id-ID"
@@ -1686,9 +2317,55 @@ export const BuatBookingTab: React.FC<Props> = ({ toast, onSuccessCreated }) => 
                       />
                     </div>
                   </div>
-                  <div className="text-xs text-500 mt-1">
-                    Default 20%. Nominal DP dapat disesuaikan manual.
+                  <div className="text-xs text-500 mt-1 mb-2">
+                    Default 20%. Nominal DP dapat disesuaikan manual atau 0% untuk Bebas DP.
                   </div>
+
+                  {dpNominal > 0 ? (
+                    <div className="p-3 surface-50 border-1 border-200 border-round-lg flex flex-column gap-2.5 mt-2">
+                      <div>
+                        <label className="font-semibold text-xs text-700 block mb-1">
+                          Metode Pembayaran DP <span className="text-red-500">*</span>
+                        </label>
+                        <SelectButton
+                          value={metodePembayaranDp}
+                          options={METODE_DP_OPTIONS}
+                          onChange={(e) => e.value && setMetodePembayaranDp(e.value)}
+                          className="w-full selectbutton-sm"
+                        />
+                      </div>
+
+                      <div className="field-checkbox mt-1 mb-0 align-items-start gap-2 p-2.5 bg-blue-50 border-1 border-blue-200 border-round">
+                        <Checkbox
+                          inputId="konfirmasi_dp"
+                          checked={konfirmasiDpDiterima}
+                          onChange={(e) => setKonfirmasiDpDiterima(!!e.checked)}
+                          className="mt-0.5"
+                        />
+                        <label htmlFor="konfirmasi_dp" className="text-xs text-blue-900 cursor-pointer line-height-2">
+                          <strong>Konfirmasi:</strong> Uang muka (DP) sebesar{' '}
+                          <span className="font-bold text-primary">{formatCurrency(dpNominal)}</span> sudah diterima dari pasien melalui kasir/staff.
+                        </label>
+                      </div>
+                    </div>
+                  ) : (
+                    <div className="p-3 bg-yellow-50 border-1 border-yellow-200 border-round-lg flex flex-column gap-2 mt-2">
+                      <div className="flex align-items-center gap-1.5 text-xs text-yellow-900 font-semibold">
+                        <i className="pi pi-exclamation-circle text-yellow-700" />
+                        <span>Alasan Bebas DP (Wajib Dipilih) <span className="text-red-500">*</span></span>
+                      </div>
+                      <Dropdown
+                        value={alasanBebasDp}
+                        options={ALASAN_BEBAS_DP_OPTIONS}
+                        onChange={(e) => setAlasanBebasDp(e.value)}
+                        placeholder="-- Pilih Alasan Bebas DP --"
+                        className="w-full text-xs"
+                      />
+                      <span className="text-xs text-yellow-800 line-height-2">
+                        Pembebasan DP memerlukan alasan sah untuk mencegah pemesanan fiktif atau penahanan slot tanpa komitmen.
+                      </span>
+                    </div>
+                  )}
                 </>
               )}
             </div>
@@ -1727,8 +2404,16 @@ export const BuatBookingTab: React.FC<Props> = ({ toast, onSuccessCreated }) => 
                 className="p-button-primary w-full py-3 font-bold"
                 onClick={handleSubmitBooking}
                 loading={loadingSubmit}
-                disabled={!selectedPasien || selectedList.length === 0 || !selectedSlot || !jamBooking}
+                disabled={!selectedPasien || selectedList.length === 0 || !selectedSlot || !jamBooking || !isDpValid}
               />
+              {!isDpValid && selectedPasien && selectedList.length > 0 && selectedSlot && jamBooking && (
+                <div className="text-xs text-red-600 bg-red-50 border-1 border-red-200 border-round p-2">
+                  <i className="pi pi-info-circle mr-1 text-xs" />
+                  {dpNominal > 0
+                    ? 'Pilih metode pembayaran DP dan centang konfirmasi DP untuk mengaktifkan tombol simpan.'
+                    : 'Pilih alasan bebas DP untuk mengaktifkan tombol simpan.'}
+                </div>
+              )}
               <Button
                 label="Reset Form"
                 icon={<RotateCcw size={16} className="mr-1" />}
@@ -1787,6 +2472,44 @@ export const BuatBookingTab: React.FC<Props> = ({ toast, onSuccessCreated }) => 
         rooms={jadwalDialogRooms}
         tanggalTerpilih={tanggalBooking}
       />
+
+      {/* Tooltip & Popover Petugas Pendamping */}
+      <Tooltip target=".companion-tooltip-target" position="top" />
+
+      <OverlayPanel ref={companionOpRef} className="shadow-4 border-round-xl p-0" style={{ maxWidth: '340px' }}>
+        {activeCompanionData && (
+          <div className="p-3">
+            <div className="font-bold text-sm text-900 mb-1 flex align-items-center gap-1.5">
+              <Users size={16} className="text-primary" />
+              <span>Daftar Petugas Pendamping</span>
+            </div>
+            <div className="text-xs text-500 mb-2.5 pb-2 border-bottom-1 surface-border line-height-2">
+              PJ: <span className="font-semibold text-800">{activeCompanionData.pj}</span>
+              <br />
+              <span className="text-[11px] text-400">{activeCompanionData.jam} · {activeCompanionData.ruangan}</span>
+            </div>
+            <div className="flex flex-column gap-2 max-h-12rem overflow-y-auto pr-1">
+              {activeCompanionData.companions.map((c, idx) => (
+                <div key={idx} className="flex align-items-center gap-2 p-2 border-round surface-50 text-xs">
+                  <span className="w-1.5rem h-1.5rem border-round-circle bg-primary-100 text-primary-700 flex align-items-center justify-content-center font-bold text-xs flex-shrink-0">
+                    {idx + 1}
+                  </span>
+                  <div className="min-w-0 flex-1">
+                    <div className="font-semibold text-800 text-overflow-ellipsis overflow-hidden white-space-nowrap">
+                      {c.nama_petugas}
+                    </div>
+                    {c.jabatan_petugas && (
+                      <div className="text-[10px] text-500 text-overflow-ellipsis overflow-hidden white-space-nowrap">
+                        {c.jabatan_petugas}
+                      </div>
+                    )}
+                  </div>
+                </div>
+              ))}
+            </div>
+          </div>
+        )}
+      </OverlayPanel>
     </div>
   );
 };

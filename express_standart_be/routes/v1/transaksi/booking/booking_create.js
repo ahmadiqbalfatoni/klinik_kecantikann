@@ -28,6 +28,9 @@ router.post("/", async (req, res) => {
     let jamBooking = (oPayload.jam_booking || "").trim();
     const catatanPasien = (oPayload.catatan_pasien || "").trim() || null;
     const dpNominal = parseFloat(oPayload.dp_nominal ?? 0);
+    const metodePembayaranDp = (oPayload.metode_pembayaran_dp || "").toLowerCase().trim();
+    const konfirmasiDpDiterima = oPayload.konfirmasi_dp_diterima === true || oPayload.konfirmasi_dp_diterima === "true" || oPayload.konfirmasi_dp_diterima === 1;
+    const alasanBebasDp = (oPayload.alasan_bebas_dp || "").trim();
     const sumber = (oPayload.sumber || "staff").toLowerCase().trim();
     let kodeRuangan = (oPayload.kode_ruangan || "").trim();
 
@@ -72,6 +75,18 @@ router.post("/", async (req, res) => {
       return res.status(422).json({
         status: status.BAD_REQUEST,
         message: "Tanggal booking wajib diisi",
+        datetime: formatDateSystem(),
+      });
+    }
+
+    const clinicTz = oPayload.tz || "Asia/Jakarta";
+    const cleanDateStr = (tanggalBooking || "").slice(0, 10);
+    const todayYmd = formatDateSystem(new Date(), "yyyy-MM-dd", clinicTz) || new Date().toISOString().slice(0, 10);
+
+    if (cleanDateStr < todayYmd) {
+      return res.status(422).json({
+        status: status.BAD_REQUEST,
+        message: `Tanggal booking (${cleanDateStr}) tidak dapat memilih tanggal di masa lalu`,
         datetime: formatDateSystem(),
       });
     }
@@ -314,7 +329,7 @@ router.post("/", async (req, res) => {
       isBookingButuhKonsulCheck = (oPayload.butuh_konsul === true || oPayload.butuh_konsul === 1 || oPayload.butuh_konsul === "1" || oPayload.butuh_konsul === "true") ? 1 : 0;
     }
 
-    const cleanDateStr = (tanggalBooking || "").slice(0, 10);
+    // cleanDateStr & todayYmd sudah didefinisikan pada validasi input di awal
     const HARI_MAP = ["minggu", "senin", "selasa", "rabu", "kamis", "jumat", "sabtu"];
     const [year, month, day] = cleanDateStr.split("-").map(Number);
     const dateObj = new Date(year, month - 1, day);
@@ -369,7 +384,7 @@ router.post("/", async (req, res) => {
 
     const jStart = (jadwal.jam_mulai || "08:00:00").slice(0, 5);
     const jEnd = (jadwal.jam_selesai || "16:00:00").slice(0, 5);
-    const bTime = jamBooking.slice(0, 5);
+    let bTime = jamBooking.slice(0, 5);
 
     const [jStartH, jStartM] = jStart.split(":").map(Number);
     const [jEndH, jEndM] = jEnd.split(":").map(Number);
@@ -377,7 +392,60 @@ router.post("/", async (req, res) => {
     const jEndMinutes = jEndH * 60 + jEndM;
 
     const [bH, bM] = bTime.split(":").map(Number);
-    const bMinutes = bH * 60 + bM;
+    const bMinutesRaw = (isNaN(bH) ? 8 : bH) * 60 + (isNaN(bM) ? 0 : bM);
+
+    // 1. Batasi rentang jam booking di luar jam kerja shift petugas sebelum pembulatan
+    if (bMinutesRaw < jStartMinutes || bMinutesRaw >= jEndMinutes) {
+      return res.status(422).json({
+        status: status.BAD_REQUEST,
+        message: `Jam booking (${bTime} WIB) berada di luar jam kerja shift petugas (${jStart} - ${jEnd} WIB)`,
+        datetime: formatDateSystem(),
+      });
+    }
+
+    // 1b. Validasi waktu saat ini: jika booking hari ini, tolak jam yang sudah lewat waktu saat ini
+    const isTodayBooking = cleanDateStr === todayYmd;
+    if (isTodayBooking) {
+      const nowTimeStr = formatDateSystem(new Date(), "HH:mm", clinicTz);
+      const [nowH, nowM] = nowTimeStr.split(":").map(Number);
+      const nowMinutes = nowH * 60 + nowM;
+
+      // Buffer waktu persiapan minimal sebelum booking (menit)
+      // TODO: Diskusikan dengan manajemen operasional klinik jika membutuhkan buffer persiapan booking (misal 30-60 menit)
+      const BOOKING_LEAD_TIME_BUFFER_MINUTES = 0;
+
+      if (bMinutesRaw < nowMinutes + BOOKING_LEAD_TIME_BUFFER_MINUTES) {
+        return res.status(422).json({
+          status: status.BAD_REQUEST,
+          message: `Jam booking (${bTime} WIB) tidak dapat dipilih karena sudah melewati waktu saat ini (${nowTimeStr} WIB) untuk reservasi hari ini.`,
+          datetime: formatDateSystem(),
+        });
+      }
+    }
+
+    // Bulatkan jam_booking ke interval durasi layanan terdekat berdasarkan shift sesi
+    const stepInterval = totalDurasiMenit > 0 ? totalDurasiMenit : 30;
+    const diffFromStart = bMinutesRaw - jStartMinutes;
+    const roundedStep = Math.round(diffFromStart / stepInterval);
+    const bMinutes = jStartMinutes + roundedStep * stepInterval;
+    bTime = `${String(Math.floor(bMinutes / 60)).padStart(2, "0")}:${String(bMinutes % 60).padStart(2, "0")}`;
+    jamBooking = `${bTime}:00`;
+
+    // Pastikan hasil pembulatan jam booking juga tidak berada di masa lalu untuk reservasi hari ini
+    if (isTodayBooking) {
+      const nowTimeStr = formatDateSystem(new Date(), "HH:mm", clinicTz);
+      const [nowH, nowM] = nowTimeStr.split(":").map(Number);
+      const nowMinutes = nowH * 60 + nowM;
+      const BOOKING_LEAD_TIME_BUFFER_MINUTES = 0;
+
+      if (bMinutes < nowMinutes + BOOKING_LEAD_TIME_BUFFER_MINUTES) {
+        return res.status(422).json({
+          status: status.BAD_REQUEST,
+          message: `Jam booking (${bTime} WIB) tidak dapat dipilih karena sudah melewati waktu saat ini (${nowTimeStr} WIB) untuk reservasi hari ini.`,
+          datetime: formatDateSystem(),
+        });
+      }
+    }
 
     // Validasi jam booking terhadap shift dokter konsultasi (jika alur butuh konsultasi)
     if (isBookingButuhKonsulCheck === 1 && dokterKonsulList.length > 0) {
@@ -434,23 +502,84 @@ router.post("/", async (req, res) => {
       });
     }
 
-    // Validasi apakah jam ini sudah dibooking oleh pasien lain pada petugas yang sama
-    const existingSlotBooking = await DB("trx_booking")
-      .where("kode_jadwal", kodeJadwal)
-      .where("tanggal_booking", tanggalBooking)
-      .where("jam_booking", jamBooking)
-      .whereNotIn("status", ["dibatalkan", "tidak_hadir"])
-      .first();
+    // Cari semua jadwal dalam sesi yang sama (ruangan, hari, jam_mulai, jam_selesai)
+    const sessionSchedules = await DB("mst_jadwal_karyawan")
+      .where("kode_ruangan", jadwal.kode_ruangan)
+      .where("hari", jadwal.hari)
+      .where("jam_mulai", jadwal.jam_mulai)
+      .where("jam_selesai", jadwal.jam_selesai)
+      .where("status", "aktif")
+      .select("kode_jadwal");
+    const allKodeJadwalInSession = sessionSchedules.map((s) => s.kode_jadwal);
 
-    if (existingSlotBooking) {
-      return res.status(422).json({
-        status: status.BAD_REQUEST,
-        message: `Jam ${bTime} WIB sudah terisi oleh pasien lain pada dokter/terapis ini. Silakan pilih jam yang lain.`,
-        datetime: formatDateSystem(),
-      });
+    // Validasi apakah rentang waktu tindakan bertabrakan dengan janji temu pasien lain pada sesi yang sama
+    const detailDurasiSubquery = DB("trx_detail_booking")
+      .groupBy("kode_booking")
+      .select("kode_booking", DB.raw("SUM(durasi_menit) as total_durasi"));
+
+    const existingBookings = await DB("trx_booking as b")
+      .leftJoin(detailDurasiSubquery.as("d"), "b.kode_booking", "d.kode_booking")
+      .whereIn("b.kode_jadwal", allKodeJadwalInSession.length > 0 ? allKodeJadwalInSession : [kodeJadwal])
+      .where("b.tanggal_booking", tanggalBooking)
+      .whereNotIn("b.status", ["dibatalkan", "tidak_hadir"])
+      .select("b.kode_booking", "b.jam_booking", DB.raw("COALESCE(d.total_durasi, 30) as durasi_menit"));
+
+    for (const eb of existingBookings) {
+      const eStartStr = eb.jam_booking ? String(eb.jam_booking).slice(0, 5) : "08:00";
+      const [eh, em] = eStartStr.split(":").map(Number);
+      const eStartMin = (isNaN(eh) ? 8 : eh) * 60 + (isNaN(em) ? 0 : em);
+      const eDurasi = parseInt(eb.durasi_menit || 30, 10);
+      const eEndMin = eStartMin + eDurasi;
+
+      // Dua rentang [bMinutes, endTreatmentMinutes) dan [eStartMin, eEndMin) saling bertabrakan jika:
+      // bMinutes < eEndMin && eStartMin < endTreatmentMinutes
+      if (bMinutes < eEndMin && eStartMin < endTreatmentMinutes) {
+        const eEndStr = `${String(Math.floor(eEndMin / 60)).padStart(2, "0")}:${String(eEndMin % 60).padStart(2, "0")}`;
+        const newEndStr = `${String(Math.floor(endTreatmentMinutes / 60)).padStart(2, "0")}:${String(endTreatmentMinutes % 60).padStart(2, "0")}`;
+        return res.status(422).json({
+          status: status.BAD_REQUEST,
+          message: `Waktu tindakan yang dipilih (${bTime} - ${newEndStr} WIB) bertabrakan dengan janji temu pasien lain (${eStartStr} - ${eEndStr} WIB) pada sesi ini. Silakan pilih jam yang lain.`,
+          datetime: formatDateSystem(),
+        });
+      }
     }
 
-    // 5. Eksekusi Atomic Transaction untuk validasi kuota + insert trx_booking + trx_detail_booking
+    // 5. Validasi Aturan Bisnis Uang Muka (DP) & Anti-Spam Booking
+    const hasKlaim = validatedItems.some((it) => it.jenis_item === "klaim_paket");
+    const hasBaru = validatedItems.some((it) => it.jenis_item !== "klaim_paket");
+    const finalDpNominal = (!hasBaru && hasKlaim) ? 0 : (isNaN(dpNominal) ? 0 : Math.max(0, dpNominal));
+
+    if (finalDpNominal > 0) {
+      if (!konfirmasiDpDiterima) {
+        return res.status(422).json({
+          status: status.BAD_REQUEST,
+          message: "Uang muka (DP) wajib dikonfirmasi telah diterima dari pasien untuk mengunci jadwal booking.",
+          datetime: formatDateSystem(),
+        });
+      }
+      const allowedMethods = ["cash", "transfer", "qris"];
+      if (!metodePembayaranDp || !allowedMethods.includes(metodePembayaranDp)) {
+        return res.status(422).json({
+          status: status.BAD_REQUEST,
+          message: "Metode pembayaran DP wajib dipilih (Cash, Transfer, atau QRIS).",
+          datetime: formatDateSystem(),
+        });
+      }
+    } else {
+      let effectiveAlasan = alasanBebasDp;
+      if (!effectiveAlasan && !hasBaru && hasKlaim) {
+        effectiveAlasan = "Klaim Paket (Kepemilikan Aktif)";
+      }
+      if (!effectiveAlasan) {
+        return res.status(422).json({
+          status: status.BAD_REQUEST,
+          message: "Alasan bebas DP wajib dipilih untuk reservasi tanpa uang muka.",
+          datetime: formatDateSystem(),
+        });
+      }
+    }
+
+    // 6. Eksekusi Atomic Transaction untuk validasi kuota + insert trx_booking + trx_detail_booking
     let newBooking = null;
 
     await DB.transaction(async (trx) => {
@@ -496,8 +625,6 @@ router.post("/", async (req, res) => {
       const nowFormatted = formatDateSystem();
 
       const firstItem = validatedItems[0] || {};
-      const hasKlaim = validatedItems.some((it) => it.jenis_item === "klaim_paket");
-      const hasBaru = validatedItems.some((it) => it.jenis_item !== "klaim_paket");
       let headerJenisLayanan = firstItem.jenis_layanan || "layanan";
       if (hasKlaim && hasBaru) {
         headerJenisLayanan = "campuran";
@@ -505,8 +632,14 @@ router.post("/", async (req, res) => {
         headerJenisLayanan = "klaim_paket";
       }
 
-      // Jika seluruh item adalah klaim paket, DP otomatis 0
-      const finalDpNominal = (!hasBaru && hasKlaim) ? 0 : (isNaN(dpNominal) ? 0 : dpNominal);
+      let savedMetodeDp = null;
+      let savedAlasanBebasDp = null;
+
+      if (finalDpNominal > 0) {
+        savedMetodeDp = metodePembayaranDp;
+      } else {
+        savedAlasanBebasDp = alasanBebasDp || ((!hasBaru && hasKlaim) ? "Klaim Paket (Kepemilikan Aktif)" : "Bebas DP");
+      }
 
       // Tentukan status butuh_konsul untuk seluruh booking
       let isBookingButuhKonsul = 0;
@@ -535,8 +668,10 @@ router.post("/", async (req, res) => {
         total_biaya: calculatedTotalBiaya,
         status: "dikonfirmasi",
         dp_nominal: finalDpNominal,
-        dp_status: "belum_bayar",
-        dp_dibayar_at: null,
+        dp_status: "sudah_bayar",
+        dp_dibayar_at: nowFormatted,
+        metode_pembayaran_dp: savedMetodeDp,
+        alasan_bebas_dp: savedAlasanBebasDp,
         sumber: ["staff", "whatsapp"].includes(sumber) ? sumber : "staff",
         butuh_konsul: isBookingButuhKonsul,
         tz: oPayload.tz || "Asia/Jakarta",

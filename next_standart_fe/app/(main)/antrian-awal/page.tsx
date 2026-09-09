@@ -12,6 +12,7 @@ import { initValue, State } from './components/interfaces';
 import { apiEndpointData } from './components/endpoints';
 import Table from './components/display/table';
 import GridPanggil from './components/display/grid_panggil';
+import TabCetakAntrean from './components/display/tab_cetak_antrean';
 import { TabPanel, TabView } from 'primereact/tabview';
 
 const Page = () => {
@@ -149,6 +150,18 @@ const Page = () => {
                 activeIndex={state.activeTab}
                 onTabChange={(e) => setState((p) => ({ ...p, activeTab: e.index }))}
             >
+                <TabPanel
+                    header="Antrean Digital"
+                    leftIcon="pi pi-print mr-2"
+                >
+                    <TabCetakAntrean
+                        state={state}
+                        setState={setState}
+                        toast={toast}
+                        getGridData={getGridData}
+                    />
+                </TabPanel>
+
                 <TabPanel
                     header="Pemanggilan Antrean"
                     leftIcon="pi pi-volume-up mr-2"

@@ -29,6 +29,7 @@ interface JadwalDetail {
   jam_selesai: string;
   kuota: number;
   status: string;
+  is_penanggung_jawab?: number | boolean;
 }
 
 export interface RoomTabOption {
@@ -60,6 +61,76 @@ const DAYS_OF_WEEK = [
 ];
 
 const HARI_MAP = ['minggu', 'senin', 'selasa', 'rabu', 'kamis', 'jumat', 'sabtu'];
+
+interface SessionGroup {
+  sessionKey: string;
+  jamMulai: string;
+  jamSelesai: string;
+  pjRow: JadwalDetail;
+  companions: JadwalDetail[];
+}
+
+// Helper untuk mengelompokkan jadwal satu hari per SESI (jam_mulai + jam_selesai)
+// Menempatkan PJ di baris utama, diikuti petugas pendamping
+const getGroupedSessionsForDay = (daySchedules: JadwalDetail[]): SessionGroup[] => {
+  if (!daySchedules || daySchedules.length === 0) return [];
+
+  const sessionMap = new Map<string, { jamMulai: string; jamSelesai: string; rows: JadwalDetail[] }>();
+
+  for (const s of daySchedules) {
+    const jamMulaiClean = (s.jam_mulai || '').slice(0, 5);
+    const jamSelesaiClean = (s.jam_selesai || '').slice(0, 5);
+    const key = `${jamMulaiClean}-${jamSelesaiClean}`;
+
+    if (!sessionMap.has(key)) {
+      sessionMap.set(key, { jamMulai: jamMulaiClean, jamSelesai: jamSelesaiClean, rows: [] });
+    }
+    sessionMap.get(key)!.rows.push(s);
+  }
+
+  // Urutkan sesi secara kronologis berdasarkan jam_mulai lalu jam_selesai
+  const sortedSessions = Array.from(sessionMap.values()).sort((a, b) =>
+    a.jamMulai.localeCompare(b.jamMulai) || a.jamSelesai.localeCompare(b.jamSelesai)
+  );
+
+  return sortedSessions.map((ses) => {
+    // Cari karyawan yang merupakan PJ (is_penanggung_jawab == 1)
+    const pjRow = ses.rows.find((r) => r.is_penanggung_jawab == 1) || ses.rows[0];
+
+    // Filter pendamping:
+    // 1. Bukan baris milik PJ itu sendiri
+    // 2. Deduplikasi pendamping berdasarkan no_sip atau nama_karyawan
+    const pjNoSip = String(pjRow.no_sip || '').trim().toLowerCase();
+    const pjNama = String(pjRow.nama_karyawan || '').trim().toLowerCase();
+
+    const seenCompanion = new Set<string>();
+    if (pjNoSip) seenCompanion.add(pjNoSip);
+    if (pjNama) seenCompanion.add(pjNama);
+
+    const companions: JadwalDetail[] = [];
+    for (const r of ses.rows) {
+      if (r.kode_jadwal === pjRow.kode_jadwal) continue;
+      const cNoSip = String(r.no_sip || '').trim().toLowerCase();
+      const cNama = String(r.nama_karyawan || '').trim().toLowerCase();
+      if (pjNoSip && cNoSip === pjNoSip) continue;
+      if (pjNama && cNama === pjNama) continue;
+
+      const dedupeKey = cNoSip || cNama;
+      if (dedupeKey && seenCompanion.has(dedupeKey)) continue;
+      if (dedupeKey) seenCompanion.add(dedupeKey);
+
+      companions.push(r);
+    }
+
+    return {
+      sessionKey: `${ses.jamMulai}-${ses.jamSelesai}`,
+      jamMulai: ses.jamMulai,
+      jamSelesai: ses.jamSelesai,
+      pjRow,
+      companions,
+    };
+  });
+};
 
 export const DialogJadwalMingguanRuangan: React.FC<Props> = ({
   visible,
@@ -161,7 +232,7 @@ export const DialogJadwalMingguanRuangan: React.FC<Props> = ({
               Jadwal Mingguan Petugas & Dokter
             </div>
             <div className="text-xs text-500 font-normal">
-              Ketersediaan shift kerja Senin s.d. Minggu
+              Ketersediaan sesi &amp; jadwal kerja Senin s.d. Minggu
             </div>
           </div>
         </div>
@@ -223,11 +294,9 @@ export const DialogJadwalMingguanRuangan: React.FC<Props> = ({
                 {formattedSelectedDate}
               </span>
             </div>
-            <Tag
-              value={`Hari ${selectedDayKey ? selectedDayKey.toUpperCase() : ''}`}
-              severity="info"
-              className="text-xs font-bold uppercase"
-            />
+            <span className="text-xs font-bold uppercase bg-indigo-600 text-white px-2.5 py-1 border-round-md shadow-1">
+              Hari {selectedDayKey ? selectedDayKey.toUpperCase() : ''}
+            </span>
           </div>
         )}
 
@@ -239,10 +308,12 @@ export const DialogJadwalMingguanRuangan: React.FC<Props> = ({
             </span>
           </div>
         ) : (
-          <div className="flex flex-column gap-2">
+          <div className="flex flex-column gap-2.5">
             {DAYS_OF_WEEK.map((day) => {
               const daySchedules = scheduleByDay[day.key] || [];
-              const hasSchedule = daySchedules.length > 0;
+              const groupedSessions = getGroupedSessionsForDay(daySchedules);
+              const sessionCount = groupedSessions.length;
+              const hasSchedule = sessionCount > 0;
               const isSelectedDay = selectedDayKey === day.key;
 
               return (
@@ -257,33 +328,34 @@ export const DialogJadwalMingguanRuangan: React.FC<Props> = ({
                   }`}
                 >
                   <div className="flex flex-column sm:flex-row justify-content-between align-items-start sm:align-items-center gap-2">
-                    {/* Sisi Kiri: Badge Hari & Label Terpilih */}
-                    <div className="flex align-items-center gap-2">
+                    {/* Sisi Kiri: Badge Hari & Label Terpilih (Styling proporsional, tanpa tumpang tindih) */}
+                    <div className="flex align-items-center gap-2 flex-wrap sm:flex-nowrap">
                       <div
-                        className={`font-bold text-xs py-1 px-2.5 border-round text-center min-w-4rem ${
+                        className={`font-bold text-xs px-3 py-1.5 border-round-lg text-center inline-flex align-items-center justify-content-center line-height-1 flex-shrink-0 ${
                           isSelectedDay
                             ? 'bg-indigo-600 text-white shadow-1'
                             : hasSchedule
                             ? 'bg-emerald-100 text-emerald-800'
-                            : 'bg-surface-300 text-500'
+                            : 'bg-surface-200 text-500'
                         }`}
+                        style={{ minWidth: '60px', height: '28px', boxSizing: 'border-box' }}
                       >
                         {day.label}
                       </div>
 
                       {isSelectedDay && (
-                        <span className="inline-flex align-items-center gap-1 text-xs font-bold text-indigo-700 bg-indigo-100 px-2 py-0.5 border-round-md">
-                          <CheckCircle2 size={13} />
+                        <span className="inline-flex align-items-center gap-1.5 text-xs font-semibold text-indigo-700 bg-indigo-100 border-1 border-indigo-300 px-2.5 py-1 border-round-lg line-height-1 flex-shrink-0">
+                          <CheckCircle2 size={13} className="text-indigo-600" />
                           Hari Pilihan Booking Anda
                         </span>
                       )}
                     </div>
 
-                    {/* Sisi Kanan: Status Ketersediaan Ringkas */}
+                    {/* Sisi Kanan: Status Ketersediaan Ringkas (Sesi Tersedia) */}
                     <div>
                       {hasSchedule ? (
                         <Tag
-                          value={`${daySchedules.length} Shift Tersedia`}
+                          value={`${sessionCount} Sesi Tersedia`}
                           severity="success"
                           className="text-xs font-semibold py-0 px-2"
                         />
@@ -297,41 +369,97 @@ export const DialogJadwalMingguanRuangan: React.FC<Props> = ({
                     </div>
                   </div>
 
-                  {/* Rincian Petugas / Shift pada Hari Tersebut */}
-                  <div className="mt-2 pl-1">
+                  {/* Rincian Sesi & Petugas pada Hari Tersebut (Dikelompokkan Per Sesi: PJ dulu, lalu Pendamping) */}
+                  <div className="mt-2.5">
                     {hasSchedule ? (
-                      <div className="flex flex-column gap-1.5">
-                        {daySchedules.map((s, idx) => {
-                          const isDoctor = (s.jabatan || '').toLowerCase().includes('dokter');
-                          const jamMulai = (s.jam_mulai || '').slice(0, 5);
-                          const jamSelesai = (s.jam_selesai || '').slice(0, 5);
+                      <div className="flex flex-column gap-2">
+                        {groupedSessions.map((session, sIdx) => {
+                          const pj = session.pjRow;
+                          const isPjDoctor = (pj.jabatan || '').toLowerCase().includes('dokter');
+                          const isPJ = pj.is_penanggung_jawab == 1;
 
                           return (
                             <div
-                              key={idx}
-                              className="flex flex-column sm:flex-row sm:align-items-center justify-content-between text-xs bg-white p-2 border-round border-1 surface-border gap-1"
+                              key={session.sessionKey || sIdx}
+                              className="border-1 surface-border border-round-lg overflow-hidden bg-white shadow-1"
                             >
-                              <div className="flex align-items-center gap-2">
-                                {isDoctor ? (
-                                  <Stethoscope size={15} className="text-primary flex-shrink-0" />
-                                ) : (
-                                  <User size={15} className="text-500 flex-shrink-0" />
-                                )}
-                                <span className="font-bold text-900">{s.nama_karyawan}</span>
-                                <span className="text-500 capitalize">({s.jabatan || 'Petugas'})</span>
+                              {/* 1. Baris Petugas Penanggung Jawab (PJ) — Menampilkan Kuota */}
+                              <div className="flex flex-column sm:flex-row sm:align-items-center justify-content-between text-xs p-2.5 bg-surface-50 border-bottom-1 surface-border gap-2">
+                                <div className="flex align-items-center gap-2 min-w-0">
+                                  {isPjDoctor ? (
+                                    <Stethoscope size={16} className="text-primary flex-shrink-0" />
+                                  ) : (
+                                    <User size={16} className="text-primary flex-shrink-0" />
+                                  )}
+                                  <span className="font-bold text-900 text-sm text-overflow-ellipsis overflow-hidden white-space-nowrap">
+                                    {pj.nama_karyawan}
+                                  </span>
+                                  {isPJ ? (
+                                    <Tag value="PJ" severity="warning" className="text-[10px] py-0 px-1.5 font-bold flex-shrink-0" />
+                                  ) : (
+                                    <Tag value="PJ (Default)" severity="secondary" className="text-[10px] py-0 px-1 font-medium flex-shrink-0" />
+                                  )}
+                                  <span className="text-500 capitalize flex-shrink-0 text-xs">
+                                    ({pj.jabatan || 'Petugas'})
+                                  </span>
+                                </div>
+
+                                <div className="flex align-items-center gap-2 ml-5 sm:ml-0 flex-shrink-0">
+                                  <span className="text-600 font-semibold flex align-items-center gap-1 bg-white px-2 py-0.5 border-round border-1 surface-border text-xs">
+                                    <Clock size={12} className="text-500" />
+                                    {session.jamMulai} - {session.jamSelesai} WIB
+                                  </span>
+                                  {pj.kuota > 0 && (
+                                    <span className="text-600 font-medium text-[11px] bg-primary-50 text-primary-700 px-2 py-0.5 border-round">
+                                      Kuota: <strong>{pj.kuota}</strong>
+                                    </span>
+                                  )}
+                                </div>
                               </div>
 
-                              <div className="flex align-items-center gap-2 ml-4 sm:ml-0">
-                                <span className="text-600 font-semibold flex align-items-center gap-1 bg-surface-100 px-2 py-0.5 border-round">
-                                  <Clock size={12} className="text-500" />
-                                  {jamMulai} - {jamSelesai} WIB
-                                </span>
-                                {s.kuota > 0 && (
-                                  <span className="text-500 text-[11px]">
-                                    Kuota: <strong>{s.kuota}</strong>
-                                  </span>
-                                )}
-                              </div>
+                              {/* 2. Baris Petugas Pendamping (Hierarki Anak dengan Indentasi & Kuota DIHAPUS) */}
+                              {session.companions.length > 0 && (
+                                <div className="p-2 bg-white flex flex-column gap-1.5">
+                                  {session.companions.map((comp, cIdx) => {
+                                    const isCompDoctor = (comp.jabatan || '').toLowerCase().includes('dokter');
+
+                                    return (
+                                      <div
+                                        key={comp.kode_jadwal || cIdx}
+                                        className="flex flex-column sm:flex-row sm:align-items-center justify-content-between text-xs p-2 border-round surface-50 border-left-3 border-indigo-400 ml-3 sm:ml-4 gap-2"
+                                      >
+                                        <div className="flex align-items-center gap-2 min-w-0">
+                                          <span className="text-indigo-400 font-bold text-xs select-none">└</span>
+                                          {isCompDoctor ? (
+                                            <Stethoscope size={14} className="text-500 flex-shrink-0" />
+                                          ) : (
+                                            <User size={14} className="text-500 flex-shrink-0" />
+                                          )}
+                                          <span className="font-semibold text-800 text-overflow-ellipsis overflow-hidden white-space-nowrap">
+                                            {comp.nama_karyawan}
+                                          </span>
+                                          <Tag
+                                            value="Pendamping"
+                                            severity="info"
+                                            className="text-[10px] py-0 px-1 font-normal opacity-90 flex-shrink-0"
+                                          />
+                                          <span className="text-500 capitalize text-[11px] flex-shrink-0">
+                                            ({comp.jabatan || 'Pendamping'})
+                                          </span>
+                                        </div>
+
+                                        <div className="flex align-items-center gap-2 ml-5 sm:ml-0 flex-shrink-0">
+                                          <span className="text-500 text-[11px] flex align-items-center gap-1">
+                                            <Clock size={11} className="text-400" />
+                                            {session.jamMulai} - {session.jamSelesai} WIB
+                                          </span>
+                                          {/* Kuota TIDAK ditampilkan pada baris pendamping sesuai instruksi */}
+                                        </div>
+                                      </div>
+                                    );
+                                  })}
+                                </div>
+                              )}
                             </div>
                           );
                         })}

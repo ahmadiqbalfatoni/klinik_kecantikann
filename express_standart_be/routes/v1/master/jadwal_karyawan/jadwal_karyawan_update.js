@@ -74,6 +74,25 @@ router.post("/", async (req, res) => {
         }
       }
 
+      // Cek apakah ada jadwal lain yang sama persis (ruangan, hari, no_sip, jam_mulai, jam_selesai)
+      const targetNoSip = oPayload.no_sip !== undefined ? oPayload.no_sip : prev.no_sip;
+      const existing = await trx("mst_jadwal_karyawan")
+        .where({
+          kode_ruangan: targetRuangan,
+          hari: targetHari,
+          no_sip: targetNoSip
+        })
+        .whereRaw("LEFT(jam_mulai, 5) = ?", [targetJamMulai])
+        .whereRaw("LEFT(jam_selesai, 5) = ?", [targetJamSelesai])
+        .whereNot("kode_jadwal", oPayload.kode_jadwal)
+        .first();
+
+      if (existing) {
+        const err = new Error("Karyawan ini sudah memiliki jadwal pada ruangan, hari, dan jam yang sama.");
+        err.statusCode = 422;
+        throw err;
+      }
+
       const oData = {
         no_sip: oPayload.no_sip,
         kode_ruangan: oPayload.kode_ruangan || null,
@@ -94,9 +113,12 @@ router.post("/", async (req, res) => {
     return res.status(200).json({ status: status.SUKSES, message: "Jadwal karyawan berhasil diupdate", datetime: formatDateSystem() });
   } catch (error) {
     if (error.statusCode === 404) return res.status(404).json({ status: status.NOT_FOUND, message: "Data tidak ditemukan", datetime: formatDateSystem() });
-    const oResult = { status: status.BAD_REQUEST, message: "Sistem sedang maintenance", datetime: formatDateSystem() };
+    const isDup = error.code === "ER_DUP_ENTRY";
+    const statusCode = error.statusCode || (isDup ? 422 : 500);
+    const message = isDup ? "Jadwal pada ruangan, hari, dan jam tersebut untuk karyawan ini sudah ada." : (error.message || "Sistem sedang maintenance");
+    const oResult = { status: status.BAD_REQUEST, message, datetime: formatDateSystem() };
     Logging(error, { file: "/master/jadwal_karyawan/jadwal_karyawan_update.js", func: "update", request: oPayload, response: oResult, user: username });
-    return res.status(500).json(oResult);
+    return res.status(statusCode).json(oResult);
   }
 });
 

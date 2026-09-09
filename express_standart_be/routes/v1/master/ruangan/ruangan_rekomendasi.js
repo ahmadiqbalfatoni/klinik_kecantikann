@@ -327,6 +327,19 @@ router.post("/antrian-layanan-simpan-rekomendasi", async (req, res) => {
         .where("kode_antrian_layanan", kode_antrian_layanan)
         .update(updateObj);
 
+      if (oPayload.diubah_dari_booking) {
+        await ChangesLog({
+          description: `Perubahan Petugas Tindakan Booking: ${oPayload.petugas_asal_booking || ''} (${oPayload.no_sip_asal_booking || ''}) diubah ke ${oPayload.petugas_pengganti || oPayload.kode_karyawan} (${oPayload.kode_karyawan}) pada antrean ${kode_antrian_layanan}`,
+          tableName: "trx_antrian_layanan",
+          referenceCode: kode_antrian_layanan,
+          action: "UPDATE",
+          dataBefore: { kode_karyawan: oPayload.no_sip_asal_booking, nama: oPayload.petugas_asal_booking },
+          dataAfter: { kode_karyawan: oPayload.kode_karyawan, nama: oPayload.petugas_pengganti, catatan: oPayload.catatan_perubahan_petugas },
+          user: username,
+          tz: oPayload.tz || "Asia/Jakarta"
+        }, trx);
+      }
+
       // ─── B. Memisahkan rekomendasi Layanan vs Produk ───
       const items = Array.isArray(rekomendasi_items) ? rekomendasi_items : [];
       const layananItems = [];

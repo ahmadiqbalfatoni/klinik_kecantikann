@@ -69,6 +69,23 @@ router.post("/", async (req, res) => {
         }
       }
 
+      // Cek apakah jadwal yang sama persis (ruangan, hari, no_sip, jam_mulai, jam_selesai) sudah ada
+      const existing = await trx("mst_jadwal_karyawan")
+        .where({
+          kode_ruangan: oPayload.kode_ruangan,
+          hari: oPayload.hari,
+          no_sip: oPayload.no_sip
+        })
+        .whereRaw("LEFT(jam_mulai, 5) = ?", [targetJamMulai])
+        .whereRaw("LEFT(jam_selesai, 5) = ?", [targetJamSelesai])
+        .first();
+
+      if (existing) {
+        const err = new Error("Karyawan ini sudah memiliki jadwal pada ruangan, hari, dan jam yang sama.");
+        err.statusCode = 422;
+        throw err;
+      }
+
       const last = await trx("mst_jadwal_karyawan").orderBy("id", "desc").first();
       let n = 1;
       if (last?.kode_jadwal) {
@@ -99,9 +116,12 @@ router.post("/", async (req, res) => {
 
     return res.status(200).json({ status: status.SUKSES, message: "Jadwal karyawan berhasil ditambahkan", datetime: formatDateSystem(), data: { kode_jadwal: kode } });
   } catch (error) {
-    const oResult = { status: status.BAD_REQUEST, message: error.message || "Sistem sedang maintenance", datetime: formatDateSystem() };
+    const isDup = error.code === "ER_DUP_ENTRY";
+    const statusCode = error.statusCode || (isDup ? 422 : 500);
+    const message = isDup ? "Jadwal pada ruangan, hari, dan jam tersebut untuk karyawan ini sudah ada." : (error.message || "Sistem sedang maintenance");
+    const oResult = { status: status.BAD_REQUEST, message, datetime: formatDateSystem() };
     Logging(error, { file: "/master/jadwal_karyawan/jadwal_karyawan_create.js", func: "create", request: oPayload, response: oResult, user: username });
-    return res.status(500).json(oResult);
+    return res.status(statusCode).json(oResult);
   }
 });
 

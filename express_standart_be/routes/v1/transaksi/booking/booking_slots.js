@@ -117,6 +117,7 @@ router.post("/", async (req, res) => {
         "j.id",
         "j.kode_jadwal",
         "j.no_sip",
+        "j.is_penanggung_jawab",
         "k.nama as nama_petugas",
         "k.jabatan as jabatan_petugas",
         "j.kode_ruangan",
@@ -126,41 +127,136 @@ router.post("/", async (req, res) => {
         "j.jam_selesai",
         "j.kuota"
       )
-      .orderBy("j.jam_mulai", "asc");
+      .orderBy("j.jam_mulai", "asc")
+      .orderBy("j.is_penanggung_jawab", "desc");
 
-    // 4. Hitung pemakaian kuota per jadwal pada tanggal tersebut
-    const vaSlots = [];
+    // 4. Group data jadwal berdasarkan SESI: kombinasi (kode_ruangan + hari + jam_mulai + jam_selesai)
+    // Satu sesi waktu di ruangan yang sama adalah 1 slot, terlepas dari berapa karyawan (PJ + pendamping) yang piket
+    const sessionMap = new Map();
     for (const jdw of vaJadwal) {
-      const bookedRows = await DB("trx_booking")
-        .where("kode_jadwal", jdw.kode_jadwal)
-        .where("tanggal_booking", tanggalBooking)
-        .whereNotIn("status", ["dibatalkan", "tidak_hadir"])
-        .select("jam_booking");
+      const jamMulaiClean = jdw.jam_mulai ? jdw.jam_mulai.slice(0, 5) : "08:00";
+      const jamSelesaiClean = jdw.jam_selesai ? jdw.jam_selesai.slice(0, 5) : "16:00";
+      const sessionKey = `${jdw.kode_ruangan}_${(jdw.hari || "").toLowerCase()}_${jamMulaiClean}_${jamSelesaiClean}`;
+
+      if (!sessionMap.has(sessionKey)) {
+        sessionMap.set(sessionKey, {
+          key: sessionKey,
+          kode_ruangan: jdw.kode_ruangan,
+          nama_ruangan: jdw.nama_ruangan || jdw.kode_ruangan,
+          hari: jdw.hari,
+          jam_mulai: jamMulaiClean,
+          jam_selesai: jamSelesaiClean,
+          rows: [],
+        });
+      }
+      sessionMap.get(sessionKey).rows.push(jdw);
+    }
+
+    // 5. Bangun 1 slot per sesi dengan info utama Petugas Penanggung Jawab (PJ) dan kuota milik PJ
+    const vaSlots = [];
+    for (const session of sessionMap.values()) {
+      const groupRows = session.rows;
+
+      // Cari karyawan dengan is_penanggung_jawab === 1; fallback ke karyawan pertama jika belum ada yang di-set PJ
+      const pjRow = groupRows.find((r) => r.is_penanggung_jawab == 1) || groupRows[0];
+      const hasPJ = Boolean(groupRows.some((r) => r.is_penanggung_jawab == 1));
+
+      // Identifikasi identitas PJ untuk mengecualikannya secara tegas dari daftar pendamping
+      const pjNoSip = String(pjRow.no_sip || "").trim().toLowerCase();
+      const pjNama = String(pjRow.nama_petugas || "").trim().toLowerCase();
+
+      // Daftar petugas pendamping dalam sesi yang sama:
+      // 1. KECUALIKAN baris yang no_sip / nama sama dengan PJ (karena PJ tidak bisa menjadi pendamping dirinya sendiri).
+      // 2. DEDUPLIKASI pendamping unik (agar 1 karyawan pendamping tidak muncul berulang jika ada data kembar).
+      const seenCompanion = new Set();
+      if (pjNoSip) seenCompanion.add(pjNoSip);
+      if (pjNama) seenCompanion.add(pjNama);
+
+      const petugasPendamping = [];
+      for (const r of groupRows) {
+        if (r.kode_jadwal === pjRow.kode_jadwal) continue;
+        const curNoSip = String(r.no_sip || "").trim().toLowerCase();
+        const curNama = String(r.nama_petugas || "").trim().toLowerCase();
+
+        // Kecualikan jika sama dengan PJ
+        if (pjNoSip && curNoSip === pjNoSip) continue;
+        if (pjNama && curNama === pjNama) continue;
+
+        // Deduplikasi pendamping jika ada jadwal kembar
+        const dedupeKey = curNoSip || curNama;
+        if (dedupeKey && seenCompanion.has(dedupeKey)) continue;
+        if (dedupeKey) seenCompanion.add(dedupeKey);
+
+        petugasPendamping.push({
+          kode_jadwal: r.kode_jadwal,
+          no_sip: r.no_sip,
+          nama_petugas: r.nama_petugas || "Petugas Medis",
+          jabatan_petugas: r.jabatan_petugas || "Terapis / Petugas",
+        });
+      }
+
+      // Kuota slot mengikuti kuota milik Penanggung Jawab (PJ)
+      const totalKuota = parseInt(pjRow.kuota || 0, 10);
+
+      // Hitung booking yang sudah terisi dan rentang durasi per booking untuk seluruh jadwal di sesi ini
+      const allKodeJadwalInSession = groupRows.map((r) => r.kode_jadwal);
+
+      const detailDurasiSubquery = DB("trx_detail_booking")
+        .groupBy("kode_booking")
+        .select("kode_booking", DB.raw("SUM(durasi_menit) as total_durasi"));
+
+      const bookedRows = await DB("trx_booking as b")
+        .leftJoin(detailDurasiSubquery.as("d"), "b.kode_booking", "d.kode_booking")
+        .whereIn("b.kode_jadwal", allKodeJadwalInSession)
+        .where("b.tanggal_booking", tanggalBooking)
+        .whereNotIn("b.status", ["dibatalkan", "tidak_hadir"])
+        .select("b.kode_booking", "b.jam_booking", DB.raw("COALESCE(d.total_durasi, 30) as durasi_menit"));
 
       const terisi = bookedRows.length;
-      const totalKuota = parseInt(jdw.kuota || 0, 10);
       const sisaKuota = Math.max(0, totalKuota - terisi);
       const isAvailable = sisaKuota > 0;
       const bookedTimes = bookedRows
         .map((b) => (b.jam_booking ? String(b.jam_booking).slice(0, 5) : ""))
         .filter(Boolean);
 
+      const bookedIntervals = bookedRows.map((b) => {
+        const startStr = b.jam_booking ? String(b.jam_booking).slice(0, 5) : "08:00";
+        const durasi = parseInt(b.durasi_menit || 30, 10);
+        const [h, m] = startStr.split(":").map(Number);
+        const startMin = (isNaN(h) ? 8 : h) * 60 + (isNaN(m) ? 0 : m);
+        const endMin = startMin + durasi;
+        const endStr = `${String(Math.floor(endMin / 60)).padStart(2, "0")}:${String(endMin % 60).padStart(2, "0")}`;
+        return {
+          kode_booking: b.kode_booking,
+          jam_mulai: startStr,
+          durasi_menit: durasi,
+          jam_selesai: endStr,
+          start_minutes: startMin,
+          end_minutes: endMin,
+        };
+      });
+
       vaSlots.push({
-        kode_jadwal: jdw.kode_jadwal,
-        no_sip: jdw.no_sip,
-        nama_petugas: jdw.nama_petugas || "Petugas Medis",
-        jabatan_petugas: jdw.jabatan_petugas || "Dokter / Terapis",
-        kode_ruangan: jdw.kode_ruangan,
-        nama_ruangan: jdw.nama_ruangan || jdw.kode_ruangan,
-        hari: jdw.hari,
-        jam_mulai: jdw.jam_mulai ? jdw.jam_mulai.slice(0, 5) : "08:00",
-        jam_selesai: jdw.jam_selesai ? jdw.jam_selesai.slice(0, 5) : "16:00",
-        jam_booking_default: jdw.jam_mulai ? jdw.jam_mulai.slice(0, 5) : "08:00",
+        kode_jadwal: pjRow.kode_jadwal,
+        no_sip: pjRow.no_sip,
+        nama_petugas: hasPJ ? pjRow.nama_petugas : (pjRow.nama_petugas || "Petugas belum ditentukan"),
+        jabatan_petugas: pjRow.jabatan_petugas || "Dokter / Terapis",
+        is_penanggung_jawab: pjRow.is_penanggung_jawab == 1,
+        has_pj: hasPJ,
+        petugas_pendamping: petugasPendamping,
+        jumlah_pendamping: petugasPendamping.length,
+        kode_ruangan: session.kode_ruangan,
+        nama_ruangan: session.nama_ruangan,
+        hari: session.hari,
+        jam_mulai: session.jam_mulai,
+        jam_selesai: session.jam_selesai,
+        jam_booking_default: session.jam_mulai,
         kuota_total: totalKuota,
         kuota_terisi: terisi,
         sisa_kuota: sisaKuota,
         is_available: isAvailable,
         booked_times: bookedTimes,
+        booked_intervals: bookedIntervals,
       });
     }
 

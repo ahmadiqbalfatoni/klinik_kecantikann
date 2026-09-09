@@ -131,21 +131,6 @@ export const StepPilihLayanan: React.FC<Props> = ({
     }).format(val);
   };
 
-  const getItemConsultType = (item: ServiceItem) => {
-    // Untuk klaim paket: gunakan tipe_paket sebagai sumber kebenaran (BUKAN tipe layanan komponen)
-    // Untuk layanan biasa: gunakan tipe layanan
-    const effectiveTipe = (
-      item.jenis === 'klaim_paket' && item.tipe_paket
-        ? item.tipe_paket
-        : (item.tipe || '')
-    ).toString().trim().toUpperCase();
-
-    const isWajib = effectiveTipe === 'MEDICAL TREATMENT';
-    const isService = effectiveTipe === 'SERVICE TREATMENT';
-    const isOpsional = !isWajib && !isService; // BEAUTY TREATMENT -> selalu opsional
-    return { isWajib, isService, isOpsional };
-  };
-
   const handleProcessSubmit = async (customItems?: ServiceItem[]) => {
     const itemsToSubmit = customItems !== undefined ? customItems : selectedList;
 

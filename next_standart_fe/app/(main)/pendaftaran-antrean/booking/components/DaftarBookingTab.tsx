@@ -13,7 +13,10 @@ import { Divider } from 'primereact/divider';
 import { IconField } from 'primereact/iconfield';
 import { InputIcon } from 'primereact/inputicon';
 import { confirmDialog, ConfirmDialog } from 'primereact/confirmdialog';
+import { Dialog } from 'primereact/dialog';
+import { InputNumber } from 'primereact/inputnumber';
 import postData from '@/lib/axios/postData';
+import formUpload from '@/lib/axios/formData';
 import { showError, showSuccess } from '@/lib/tools/generalTools';
 import { DialogCheckinBooking } from './DialogCheckinBooking';
 import { DialogDetailBooking } from './DialogDetailBooking';
@@ -60,12 +63,15 @@ interface BookingRow {
   dp_nominal: number;
   dp_status: 'belum_bayar' | 'sudah_bayar' | 'hangus' | 'dipotong_treatment';
   dp_dibayar_at?: string;
+  metode_pembayaran_dp?: string;
+  alasan_bebas_dp?: string;
   sumber: 'staff' | 'whatsapp';
   butuh_konsul?: number | boolean;
   created_at: string;
   can_checkin: boolean;
   can_cancel: boolean;
   can_pay_dp: boolean;
+  can_mark_tidak_hadir?: boolean;
 }
 
 interface Props {
@@ -99,6 +105,13 @@ export const DaftarBookingTab: React.FC<Props> = ({ toast, onNavigateToCreate })
 
   // Auto scan loading
   const [loadingAutoScan, setLoadingAutoScan] = useState(false);
+
+  // Tolerance Settings Shortcut
+  const [toleranceMinutes, setToleranceMinutes] = useState<number>(30);
+  const [dialogToleranceMinutes, setDialogToleranceMinutes] = useState<number>(30);
+  const [showToleranceDialog, setShowToleranceDialog] = useState(false);
+  const [loadingTolerance, setLoadingTolerance] = useState(false);
+  const [savingTolerance, setSavingTolerance] = useState(false);
 
   const formatCurrency = (val: number) => {
     return new Intl.NumberFormat('id-ID', { style: 'currency', currency: 'IDR', minimumFractionDigits: 0 }).format(val);
@@ -272,6 +285,80 @@ export const DaftarBookingTab: React.FC<Props> = ({ toast, onNavigateToCreate })
     }
   };
 
+  // Ambil data konfigurasi toleransi keterlambatan dari server
+  const fetchToleranceConfig = async () => {
+    try {
+      const res = await postData('/setup/config-data', {
+        kode: ['toleransi_keterlambatan_menit'],
+      });
+      if (res.data?.status === 200 || res.status === 200) {
+        const val = parseInt(res.data?.data?.toleransi_keterlambatan_menit || '30', 10);
+        if (!isNaN(val) && val > 0) {
+          setToleranceMinutes(val);
+          setDialogToleranceMinutes(val);
+        }
+      }
+    } catch (e) {
+      console.error('Error fetching tolerance config:', e);
+    }
+  };
+
+  useEffect(() => {
+    fetchToleranceConfig();
+  }, []);
+
+  const handleOpenToleranceDialog = async () => {
+    setLoadingTolerance(true);
+    setShowToleranceDialog(true);
+    try {
+      const res = await postData('/setup/config-data', {
+        kode: ['toleransi_keterlambatan_menit'],
+      });
+      if (res.data?.status === 200 || res.status === 200) {
+        const val = parseInt(res.data?.data?.toleransi_keterlambatan_menit || '30', 10);
+        if (!isNaN(val) && val > 0) {
+          setToleranceMinutes(val);
+          setDialogToleranceMinutes(val);
+        }
+      }
+    } catch (e) {
+      console.error('Error fetching tolerance config:', e);
+    } finally {
+      setLoadingTolerance(false);
+    }
+  };
+
+  const handleSaveTolerance = async () => {
+    if (!dialogToleranceMinutes || dialogToleranceMinutes < 1 || dialogToleranceMinutes > 180) {
+      showError(toast, 'Toleransi keterlambatan harus antara 1 sampai 180 menit');
+      return;
+    }
+
+    setSavingTolerance(true);
+    try {
+      const formData = new FormData();
+      formData.append('kode', JSON.stringify(['toleransi_keterlambatan_menit']));
+      formData.append('keterangan', JSON.stringify([String(dialogToleranceMinutes)]));
+
+      const res = await formUpload('/setup/config-create', formData, { 'X-Level': '1' });
+
+      if (res.data?.status === 200 || res.status === 200) {
+        showSuccess(toast, 'Pengaturan toleransi keterlambatan berhasil disimpan');
+        setToleranceMinutes(dialogToleranceMinutes);
+        setShowToleranceDialog(false);
+        // Refresh tabel booking langsung agar status overdue booking mencerminkan nilai baru
+        fetchBookingData();
+      } else {
+        showError(toast, res.data?.message || 'Gagal menyimpan pengaturan toleransi');
+      }
+    } catch (err: any) {
+      console.error('Error saving tolerance config:', err);
+      showError(toast, err?.response?.data?.message || 'Terjadi kesalahan saat menyimpan pengaturan');
+    } finally {
+      setSavingTolerance(false);
+    }
+  };
+
   const statusOptions = [
     { label: 'Semua Status', value: '' },
     { label: 'Dikonfirmasi', value: 'dikonfirmasi' },
@@ -307,6 +394,81 @@ export const DaftarBookingTab: React.FC<Props> = ({ toast, onNavigateToCreate })
         booking={selectedBookingForDetail}
         onHide={() => setShowDetailDialog(false)}
       />
+
+      {/* Dialog Pengaturan Toleransi Keterlambatan */}
+      <Dialog
+        header={
+          <div className="flex align-items-center gap-2">
+            <i className="pi pi-cog text-primary" style={{ fontSize: '1.25rem' }} />
+            <span className="font-bold text-lg text-900">Pengaturan Toleransi Keterlambatan</span>
+          </div>
+        }
+        visible={showToleranceDialog}
+        onHide={() => !savingTolerance && setShowToleranceDialog(false)}
+        style={{ width: '450px', maxWidth: '95vw' }}
+        modal
+        closable={!savingTolerance}
+        footer={
+          <div className="flex justify-content-end gap-2 pt-2">
+            <Button
+              type="button"
+              label="Batal"
+              icon="pi pi-times"
+              outlined
+              severity="secondary"
+              className="p-button-sm"
+              disabled={savingTolerance}
+              onClick={() => setShowToleranceDialog(false)}
+            />
+            <Button
+              type="button"
+              label="Simpan"
+              icon="pi pi-check"
+              className="p-button-sm font-semibold"
+              loading={savingTolerance}
+              onClick={handleSaveTolerance}
+            />
+          </div>
+        }
+      >
+        <div className="pt-2">
+          {loadingTolerance ? (
+            <div className="flex align-items-center justify-content-center p-4">
+              <i className="pi pi-spin pi-spinner text-primary text-2xl" />
+            </div>
+          ) : (
+            <div className="flex flex-column gap-3">
+              <div>
+                <label htmlFor="toleransi-menit-input" className="block text-sm font-semibold text-800 mb-2">
+                  Toleransi Keterlambatan Kedatangan (menit) <span className="text-red-500">*</span>
+                </label>
+                <InputNumber
+                  id="toleransi-menit-input"
+                  value={dialogToleranceMinutes}
+                  onValueChange={(e) => setDialogToleranceMinutes(e.value || 30)}
+                  min={1}
+                  max={180}
+                  suffix=" menit"
+                  showButtons
+                  buttonLayout="horizontal"
+                  step={5}
+                  decrementButtonClassName="p-button-secondary p-button-outlined"
+                  incrementButtonClassName="p-button-secondary p-button-outlined"
+                  incrementButtonIcon="pi pi-plus"
+                  decrementButtonIcon="pi pi-minus"
+                  className="w-full"
+                  inputClassName="text-center font-bold text-base"
+                />
+              </div>
+
+              <div className="p-3 surface-100 border-round-md border-left-3 border-primary text-xs text-700 line-height-3">
+                <i className="pi pi-info-circle mr-1.5 text-primary font-semibold" />
+                Booking akan otomatis bisa ditandai <strong>&quot;Tidak Hadir&quot;</strong> setelah pasien terlambat melebihi durasi ini dari jam janji temu.
+              </div>
+            </div>
+          )}
+        </div>
+      </Dialog>
 
       {/* HEADER SECTION */}
       <div className="card surface-card border-1 surface-border border-round-xl p-4 shadow-1 mb-3">
@@ -345,7 +507,20 @@ export const DaftarBookingTab: React.FC<Props> = ({ toast, onNavigateToCreate })
               className="border-round-md font-medium px-3"
               onClick={handleAutoScanExpired}
               loading={loadingAutoScan}
-              tooltip="Scan & update booking yang telah melewati waktu toleransi (30 menit) menjadi tidak hadir"
+              tooltip={`Scan & update booking yang telah melewati waktu toleransi (${toleranceMinutes} menit) menjadi tidak hadir`}
+            />
+
+            <Divider layout="vertical" className="hidden sm:block m-0 h-2rem" />
+
+            <Button
+              size="small"
+              label="Pengaturan Toleransi"
+              icon="pi pi-cog"
+              outlined
+              severity="secondary"
+              className="border-round-md font-medium px-3"
+              onClick={handleOpenToleranceDialog}
+              tooltip="Atur batas toleransi keterlambatan kedatangan pasien"
             />
 
             <Divider layout="vertical" className="hidden sm:block m-0 h-2rem" />
@@ -660,8 +835,8 @@ export const DaftarBookingTab: React.FC<Props> = ({ toast, onNavigateToCreate })
             {/* Kolom Uang Muka (DP) */}
             <Column
               header="Uang Muka (DP)"
-              headerStyle={{ width: '150px' }}
-              style={{ width: '150px', minWidth: '140px', verticalAlign: 'middle', padding: '0.85rem 1rem' }}
+              headerStyle={{ width: '165px' }}
+              style={{ width: '165px', minWidth: '150px', verticalAlign: 'middle', padding: '0.85rem 1rem' }}
               body={(rowData: BookingRow) => {
                 const dpStatusSeverityMap: any = {
                   belum_bayar: 'warning',
@@ -677,18 +852,36 @@ export const DaftarBookingTab: React.FC<Props> = ({ toast, onNavigateToCreate })
                   dipotong_treatment: 'Dipotong Kasir',
                 };
 
+                const methodLabelMap: Record<string, string> = {
+                  cash: 'Tunai',
+                  transfer: 'Transfer',
+                  qris: 'QRIS',
+                };
+
                 return (
                   <div>
                     <div className="font-bold text-900 text-sm">
                       {formatCurrency(rowData.dp_nominal || 0)}
                     </div>
-                    <div className="mt-1">
+                    <div className="flex align-items-center gap-1 mt-1 flex-wrap">
                       <Tag
                         value={dpStatusLabelMap[rowData.dp_status] || rowData.dp_status}
                         severity={dpStatusSeverityMap[rowData.dp_status] || 'secondary'}
-                        className="text-xs"
+                        className="text-xs py-0 px-1 font-semibold"
                       />
+                      {rowData.dp_nominal > 0 && rowData.metode_pembayaran_dp && (
+                        <Tag
+                          value={methodLabelMap[rowData.metode_pembayaran_dp] || rowData.metode_pembayaran_dp.toUpperCase()}
+                          severity="info"
+                          className="text-xs py-0 px-1 font-semibold"
+                        />
+                      )}
                     </div>
+                    {rowData.dp_nominal === 0 && rowData.alasan_bebas_dp && (
+                      <div className="text-xs text-500 mt-1 italic line-clamp-1" title={`Alasan: ${rowData.alasan_bebas_dp}`}>
+                        {rowData.alasan_bebas_dp}
+                      </div>
+                    )}
                   </div>
                 );
               }}
@@ -743,7 +936,7 @@ export const DaftarBookingTab: React.FC<Props> = ({ toast, onNavigateToCreate })
                   )}
 
                   {/* 4. TANDAI TIDAK HADIR BUTTON */}
-                  {rowData.status === 'dikonfirmasi' && !rowData.can_checkin && (
+                  {rowData.can_mark_tidak_hadir && (
                     <Button
                       icon="pi pi-user-minus"
                       outlined

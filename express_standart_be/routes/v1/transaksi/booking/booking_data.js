@@ -114,6 +114,8 @@ router.post("/", async (req, res) => {
       "b.dp_nominal",
       "b.dp_status",
       "b.dp_dibayar_at",
+      "b.metode_pembayaran_dp",
+      "b.alasan_bebas_dp",
       "b.sumber",
       "b.butuh_konsul",
       "b.created_by",
@@ -184,7 +186,15 @@ router.post("/", async (req, res) => {
       });
     }
 
-    const todayYmd = new Date().toISOString().slice(0, 10);
+    // Ambil konfigurasi toleransi keterlambatan dari tabel config (default: 30 menit)
+    const cfgToleransi = await DB("config")
+      .where("kode", "toleransi_keterlambatan_menit")
+      .first();
+    const toleransiMenit = parseInt(cfgToleransi?.keterangan || "30", 10) || 30;
+
+    const now = new Date();
+    const todayYmd = `${now.getFullYear()}-${String(now.getMonth() + 1).padStart(2, '0')}-${String(now.getDate()).padStart(2, '0')}`;
+    const nowMinutes = now.getHours() * 60 + now.getMinutes();
 
     const mappedData = rows.map((row) => {
       const items = detailMap[row.kode_booking] || [];
@@ -218,11 +228,27 @@ router.post("/", async (req, res) => {
       // Flag apakah check-in aktif (hanya untuk tanggal hari ini dan status dikonfirmasi)
       const canCheckin = tglStr === todayYmd && row.status === "dikonfirmasi";
 
-      // Flag apakah bisa dibatalkan (tanggal belum terlewat dan status dikonfirmasi)
-      const canCancel = tglStr >= todayYmd && row.status === "dikonfirmasi";
-
       // Flag apakah bisa tandai lunas DP
       const canPayDp = row.dp_status === "belum_bayar" && row.status === "dikonfirmasi";
+
+      // Flag apakah bisa ditandai tidak hadir:
+      // HANYA jika status dikonfirmasi DAN sudah melewati tanggal/jam booking + toleransi dinamis
+      let isOverdue = false;
+      if (tglStr < todayYmd) {
+        isOverdue = true;
+      } else if (tglStr === todayYmd) {
+        if (row.jam_booking) {
+          const [bH, bM] = String(row.jam_booking).slice(0, 5).split(":").map(Number);
+          const bookMins = (bH || 0) * 60 + (bM || 0) + toleransiMenit;
+          isOverdue = nowMinutes >= bookMins;
+        }
+      }
+      // Untuk tglStr > todayYmd (masa depan), isOverdue tetap false
+
+      // Flag apakah bisa dibatalkan (tanggal belum terlewat, belum overdue, dan status dikonfirmasi)
+      const canCancel = tglStr >= todayYmd && row.status === "dikonfirmasi" && !isOverdue;
+
+      const canMarkTidakHadir = row.status === "dikonfirmasi" && isOverdue;
 
       return {
         ...row,
@@ -236,6 +262,7 @@ router.post("/", async (req, res) => {
         can_checkin: canCheckin,
         can_cancel: canCancel,
         can_pay_dp: canPayDp,
+        can_mark_tidak_hadir: canMarkTidakHadir,
       };
     });
 

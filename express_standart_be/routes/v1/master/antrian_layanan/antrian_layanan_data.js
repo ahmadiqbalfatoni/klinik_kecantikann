@@ -33,6 +33,9 @@ const handleGetData = async (req, res) => {
     const baseQuery = DB("trx_antrian_layanan as al")
       .leftJoin("trx_kunjungan as k", "al.kode_kunjungan", "k.kode_kunjungan")
       .leftJoin("mst_pasien as p", "k.no_rm", "p.no_rm")
+      .leftJoin("trx_booking as b", "k.kode_booking", "b.kode_booking")
+      .leftJoin("mst_jadwal_karyawan as j_book", "b.kode_jadwal", "j_book.kode_jadwal")
+      .leftJoin("mst_karyawan as kar_book", "j_book.no_sip", "kar_book.no_sip")
       .leftJoin("trx_rekam_medis as rm_asal", "al.kode_kunjungan", "rm_asal.kode_kunjungan")
       .leftJoin("trx_rekam_medis_foto as rmf", function () {
         this.on("rm_asal.id", "=", "rmf.id_rekam_medis").andOn("rmf.tipe", "=", DB.raw("?", ["before"]));
@@ -44,7 +47,7 @@ const handleGetData = async (req, res) => {
       .leftJoin("mst_karyawan as kar", function () {
         this.on("al.kode_karyawan", "=", "kar.no_sip").orOn("al.kode_karyawan", "=", "kar.kode_user");
       })
-      .groupBy("al.id", "k.id", "p.id", "rm_asal.id", "rmf.id", "al_asal.id", "ral.id", "kar.id")
+      .groupBy("al.id", "k.id", "p.id", "b.id", "j_book.id", "kar_book.id", "rm_asal.id", "rmf.id", "al_asal.id", "ral.id", "kar.id")
       .modify((qb) => {
         if (filterTanggal) {
           qb.whereRaw("DATE(al.created_at) = ?", [filterTanggal]);
@@ -65,6 +68,7 @@ const handleGetData = async (req, res) => {
               .orWhereRaw("LOWER(p.nama) LIKE ?", [`%${lower}%`])
               .orWhereRaw("LOWER(p.kelurahan_desa) LIKE ?", [`%${lower}%`])
               .orWhereRaw("LOWER(kar.nama) LIKE ?", [`%${lower}%`])
+              .orWhereRaw("LOWER(kar_book.nama) LIKE ?", [`%${lower}%`])
               .orWhereRaw("LOWER(dal.nama_layanan) LIKE ?", [`%${lower}%`]);
           });
         }
@@ -81,11 +85,22 @@ const handleGetData = async (req, res) => {
       "al.kode_kunjungan",
       "al.nomor_antrian",
       "al.status",
-      "al.kode_karyawan",
+      DB.raw("COALESCE(al.kode_karyawan, j_book.no_sip) as kode_karyawan"),
       "al.hasil_form",
       "al.catatan_petugas",
-      "kar.nama as nama_petugas",
-      "kar.jabatan as jabatan_petugas",
+      DB.raw("COALESCE(kar.nama, kar_book.nama) as nama_petugas"),
+      DB.raw("COALESCE(kar.jabatan, kar_book.jabatan) as jabatan_petugas"),
+      "k.kode_booking",
+      "b.kode_jadwal as booking_kode_jadwal",
+      "b.tanggal_booking as booking_tanggal_booking",
+      "j_book.no_sip as booking_no_sip",
+      "kar_book.nama as booking_nama_petugas",
+      "kar_book.jabatan as booking_jabatan_petugas",
+      "j_book.hari as booking_hari",
+      "j_book.jam_mulai as booking_jam_mulai",
+      "j_book.jam_selesai as booking_jam_selesai",
+      "j_book.kode_ruangan as booking_kode_ruangan",
+      "j_book.is_penanggung_jawab as booking_is_penanggung_jawab",
       "al.dipanggil_at",
       "al.selesai_at",
       "al.created_at",
@@ -160,6 +175,65 @@ const handleGetData = async (req, res) => {
         ...item,
         details: detailMap[item.kode_antrian_layanan] || [],
       }));
+    }
+
+    // Attach companion staff (petugas pendamping) for booking antrian
+    const bookingJadwals = vaData.filter(
+      (d) => d.kode_booking && d.booking_kode_ruangan && d.booking_hari && d.booking_jam_mulai && d.booking_jam_selesai
+    );
+    if (bookingJadwals.length > 0) {
+      const roomCodes = [...new Set(bookingJadwals.map((b) => b.booking_kode_ruangan))];
+      const hariList = [...new Set(bookingJadwals.map((b) => b.booking_hari))];
+
+      const companionRows = await DB("mst_jadwal_karyawan as j")
+        .leftJoin("mst_karyawan as k", "j.no_sip", "k.no_sip")
+        .whereIn("j.kode_ruangan", roomCodes)
+        .whereIn("j.hari", hariList)
+        .where("j.is_penanggung_jawab", 0)
+        .where("j.status", "aktif")
+        .select(
+          "j.kode_jadwal",
+          "j.no_sip",
+          "j.kode_ruangan",
+          "j.hari",
+          "j.jam_mulai",
+          "j.jam_selesai",
+          "k.nama as nama_petugas",
+          "k.jabatan as jabatan_petugas"
+        );
+
+      vaData = vaData.map((item) => {
+        if (!item.kode_booking || !item.booking_kode_ruangan || !item.booking_hari || !item.booking_jam_mulai || !item.booking_jam_selesai) {
+          return { ...item, booking_petugas_pendamping: [] };
+        }
+        const itmMulai = String(item.booking_jam_mulai).slice(0, 5);
+        const itmSelesai = String(item.booking_jam_selesai).slice(0, 5);
+        const pjNoSip = item.booking_no_sip;
+
+        const companions = companionRows
+          .filter((c) => {
+            const cMulai = String(c.jam_mulai).slice(0, 5);
+            const cSelesai = String(c.jam_selesai).slice(0, 5);
+            return (
+              c.kode_ruangan === item.booking_kode_ruangan &&
+              (c.hari || "").toLowerCase() === (item.booking_hari || "").toLowerCase() &&
+              cMulai === itmMulai &&
+              cSelesai === itmSelesai &&
+              c.no_sip !== pjNoSip
+            );
+          })
+          .map((c) => ({
+            kode_jadwal: c.kode_jadwal,
+            no_sip: c.no_sip,
+            nama_petugas: c.nama_petugas || "Petugas Medis",
+            jabatan_petugas: c.jabatan_petugas || "Terapis / Perawat",
+          }));
+
+        return {
+          ...item,
+          booking_petugas_pendamping: companions,
+        };
+      });
     }
 
     return res.status(200).json({

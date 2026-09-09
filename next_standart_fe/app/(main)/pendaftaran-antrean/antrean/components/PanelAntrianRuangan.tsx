@@ -169,16 +169,33 @@ export const PanelAntrianRuangan: React.FC<PanelAntrianRuanganProps> = ({
                 status: 'aktif',
             });
             const list: any[] = res.data?.data || [];
-            // Sort: Penanggung Jawab (is_penanggung_jawab = 1) di paling awal
-            list.sort((a, b) => {
+            // Deduplikasi shift jadwal: gabungkan jika (no_sip + jam_mulai + jam_selesai) sama persis, pertahankan is_penanggung_jawab = 1
+            const shiftMap = new Map<string, any>();
+            for (const item of list) {
+                const jmMulai = (item.jam_mulai || '').slice(0, 5);
+                const jmSelesai = (item.jam_selesai || '').slice(0, 5);
+                const key = `${item.no_sip || item.kode_jadwal}_${jmMulai}_${jmSelesai}`;
+                if (!shiftMap.has(key)) {
+                    shiftMap.set(key, { ...item, jam_mulai_clean: jmMulai, jam_selesai_clean: jmSelesai });
+                } else {
+                    const existing = shiftMap.get(key);
+                    if ((item.is_penanggung_jawab === 1 || item.is_penanggung_jawab === true) && !existing.is_penanggung_jawab) {
+                        existing.is_penanggung_jawab = 1;
+                    }
+                }
+            }
+            const dedupedList = Array.from(shiftMap.values());
+
+            // Sort: Penanggung Jawab (is_penanggung_jawab = 1) di paling awal, lalu urut jam mulai
+            dedupedList.sort((a, b) => {
                 const pjA = a.is_penanggung_jawab ? 1 : 0;
                 const pjB = b.is_penanggung_jawab ? 1 : 0;
                 if (pjB !== pjA) return pjB - pjA;
                 return (a.jam_mulai || '').localeCompare(b.jam_mulai || '');
             });
-            setPetugasJaga(list);
-            if (list.length > 0) {
-                const pj = list.find((p) => p.is_penanggung_jawab === 1) || list[0];
+            setPetugasJaga(dedupedList);
+            if (dedupedList.length > 0) {
+                const pj = dedupedList.find((p) => p.is_penanggung_jawab === 1) || dedupedList[0];
                 setSelectedPetugasJaga(pj.nama_karyawan);
             } else {
                 setSelectedPetugasJaga('');
@@ -706,36 +723,20 @@ export const PanelAntrianRuangan: React.FC<PanelAntrianRuanganProps> = ({
                                 <div className="flex align-items-center gap-2 mb-1 flex-wrap">
                                     <Tag value={activeRoomObj?.kode_ruangan || selectedRuangan} severity="success" className="font-bold text-xs" />
                                     {petugasJaga.length > 0 ? (
-                                        <div className="flex align-items-center gap-1.5 flex-wrap">
-                                            <span className="text-xs text-500 font-medium flex align-items-center gap-1">
-                                                <i className="pi pi-users text-teal-600 text-xs" />
-                                                Petugas Piket ({petugasJaga.length}):
-                                            </span>
-                                            {petugasJaga.map((p, idx) => {
-                                                const isPj = p.is_penanggung_jawab === 1 || p.is_penanggung_jawab === true;
-                                                return (
-                                                    <span
-                                                        key={p.kode_jadwal || idx}
-                                                        className={`text-xs px-2 py-0.5 border-round-md inline-flex align-items-center gap-1 ${
-                                                            isPj
-                                                                ? 'bg-amber-100 text-amber-900 border-1 border-amber-300 font-bold shadow-xs'
-                                                                : 'surface-100 text-slate-700 border-1 surface-border font-medium'
-                                                        }`}
-                                                        title={`${p.nama_karyawan} (${p.jabatan || 'Petugas'}) - Shift: ${p.jam_mulai?.slice(0, 5)} s/d ${p.jam_selesai?.slice(0, 5)}${isPj ? ' [Penanggung Jawab]' : ''}`}
-                                                    >
-                                                        {isPj && <i className="pi pi-star-fill text-amber-500 text-[10px]" />}
-                                                        <span>{p.nama_karyawan}</span>
-                                                        {isPj && (
-                                                            <span className="text-[9px] bg-amber-500 text-white font-extrabold px-1 border-round">
-                                                                PJ
-                                                            </span>
-                                                        )}
-                                                    </span>
-                                                );
-                                            })}
-                                        </div>
+                                        <span
+                                            className="text-xs text-600 font-medium flex align-items-center gap-1.5 cursor-pointer hover:text-800 transition-colors"
+                                            title={petugasJaga.map((p) => {
+                                                const jam = p.jam_mulai && p.jam_selesai ? ` [${p.jam_mulai.slice(0, 5)} - ${p.jam_selesai.slice(0, 5)}]` : '';
+                                                return `${p.nama_karyawan || p.nama} (${p.jabatan || 'Petugas'})${jam}${p.is_penanggung_jawab ? ' [PJ]' : ''}`;
+                                            }).join('\n')}
+                                        >
+                                            <span className="text-400">·</span>
+                                            <i className="pi pi-users text-teal-600 text-xs" />
+                                            <span>Petugas Piket ({petugasJaga.length})</span>
+                                        </span>
                                     ) : (
                                         <span className="text-xs text-400 italic flex align-items-center gap-1">
+                                            <span className="text-300">·</span>
                                             <i className="pi pi-info-circle text-xs" />
                                             Belum ada jadwal petugas piket hari ini
                                         </span>

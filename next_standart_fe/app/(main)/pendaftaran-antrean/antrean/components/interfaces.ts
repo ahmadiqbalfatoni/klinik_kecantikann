@@ -28,6 +28,22 @@ export interface AntrianLayananData {
     nama_petugas?: string | null;
     jabatan_petugas?: string | null;
     kelurahan_desa?: string | null;
+    kode_booking?: string | null;
+    booking_no_sip?: string | null;
+    booking_nama_petugas?: string | null;
+    booking_jabatan_petugas?: string | null;
+    booking_tanggal_booking?: string | null;
+    booking_hari?: string | null;
+    booking_jam_mulai?: string | null;
+    booking_jam_selesai?: string | null;
+    booking_kode_ruangan?: string | null;
+    booking_is_penanggung_jawab?: number | boolean | null;
+    booking_petugas_pendamping?: Array<{
+        kode_jadwal: string;
+        no_sip: string;
+        nama_petugas: string;
+        jabatan_petugas?: string;
+    }>;
 }
 
 export interface RuanganFormField {

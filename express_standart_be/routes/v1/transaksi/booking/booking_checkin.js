@@ -110,6 +110,7 @@ router.post("/", async (req, res) => {
     }
 
     let resultCheckin = null;
+    let isNeedsConsult = false;
 
     // 4. EKSEKUSI DALAM 1 DATABASE TRANSACTION ATOMIC
     await DB.transaction(async (trx) => {
@@ -166,7 +167,7 @@ router.post("/", async (req, res) => {
       const cKodeAntrianLayanan = `${prefixAntrianLayanan}${seqPadded}`;
 
       // Cek apakah booking ini memerlukan konsultasi dokter terlebih dahulu
-      const isNeedsConsult = Boolean(booking.butuh_konsul);
+      isNeedsConsult = Boolean(booking.butuh_konsul);
       let targetKodeRuangan = kodeRuangan;
       let targetNamaRuangan = namaRuangan;
 
@@ -203,6 +204,7 @@ router.post("/", async (req, res) => {
         nomor_antrian: cNomorAntrianRuangan,
         kode_ruangan: targetKodeRuangan,
         nama_ruangan: targetNamaRuangan,
+        kode_karyawan: jadwal?.no_sip || null,
         status: "menunggu",
         tz: booking.tz || "Asia/Jakarta",
         created_by: username,
@@ -252,28 +254,65 @@ router.post("/", async (req, res) => {
 
           if (totalSesi >= 1) {
             const prefixKpl = `KPL-${todayStr}-`;
+            const prefixDkpl = `DKPL-${todayStr}-`;
+
             const lastKpl = await trx("trx_kepemilikan_paket_layanan")
               .where("kode_kepemilikan_paket_layanan", "like", `${prefixKpl}%`)
               .orderBy("id", "desc")
               .first();
 
-            let nextKplSeq = 1;
+            const lastDkpl = await trx("trx_detail_kepemilikan_paket_layanan")
+              .where("kode_detail_kepemilikan_paket_layanan", "like", `${prefixDkpl}%`)
+              .orderBy("id", "desc")
+              .first();
+
+            let seq1 = 0;
             if (lastKpl && lastKpl.kode_kepemilikan_paket_layanan) {
               const parts = lastKpl.kode_kepemilikan_paket_layanan.split("-");
               const num = parseInt(parts[parts.length - 1], 10);
-              if (!isNaN(num)) nextKplSeq = num + 1;
+              if (!isNaN(num)) seq1 = num;
             }
+
+            let seq2 = 0;
+            if (lastDkpl && lastDkpl.kode_detail_kepemilikan_paket_layanan) {
+              const parts = lastDkpl.kode_detail_kepemilikan_paket_layanan.split("-");
+              if (parts.length >= 3) {
+                const num = parseInt(parts[2], 10);
+                if (!isNaN(num)) seq2 = num;
+              }
+            }
+
+            const nextKplSeq = Math.max(seq1, seq2) + 1;
             const cKodeKpl = `${prefixKpl}${String(nextKplSeq).padStart(3, "0")}`;
+
+            // Ambil data paket untuk tanggal expired
+            const pkt = await trx("mst_paket_layanan")
+              .where("kode_paket_layanan", item.kode_layanan)
+              .first();
+
+            let tglExpired = "2099-12-31";
+            const masaBerlakuHari = parseInt(pkt?.masa_berlaku_hari || 0, 10);
+            if (!Boolean(pkt?.is_selamanya) && masaBerlakuHari > 0) {
+              const dExp = new Date();
+              dExp.setDate(dExp.getDate() + masaBerlakuHari);
+              tglExpired = `${dExp.getFullYear()}-${String(dExp.getMonth() + 1).padStart(2, "0")}-${String(dExp.getDate()).padStart(2, "0")}`;
+            }
+
+            // Hitung status paket setelah 1 sesi terpakai saat checkin
+            const totalRemaining = pktDetails.reduce(
+              (sum, d) => sum + Math.max(0, parseInt(d.jumlah_sesi || 0, 10) - 1),
+              0
+            );
+            const statusKpl = totalRemaining <= 0 ? "habis" : "aktif";
 
             await trx("trx_kepemilikan_paket_layanan").insert({
               kode_kepemilikan_paket_layanan: cKodeKpl,
               no_rm: booking.no_rm,
-              kode_kunjungan: cKodeKunjungan,
               kode_paket_layanan: item.kode_layanan,
-              total_sesi: totalSesi,
-              sisa_sesi: totalSesi,
+              kode_transaksi: booking.kode_booking || null,
               tanggal_beli: todayYmd,
-              status: "aktif",
+              tanggal_expired: tglExpired,
+              status: statusKpl,
               tz: booking.tz || "Asia/Jakarta",
               created_by: username,
               created_at: nowFormatted,
@@ -287,12 +326,13 @@ router.post("/", async (req, res) => {
             for (const d of pktDetails) {
               const cKodeDkpl = `DKPL-${todayStr}-${String(nextKplSeq).padStart(3, "0")}-${String(dkplSeq).padStart(2, "0")}`;
               dkplSeq++;
+              const jSesi = parseInt(d.jumlah_sesi || 0, 10);
               vaInsertDkpl.push({
                 kode_detail_kepemilikan_paket_layanan: cKodeDkpl,
                 kode_kepemilikan_paket_layanan: cKodeKpl,
                 kode_layanan: d.kode_layanan,
-                total_sesi: d.jumlah_sesi,
-                sisa_sesi: d.jumlah_sesi,
+                sesi_total: jSesi,
+                sesi_terpakai: Math.min(1, jSesi), // 1 sesi terpakai pada kunjungan checkin ini
                 tz: booking.tz || "Asia/Jakarta",
                 created_by: username,
                 created_at: nowFormatted,

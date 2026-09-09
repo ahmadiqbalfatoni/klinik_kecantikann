@@ -45,6 +45,19 @@ export interface RuanganGroup {
 }
 
 export const getItemConsultType = (item: ServiceItem) => {
+  // 1. Prioritas Utama: Jika properti wajib_konsultasi terdefinisi secara eksplisit (dari master data/database)
+  const wk = (item.wajib_konsultasi || '').toString().trim().toLowerCase();
+  if (wk === 'wajib') {
+    return { isWajib: true, isService: false, isOpsional: false };
+  }
+  if (wk === 'tidak') {
+    return { isWajib: false, isService: true, isOpsional: false };
+  }
+  if (wk === 'opsional') {
+    return { isWajib: false, isService: false, isOpsional: true };
+  }
+
+  // 2. Fallback: Untuk paket (mst_paket_layanan) atau klaim paket yang tidak memiliki kolom wajib_konsultasi eksplisit
   const effectiveTipe = (
     item.jenis === 'klaim_paket' && item.tipe_paket
       ? item.tipe_paket

@@ -162,6 +162,28 @@ export const DialogDetailBooking: React.FC<Props> = ({
             <span className="font-bold text-primary">{formatCurrency(booking.dp_nominal || 0)}</span>
           </div>
 
+          {booking.dp_nominal > 0 ? (
+            <div className="col-12 py-1 flex justify-content-between align-items-center border-bottom-1 surface-border">
+              <span className="text-500">Metode Bayar DP:</span>
+              <span className="font-semibold text-900 uppercase">
+                {booking.metode_pembayaran_dp === 'cash'
+                  ? 'Tunai (Cash)'
+                  : booking.metode_pembayaran_dp === 'transfer'
+                  ? 'Transfer Bank'
+                  : booking.metode_pembayaran_dp === 'qris'
+                  ? 'QRIS'
+                  : booking.metode_pembayaran_dp || '-'}
+              </span>
+            </div>
+          ) : (
+            <div className="col-12 py-1 flex justify-content-between align-items-center border-bottom-1 surface-border">
+              <span className="text-500">Alasan Bebas DP:</span>
+              <span className="font-semibold text-amber-700 bg-amber-50 px-2 py-0.5 border-round text-xs">
+                {booking.alasan_bebas_dp || 'Klaim Paket / Bebas DP'}
+              </span>
+            </div>
+          )}
+
           <div className="col-12 py-1 flex justify-content-between align-items-center border-bottom-1 surface-border">
             <span className="text-500">Status DP:</span>
             <Tag
