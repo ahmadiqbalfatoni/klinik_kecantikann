@@ -60,12 +60,12 @@ const knexConfig = {
   default: {
     client: process.env.DB_DBMS || "mysql2",
     connection: getConnectionConfig({
-      dbms: process.env.DB_DBMS,
-      host: process.env.DB_HOST,
-      port: process.env.DB_PORT,
-      username: process.env.DB_USERNAME,
-      password: process.env.DB_PASSWORD,
-      database: process.env.DB_DATABASE,
+      dbms: process.env.DB_DBMS || "mysql2",
+      host: process.env.DB_HOST || process.env.MYSQLHOST || process.env.MYSQL_HOST,
+      port: process.env.DB_PORT || process.env.MYSQLPORT || process.env.MYSQL_PORT,
+      username: process.env.DB_USERNAME || process.env.MYSQLUSER || process.env.MYSQL_USER,
+      password: process.env.DB_PASSWORD || process.env.MYSQLPASSWORD || process.env.MYSQL_PASSWORD,
+      database: process.env.DB_DATABASE || process.env.MYSQLDATABASE || process.env.MYSQL_DATABASE,
     }),
     pool: {
       min: 2,
