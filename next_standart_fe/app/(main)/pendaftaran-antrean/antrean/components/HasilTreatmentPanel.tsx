@@ -54,6 +54,8 @@ interface HasilTreatmentPanelProps {
     savedCatatanPetugas?: string;
     savedPetugasNama?: string;
     selectedPetugas?: string;
+    initialFotoBeforeUrl?: string;
+    onFotoBeforeChange?: (url: string) => void;
     onHasilSavedChange?: (saved: boolean) => void;
 }
 
@@ -70,9 +72,15 @@ export const HasilTreatmentPanel: React.FC<HasilTreatmentPanelProps> = ({
     savedCatatanPetugas,
     savedPetugasNama,
     selectedPetugas,
+    initialFotoBeforeUrl = '',
+    onFotoBeforeChange,
     onHasilSavedChange,
 }) => {
-    // Foto After state
+    // Foto Before & After state
+    const [fotoBeforeUrl, setFotoBeforeUrl] = useState<string>(initialFotoBeforeUrl || '');
+    const [uploadingFotoBefore, setUploadingFotoBefore] = useState<boolean>(false);
+    const fileInputBeforeRef = useRef<HTMLInputElement>(null);
+
     const [fotoAfterUrl, setFotoAfterUrl] = useState<string>('');
     const [uploadingFoto, setUploadingFoto] = useState<boolean>(false);
     const fileInputRef = useRef<HTMLInputElement>(null);
@@ -180,6 +188,7 @@ export const HasilTreatmentPanel: React.FC<HasilTreatmentPanelProps> = ({
     useEffect(() => {
         setIsSubmitted(false);
         onHasilSavedChange?.(false);
+        setFotoBeforeUrl(initialFotoBeforeUrl || savedFormData?.foto_before || (activePatient as any)?.foto_before || '');
         setFotoAfterUrl('');
         setCatatan('');
         setSelectedProdukList([]);
@@ -192,7 +201,7 @@ export const HasilTreatmentPanel: React.FC<HasilTreatmentPanelProps> = ({
         } else {
             setLayananPasienList([]);
         }
-    }, [activePatient?.kode_antrian_layanan, activePatient?.kode_kunjungan]);
+    }, [activePatient?.kode_antrian_layanan, activePatient?.kode_kunjungan, initialFotoBeforeUrl]);
 
     const fetchProdukOptions = async (keyword = '') => {
         setLoadingProduk(true);
@@ -211,6 +220,47 @@ export const HasilTreatmentPanel: React.FC<HasilTreatmentPanelProps> = ({
             showError(toast, 'Gagal memuat daftar produk');
         } finally {
             setLoadingProduk(false);
+        }
+    };
+
+    // Upload Foto Before
+    const handleBeforeFileSelect = async (e: React.ChangeEvent<HTMLInputElement>) => {
+        if (isSubmitted) return;
+        const file = e.target.files?.[0];
+        if (!file) return;
+
+        if (!file.type.startsWith('image/')) {
+            showError(toast, 'File harus berupa gambar (JPG, PNG, WEBP, dll)');
+            return;
+        }
+
+        setUploadingFotoBefore(true);
+        try {
+            const base64 = await new Promise<string>((resolve, reject) => {
+                const reader = new FileReader();
+                reader.onload = () => resolve(reader.result as string);
+                reader.onerror = (error) => reject(error);
+                reader.readAsDataURL(file);
+            });
+
+            const res = await postData('/master/ruangan-form-upload-foto', {
+                image_base64: base64,
+                file_name: file.name,
+                prefix: 'before',
+            });
+
+            if (res?.data?.status === 200 || res?.status === 200) {
+                const filePath = res.data?.data?.file_path || res.data?.file_path || '';
+                setFotoBeforeUrl(filePath);
+                onFotoBeforeChange?.(filePath);
+                showSuccess(toast, 'Foto Before berhasil diunggah!');
+            } else {
+                showError(toast, res?.data?.message || 'Gagal mengunggah foto');
+            }
+        } catch (_) {
+            showError(toast, 'Gagal memproses gambar');
+        } finally {
+            setUploadingFotoBefore(false);
         }
     };
 
@@ -327,10 +377,15 @@ export const HasilTreatmentPanel: React.FC<HasilTreatmentPanelProps> = ({
                 kode_antrian_layanan: activePatient.kode_antrian_layanan,
                 kode_ruangan: kodeRuangan,
                 nama_ruangan: namaRuangan,
+                foto_before: fotoBeforeUrl,
                 foto_after: fotoAfterUrl,
                 catatan: catatan,
                 catatan_petugas: savedCatatanPetugas,
-                hasil_form: savedFormData,
+                hasil_form: {
+                    ...(savedFormData || {}),
+                    ...(fotoBeforeUrl ? { foto_before: fotoBeforeUrl } : {}),
+                    ...(fotoAfterUrl ? { foto_after: fotoAfterUrl } : {}),
+                },
                 kode_karyawan: selectedPetugas || activePatient.kode_karyawan,
                 produk_items: selectedProdukList.map((p) => ({
                     kode_produk: p.kode_produk,
@@ -420,75 +475,166 @@ export const HasilTreatmentPanel: React.FC<HasilTreatmentPanelProps> = ({
             </div>
 
             <div className="grid">
-                {/* ── SEKSI KIRI: UPLOAD FOTO AFTER & CATATAN ── */}
+                {/* ── SEKSI KIRI: DOKUMENTASI FOTO BEFORE & AFTER + CATATAN ── */}
                 <div className="col-12 lg:col-5 flex flex-column gap-3">
-                    {/* Foto After Box */}
-                    <div className="p-3 surface-50 border-round-xl border-1 surface-border">
-                        <label className="block text-xs font-extrabold text-teal-800 uppercase tracking-wider mb-2 flex align-items-center gap-2">
-                            <i className="pi pi-camera text-teal-600 text-sm" />
-                            FOTO AFTER TREATMENT
-                        </label>
+                    {/* Dokumentasi Foto Before & After Container */}
+                    <div className="p-3 surface-50 border-round-xl border-1 surface-border flex flex-column gap-3">
+                        <div className="flex align-items-center justify-content-between pb-2 border-bottom-1 surface-border">
+                            <label className="text-xs font-extrabold text-teal-800 uppercase tracking-wider flex align-items-center gap-2 m-0">
+                                <i className="pi pi-camera text-teal-600 text-sm" />
+                                DOKUMENTASI FOTO BEFORE &amp; AFTER
+                            </label>
+                            <span className="text-[10px] text-500 font-semibold">Dokumentasi Tindakan</span>
+                        </div>
 
-                        <input
-                            type="file"
-                            ref={fileInputRef}
-                            onChange={handleFileSelect}
-                            accept="image/*"
-                            style={{ display: 'none' }}
-                        />
-
-                        {fotoAfterUrl ? (
-                            <div className="relative border-round-xl overflow-hidden border-2 border-teal-500 shadow-1 text-center surface-card p-2">
-                                <img
-                                    src={fotoAfterUrl}
-                                    alt="Foto After"
-                                    style={{ maxHeight: '180px', width: '100%', objectFit: 'cover', borderRadius: '8px' }}
-                                />
-                                {!isSubmitted && (
-                                    <div className="flex gap-2 mt-2 justify-content-center">
-                                        <Button
-                                            label="Ganti Foto"
-                                            icon="pi pi-refresh"
-                                            size="small"
-                                            outlined
-                                            severity="info"
-                                            onClick={() => fileInputRef.current?.click()}
-                                            loading={uploadingFoto}
-                                            className="text-xs font-bold"
-                                        />
-                                        <Button
-                                            label="Hapus"
-                                            icon="pi pi-trash"
-                                            size="small"
-                                            outlined
-                                            severity="danger"
-                                            onClick={() => setFotoAfterUrl('')}
-                                            className="text-xs font-bold"
-                                        />
-                                    </div>
+                        {/* 1. Foto Before Box */}
+                        <div className="surface-card p-3 border-round-lg border-1 surface-border">
+                            <div className="flex align-items-center justify-content-between mb-2">
+                                <span className="text-xs font-bold text-700 flex align-items-center gap-1.5">
+                                    <span>📷</span> FOTO BEFORE (SEBELUM TINDAKAN)
+                                </span>
+                                {fotoBeforeUrl && (
+                                    <Tag value="Tersedia" severity="success" className="text-[10px] px-2 py-0" />
                                 )}
                             </div>
-                        ) : (
-                            <div
-                                onClick={() => !isSubmitted && fileInputRef.current?.click()}
-                                className={`border-2 border-dashed border-300 surface-card border-round-xl p-4 text-center transition-all ${
-                                    isSubmitted ? 'opacity-60' : 'cursor-pointer hover:surface-100'
-                                }`}
-                            >
-                                {uploadingFoto ? (
-                                    <div className="py-2">
-                                        <ProgressSpinner style={{ width: '28px', height: '28px' }} />
-                                        <p className="text-xs text-500 m-0 mt-1">Mengunggah foto...</p>
-                                    </div>
-                                ) : (
-                                    <div>
-                                        <i className="pi pi-cloud-upload text-3xl text-teal-600 mb-2" />
-                                        <p className="font-bold text-xs m-0 text-700">Klik untuk unggah Foto After</p>
-                                        <p className="text-[10px] text-400 m-0 mt-1">Format JPG, PNG, WEBP (Maks 5MB)</p>
-                                    </div>
+
+                            <input
+                                type="file"
+                                ref={fileInputBeforeRef}
+                                onChange={handleBeforeFileSelect}
+                                accept="image/*"
+                                style={{ display: 'none' }}
+                            />
+
+                            {fotoBeforeUrl ? (
+                                <div className="relative border-round-lg overflow-hidden border-1 border-teal-400 shadow-1 text-center bg-teal-50/40 p-2">
+                                    <img
+                                        src={fotoBeforeUrl}
+                                        alt="Foto Before"
+                                        style={{ maxHeight: '150px', width: '100%', objectFit: 'cover', borderRadius: '6px' }}
+                                    />
+                                    {!isSubmitted && (
+                                        <div className="flex gap-2 mt-2 justify-content-center">
+                                            <Button
+                                                label="Ganti Foto"
+                                                icon="pi pi-refresh"
+                                                size="small"
+                                                outlined
+                                                severity="info"
+                                                onClick={() => fileInputBeforeRef.current?.click()}
+                                                loading={uploadingFotoBefore}
+                                                className="text-xs font-bold p-1 px-2"
+                                            />
+                                            <Button
+                                                label="Hapus"
+                                                icon="pi pi-trash"
+                                                size="small"
+                                                outlined
+                                                severity="danger"
+                                                onClick={() => {
+                                                    setFotoBeforeUrl('');
+                                                    onFotoBeforeChange?.('');
+                                                }}
+                                                className="text-xs font-bold p-1 px-2"
+                                            />
+                                        </div>
+                                    )}
+                                </div>
+                            ) : (
+                                <div
+                                    onClick={() => !isSubmitted && fileInputBeforeRef.current?.click()}
+                                    className={`border-2 border-dashed border-300 bg-white border-round-lg p-3 text-center transition-all ${
+                                        isSubmitted ? 'opacity-60' : 'cursor-pointer hover:surface-100 hover:border-teal-400'
+                                    }`}
+                                >
+                                    {uploadingFotoBefore ? (
+                                        <div className="py-2">
+                                            <ProgressSpinner style={{ width: '24px', height: '24px' }} />
+                                            <p className="text-xs text-500 m-0 mt-1">Mengunggah Foto Before...</p>
+                                        </div>
+                                    ) : (
+                                        <div>
+                                            <i className="pi pi-cloud-upload text-2xl text-teal-600 mb-1" />
+                                            <p className="font-bold text-xs m-0 text-700">Unggah Foto Before (Sebelum Tindakan)</p>
+                                            <p className="text-[10px] text-400 m-0 mt-0.5">Format JPG, PNG, WEBP (Maks 5MB)</p>
+                                        </div>
+                                    )}
+                                </div>
+                            )}
+                        </div>
+
+                        {/* 2. Foto After Box */}
+                        <div className="surface-card p-3 border-round-lg border-1 surface-border">
+                            <div className="flex align-items-center justify-content-between mb-2">
+                                <span className="text-xs font-bold text-700 flex align-items-center gap-1.5">
+                                    <span>✨</span> FOTO AFTER (SESUDAH TINDAKAN)
+                                </span>
+                                {fotoAfterUrl && (
+                                    <Tag value="Tersedia" severity="success" className="text-[10px] px-2 py-0" />
                                 )}
                             </div>
-                        )}
+
+                            <input
+                                type="file"
+                                ref={fileInputRef}
+                                onChange={handleFileSelect}
+                                accept="image/*"
+                                style={{ display: 'none' }}
+                            />
+
+                            {fotoAfterUrl ? (
+                                <div className="relative border-round-lg overflow-hidden border-1 border-teal-500 shadow-1 text-center bg-teal-50/40 p-2">
+                                    <img
+                                        src={fotoAfterUrl}
+                                        alt="Foto After"
+                                        style={{ maxHeight: '150px', width: '100%', objectFit: 'cover', borderRadius: '6px' }}
+                                    />
+                                    {!isSubmitted && (
+                                        <div className="flex gap-2 mt-2 justify-content-center">
+                                            <Button
+                                                label="Ganti Foto"
+                                                icon="pi pi-refresh"
+                                                size="small"
+                                                outlined
+                                                severity="info"
+                                                onClick={() => fileInputRef.current?.click()}
+                                                loading={uploadingFoto}
+                                                className="text-xs font-bold p-1 px-2"
+                                            />
+                                            <Button
+                                                label="Hapus"
+                                                icon="pi pi-trash"
+                                                size="small"
+                                                outlined
+                                                severity="danger"
+                                                onClick={() => setFotoAfterUrl('')}
+                                                className="text-xs font-bold p-1 px-2"
+                                            />
+                                        </div>
+                                    )}
+                                </div>
+                            ) : (
+                                <div
+                                    onClick={() => !isSubmitted && fileInputRef.current?.click()}
+                                    className={`border-2 border-dashed border-300 bg-white border-round-lg p-3 text-center transition-all ${
+                                        isSubmitted ? 'opacity-60' : 'cursor-pointer hover:surface-100 hover:border-teal-400'
+                                    }`}
+                                >
+                                    {uploadingFoto ? (
+                                        <div className="py-2">
+                                            <ProgressSpinner style={{ width: '24px', height: '24px' }} />
+                                            <p className="text-xs text-500 m-0 mt-1">Mengunggah Foto After...</p>
+                                        </div>
+                                    ) : (
+                                        <div>
+                                            <i className="pi pi-cloud-upload text-2xl text-teal-600 mb-1" />
+                                            <p className="font-bold text-xs m-0 text-700">Unggah Foto After (Sesudah Tindakan)</p>
+                                            <p className="text-[10px] text-400 m-0 mt-0.5">Format JPG, PNG, WEBP (Maks 5MB)</p>
+                                        </div>
+                                    )}
+                                </div>
+                            )}
+                        </div>
                     </div>
 
                     {/* Catatan Dokter Box */}
@@ -503,7 +649,7 @@ export const HasilTreatmentPanel: React.FC<HasilTreatmentPanelProps> = ({
                             placeholder="Catatan hasil penanganan, kondisi kulit pasien setelah treatment, atau instruksi tindak lanjut..."
                             disabled={isSubmitted}
                             className="w-full text-sm border-round-md shadow-1 bg-white border-300 focus:border-teal-500 flex-1 p-3"
-                            style={{ resize: 'none', minHeight: '100px' }}
+                            style={{ resize: 'none', minHeight: '90px' }}
                         />
                     </div>
                 </div>

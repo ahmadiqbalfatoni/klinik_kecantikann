@@ -306,7 +306,8 @@ router.post("/antrian-layanan-simpan-rekomendasi", async (req, res) => {
         updated_at: formatDateSystem(),
       };
       if (oPayload.kode_karyawan || oPayload.no_sip) {
-        updateObj.kode_karyawan = oPayload.kode_karyawan || oPayload.no_sip;
+        const rawCode = oPayload.kode_karyawan || oPayload.no_sip;
+        updateObj.kode_karyawan = String(rawCode).split("#")[0].trim();
       }
       if (hasil_form) {
         updateObj.hasil_form = typeof hasil_form === "object" ? JSON.stringify(hasil_form) : hasil_form;

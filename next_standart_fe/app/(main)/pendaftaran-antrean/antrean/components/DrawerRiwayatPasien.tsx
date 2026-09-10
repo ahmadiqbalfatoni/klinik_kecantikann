@@ -28,7 +28,50 @@ import {
     ClipboardList,
     Image as ImageIcon,
     ZoomIn,
+    Printer,
 } from 'lucide-react';
+import { RMEReportPrint } from './RMEReportPrint';
+
+export const IconMedicalRecord: React.FC<{ size?: number; className?: string; style?: React.CSSProperties }> = ({
+    size = 16,
+    className = '',
+    style,
+}) => (
+    <svg
+        viewBox="0 0 24 24"
+        width={size}
+        height={size}
+        fill="none"
+        stroke="currentColor"
+        className={className}
+        style={style}
+    >
+        {/* Document outline with rounded corners and folded corner */}
+        <path
+            d="M14.5 1.5H6.5C4.6 1.5 3 3.1 3 5v14c0 1.9 1.6 3.5 3.5 3.5h11c1.9 0 3.5-1.6 3.5-3.5V7.5L14.5 1.5z"
+            strokeWidth="1.8"
+            strokeLinejoin="round"
+        />
+        <path
+            d="M14.5 1.5V6c0 .8.7 1.5 1.5 1.5h4.5"
+            strokeWidth="1.8"
+            strokeLinecap="round"
+            strokeLinejoin="round"
+        />
+        {/* Avatar Head (Larger & Bolder on top-left) */}
+        <circle cx="8.8" cy="6" r="2.2" fill="currentColor" stroke="none" />
+        {/* Avatar Shoulders / Suit */}
+        <path
+            d="M5.5 13v-.3c0-1.8 1.4-2.8 3.3-2.8s3.3 1 3.3 2.8v.3h-1.4l-.7-1.4-.7 1.4z"
+            fill="currentColor"
+            stroke="none"
+        />
+        {/* Document Data Bars (Solid Bold Lines) */}
+        <rect x="5.5" y="14.8" width="13" height="1.6" rx="0.8" fill="currentColor" stroke="none" />
+        <rect x="5.5" y="17.4" width="13" height="1.6" rx="0.8" fill="currentColor" stroke="none" />
+        <rect x="5.5" y="20" width="7.5" height="1.6" rx="0.8" fill="currentColor" stroke="none" />
+    </svg>
+);
 
 interface DrawerRiwayatPasienProps {
     visible: boolean;
@@ -63,6 +106,10 @@ export const DrawerRiwayatPasien: React.FC<DrawerRiwayatPasienProps> = ({
 
     // Selected visit for detailed EMR dossier view (null = Table view)
     const [selectedVisit, setSelectedVisit] = useState<any | null>(null);
+
+    // Modal Print Laporan RME
+    const [printModalVisible, setPrintModalVisible] = useState<boolean>(false);
+    const [visitToPrint, setVisitToPrint] = useState<any | null>(null);
 
     // Modal Zoom Preview Foto
     const [previewModalVisible, setPreviewModalVisible] = useState<boolean>(false);
@@ -267,6 +314,17 @@ export const DrawerRiwayatPasien: React.FC<DrawerRiwayatPasienProps> = ({
                         <span>Kembali ke Tabel Riwayat</span>
                     </button>
                     <div className="flex align-items-center gap-2">
+                        <Button
+                            label="Cetak RME"
+                            icon={<IconMedicalRecord size={15} className="mr-1" />}
+                            severity="success"
+                            size="small"
+                            className="font-bold border-round-lg text-xs px-2.5 py-1.5 shadow-1"
+                            onClick={() => {
+                                setVisitToPrint(selectedVisit);
+                                setPrintModalVisible(true);
+                            }}
+                        />
                         <span className="text-xs font-mono font-semibold text-500 bg-surface-100 border-round px-2 py-1 border-1 surface-border">
                             {selectedVisit.kode_kunjungan}
                         </span>
@@ -788,14 +846,101 @@ export const DrawerRiwayatPasien: React.FC<DrawerRiwayatPasienProps> = ({
 
                                             {/* Sesi Body */}
                                             <div className="p-3 flex flex-column gap-3 text-xs">
-                                                {/* Petugas Row */}
-                                                <div className="flex align-items-center gap-1.5 text-500 pb-2 border-bottom-1 surface-border">
-                                                    <User size={14} className="text-400" />
-                                                    <span>Petugas / Operator:</span>
-                                                    <span className="font-medium text-900 ml-1">
-                                                        {layanan.petugas?.nama || 'Petugas Ruangan'}
-                                                    </span>
-                                                </div>
+                                                {/* Petugas & Terapis Lengkap Row */}
+                                                {(() => {
+                                                    const terapisList: any[] = Array.isArray(layanan.terapis_pendamping) && layanan.terapis_pendamping.length > 0
+                                                        ? layanan.terapis_pendamping
+                                                        : (Array.isArray(layanan.daftar_petugas) && layanan.daftar_petugas.length > 0
+                                                            ? layanan.daftar_petugas.filter((p: any) => !p.is_dokter_pj && p.role !== 'DOKTER')
+                                                            : (Array.isArray(headerRM.terapis_list) ? headerRM.terapis_list : []));
+
+                                                    const dokterPelaksana = layanan.petugas || layanan.rekam_medis?.dokter_penanggung_jawab || (
+                                                        Array.isArray(layanan.daftar_petugas) ? layanan.daftar_petugas.find((p: any) => p.is_dokter_pj || p.role === 'DOKTER') : null
+                                                    ) || (headerRM.dokter_nama ? { nama: headerRM.dokter_nama, jabatan: headerRM.dokter_jabatan || 'Dokter', no_sip: headerRM.no_sip } : null);
+
+                                                    return (
+                                                        <div className="surface-50 p-2.5 border-round-lg border-1 surface-border flex flex-column gap-2">
+                                                            <div className="flex align-items-center justify-content-between">
+                                                                <span className="text-[10px] font-bold text-500 uppercase tracking-wider flex align-items-center gap-1.5">
+                                                                    <User size={13} className="text-teal-700" />
+                                                                    <span>Dokter &amp; Petugas Pelaksana Ruangan:</span>
+                                                                </span>
+                                                                <span className="text-[10px] font-semibold text-500 bg-surface-100 px-2 py-0.5 border-round">
+                                                                    {(terapisList.length > 0 ? terapisList.length + 1 : (dokterPelaksana ? 1 : 0))} Petugas
+                                                                </span>
+                                                            </div>
+                                                            <div className="grid formgrid m-0">
+                                                                {/* 1. Dokter / PJ Medis */}
+                                                                {dokterPelaksana && (
+                                                                    <div className="col-12 md:col-6 p-1">
+                                                                        <div className="bg-white p-2 border-round-md border-1 surface-border flex align-items-center gap-2">
+                                                                            <div className="w-2rem h-2rem border-round-md bg-teal-50 border-1 border-teal-100 text-teal-700 flex align-items-center justify-content-center text-xs flex-shrink-0">
+                                                                                👨‍⚕️
+                                                                            </div>
+                                                                            <div className="min-w-0 flex-1">
+                                                                                <div className="flex align-items-center gap-1.5 flex-wrap">
+                                                                                    <span className="font-bold text-900 text-xs line-height-2 text-overflow-ellipsis overflow-hidden">
+                                                                                        {dokterPelaksana?.nama || 'Dokter Penanggung Jawab'}
+                                                                                    </span>
+                                                                                    <span className="text-[9px] font-semibold bg-teal-50 text-teal-700 border-1 border-teal-200 px-1.5 py-0.5 border-round">
+                                                                                        {(dokterPelaksana?.jabatan || 'DOKTER/PJ').toUpperCase()}
+                                                                                    </span>
+                                                                                </div>
+                                                                                <span className="text-[10px] text-500 block">
+                                                                                    SIP: {dokterPelaksana?.kode_karyawan || dokterPelaksana?.no_sip || headerRM.no_sip || '-'}
+                                                                                </span>
+                                                                            </div>
+                                                                        </div>
+                                                                    </div>
+                                                                )}
+
+                                                                {/* 2. Terapis / Petugas Pendamping (1, 2, 3 atau lebih) */}
+                                                                {terapisList.length > 0 && (
+                                                                    terapisList.map((terapis: any, tIdx: number) => {
+                                                                        const roleBadge = (terapis.role || terapis.jabatan || 'TERAPIS').toUpperCase();
+                                                                        let jamText = '';
+                                                                        if (terapis.jam_mulai && terapis.jam_selesai) {
+                                                                            const start = terapis.jam_mulai.slice(0, 5);
+                                                                            const end = terapis.jam_selesai.startsWith('24:00') ? '00:00' : terapis.jam_selesai.slice(0, 5);
+                                                                            jamText = `${start} - ${end}`;
+                                                                        } else if (terapis.shift) {
+                                                                            jamText = String(terapis.shift).replace(/[\[\]]/g, '').trim();
+                                                                        }
+
+                                                                        return (
+                                                                            <div key={`t-${tIdx}`} className="col-12 md:col-6 p-1">
+                                                                                <div className="bg-white p-2 border-round-md border-1 surface-border flex align-items-center gap-2">
+                                                                                    <div className="w-2rem h-2rem border-round-md bg-purple-50 border-1 border-purple-100 text-purple-700 flex align-items-center justify-content-center text-xs flex-shrink-0">
+                                                                                        💆‍♀️
+                                                                                    </div>
+                                                                                    <div className="min-w-0 flex-1">
+                                                                                        <div className="flex align-items-center gap-1.5 flex-wrap">
+                                                                                            <span className="font-bold text-900 text-xs line-height-2 text-overflow-ellipsis overflow-hidden">
+                                                                                                {terapis.nama || terapis.nama_petugas}
+                                                                                            </span>
+                                                                                            <span className="text-[9px] font-semibold bg-purple-50 text-purple-700 border-1 border-purple-200 px-1.5 py-0.5 border-round">
+                                                                                                {roleBadge}
+                                                                                            </span>
+                                                                                        </div>
+                                                                                        <div className="text-[10px] text-500 flex align-items-center gap-1.5 flex-wrap">
+                                                                                            <span>SIP: {terapis.no_sip || terapis.sip || '-'}</span>
+                                                                                            {jamText && (
+                                                                                                <>
+                                                                                                    <span className="text-300">•</span>
+                                                                                                    <span>{jamText}</span>
+                                                                                                </>
+                                                                                            )}
+                                                                                        </div>
+                                                                                    </div>
+                                                                                </div>
+                                                                            </div>
+                                                                        );
+                                                                    })
+                                                                )}
+                                                            </div>
+                                                        </div>
+                                                    );
+                                                })()}
 
                                                 {/* Catatan Petugas */}
                                                 {layanan.catatan_petugas && (
@@ -1088,21 +1233,84 @@ export const DrawerRiwayatPasien: React.FC<DrawerRiwayatPasienProps> = ({
                     )}
                 />
 
-                {/* Dokter */}
+                {/* Dokter & Petugas Pelaksana */}
                 <Column
-                    header="Dokter"
+                    header="Dokter / Petugas"
                     sortable
                     sortField="header_rekam_medis.dokter_nama"
                     headerStyle={{ fontWeight: 'bold' }}
-                    style={{ minWidth: '170px' }}
+                    style={{ minWidth: '180px' }}
                     body={(rowData) => {
-                        const dokter = rowData.header_rekam_medis?.dokter_nama;
-                        return dokter ? (
-                            <span className="font-semibold text-900">
-                                dr. {dokter.replace(/^dr\.\s*/i, '')}
-                            </span>
-                        ) : (
-                            <span className="text-500">-</span>
+                        let dokter = rowData.header_rekam_medis?.dokter_nama;
+                        const layList = rowData.layanan || [];
+
+                        if (!dokter && layList.length > 0) {
+                            for (const lay of layList) {
+                                if (lay.petugas?.nama) {
+                                    dokter = lay.petugas.nama;
+                                    break;
+                                }
+                                if (Array.isArray(lay.daftar_petugas)) {
+                                    const pj = lay.daftar_petugas.find((p: any) => p.is_dokter_pj || p.role === 'DOKTER');
+                                    if (pj?.nama) {
+                                        dokter = pj.nama;
+                                        break;
+                                    }
+                                }
+                                if (lay.rekam_medis?.dokter_penanggung_jawab?.nama) {
+                                    dokter = lay.rekam_medis.dokter_penanggung_jawab.nama;
+                                    break;
+                                }
+                            }
+                        }
+
+                        // Kumpulkan nama terapis pendamping jika ada
+                        const terapisNames: string[] = [];
+                        if (Array.isArray(rowData.header_rekam_medis?.terapis_list)) {
+                            rowData.header_rekam_medis.terapis_list.forEach((t: any) => {
+                                const tName = t?.nama || t?.nama_petugas;
+                                if (tName && !terapisNames.includes(tName)) terapisNames.push(tName);
+                            });
+                        }
+                        layList.forEach((lay: any) => {
+                            if (Array.isArray(lay.terapis_pendamping)) {
+                                lay.terapis_pendamping.forEach((t: any) => {
+                                    const tName = t?.nama || t?.nama_petugas;
+                                    if (tName && !terapisNames.includes(tName)) terapisNames.push(tName);
+                                });
+                            }
+                            if (Array.isArray(lay.daftar_petugas)) {
+                                lay.daftar_petugas.forEach((p: any) => {
+                                    if (!p.is_dokter_pj && p.role !== 'DOKTER' && p.nama && !terapisNames.includes(p.nama)) {
+                                        terapisNames.push(p.nama);
+                                    }
+                                });
+                            }
+                        });
+
+                        if (!dokter && terapisNames.length === 0) {
+                            return <span className="text-500">-</span>;
+                        }
+
+                        const cleanDokter = dokter
+                            ? (dokter.toLowerCase().startsWith('dr') || dokter.includes(',') ? dokter : `dr. ${dokter}`)
+                            : null;
+
+                        return (
+                            <div className="flex flex-column gap-1">
+                                {cleanDokter && (
+                                    <span className="font-semibold text-900 text-sm">
+                                        {cleanDokter}
+                                    </span>
+                                )}
+                                {terapisNames.length > 0 && (
+                                    <div className="flex flex-wrap items-center gap-1">
+                                        <span className="text-[10px] text-purple-700 bg-purple-50 px-1.5 py-0.5 rounded border border-purple-200 font-medium">
+                                            Terapis: {terapisNames.join(', ')}
+                                        </span>
+                                    </div>
+                                )}
+                            </div>
                         );
                     }}
                 />
@@ -1166,20 +1374,33 @@ export const DrawerRiwayatPasien: React.FC<DrawerRiwayatPasienProps> = ({
                     header="Aksi"
                     align="center"
                     alignHeader="center"
-                    headerStyle={{ width: '80px', textAlign: 'center', fontWeight: 'bold' }}
-                    style={{ width: '80px', textAlign: 'center' }}
+                    headerStyle={{ width: '110px', textAlign: 'center', fontWeight: 'bold' }}
+                    style={{ width: '110px', textAlign: 'center' }}
                     body={(rowData) => (
-                        <div className="flex align-items-center justify-content-center">
+                        <div className="flex align-items-center justify-content-center gap-2">
                             <Button
                                 icon="pi pi-eye"
                                 outlined
                                 severity="info"
                                 className="p-button-sm border-round-md"
-                                tooltip="Lihat Detail"
+                                tooltip="Lihat Detail RME"
                                 tooltipOptions={{ position: 'top' }}
                                 onClick={(e) => {
                                     e.stopPropagation();
                                     setSelectedVisit(rowData);
+                                }}
+                            />
+                            <Button
+                                icon={<IconMedicalRecord size={16} />}
+                                outlined
+                                severity="success"
+                                className="p-button-sm border-round-md"
+                                tooltip="Cetak Laporan RME"
+                                tooltipOptions={{ position: 'top' }}
+                                onClick={(e) => {
+                                    e.stopPropagation();
+                                    setVisitToPrint(rowData);
+                                    setPrintModalVisible(true);
                                 }}
                             />
                         </div>
@@ -1250,6 +1471,12 @@ export const DrawerRiwayatPasien: React.FC<DrawerRiwayatPasienProps> = ({
                     </div>
                 ) : null}
             </Dialog>
+            {/* MODAL PRINT LAPORAN REKAM MEDIS ELEKTRONIK (RME) */}
+            <RMEReportPrint
+                visible={printModalVisible}
+                onHide={() => setPrintModalVisible(false)}
+                visitData={visitToPrint}
+            />
         </>
     );
 };
