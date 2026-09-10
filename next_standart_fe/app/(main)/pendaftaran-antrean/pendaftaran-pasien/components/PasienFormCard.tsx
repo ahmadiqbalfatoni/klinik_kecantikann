@@ -46,6 +46,8 @@ interface Props {
   onCancel?: () => void;
   toast: React.RefObject<Toast>;
   submitLabel?: string;
+  hidePilihLayanan?: boolean;
+  hideHeader?: boolean;
 }
 
 const defaultFormData: PasienFormData = {
@@ -58,7 +60,7 @@ const defaultFormData: PasienFormData = {
   agama: 'Islam',
   status_perkawinan: 'belum_menikah',
   kewarganegaraan: 'WNI',
-  pekerjaan: 'Karyawan Swasta',
+  pekerjaan: 'Lainnya',
   provinsi: '',
   kota_kabupaten: '',
   kecamatan: '',
@@ -79,6 +81,8 @@ export const PasienFormCard: React.FC<Props> = ({
   onCancel,
   toast,
   submitLabel,
+  hidePilihLayanan = false,
+  hideHeader = false,
 }) => {
   const [formData, setFormData] = useState<PasienFormData>(defaultFormData);
   const [loading, setLoading] = useState(false);
@@ -396,15 +400,12 @@ export const PasienFormCard: React.FC<Props> = ({
 
       if (['00', '0000'].includes(res.data.status)) {
         showSuccess(toast, res.data.message || 'Data pasien berhasil disimpan');
-        if (proceedToLayanan) {
-          const resultData = res.data?.data || {
-            ...formData,
-            no_rm: formData.no_rm || payload.no_rm,
-          };
-          onSuccess(resultData);
-        } else {
-          if (onCancel) onCancel();
-        }
+        const resultData = res.data?.data || {
+          ...formData,
+          no_rm: formData.no_rm || payload.no_rm,
+        };
+        resultData.proceedToLayanan = proceedToLayanan && !hidePilihLayanan;
+        onSuccess(resultData);
       } else {
         showError(toast, res.data.message || 'Gagal menyimpan data pasien');
       }
@@ -483,25 +484,27 @@ export const PasienFormCard: React.FC<Props> = ({
 
   return (
     <div
-      className="surface-card p-4 border-round-xl border-1 surface-border shadow-1 mb-4"
+      className={hideHeader ? 'p-1' : 'surface-card p-4 border-round-xl border-1 surface-border shadow-1 mb-4'}
       onKeyDown={handleKeyDown}
     >
       {/* FORM CARD HEADER */}
-      <div className="flex justify-content-between align-items-center mb-4 flex-wrap gap-2">
-        <div>
-          <h3 className="text-2xl font-bold text-900 flex align-items-center gap-2 mb-1">
-            <i className="pi pi-user-edit text-blue-600 text-2xl" />
-            {formData.no_rm ? `Edit Profile Pasien (${formData.no_rm})` : 'Form Pendaftaran Pasien Baru'}
-          </h3>
-          <p className="text-500 text-sm m-0">
-            Isi formulir rekam medis pasien secara lengkap di bawah ini.
-          </p>
-        </div>
+      {!hideHeader && (
+        <div className="flex justify-content-between align-items-center mb-4 flex-wrap gap-2">
+          <div>
+            <h3 className="text-2xl font-bold text-900 flex align-items-center gap-2 mb-1">
+              <i className="pi pi-user-edit text-blue-600 text-2xl" />
+              {formData.no_rm ? `Edit Profile Pasien (${formData.no_rm})` : 'Form Pendaftaran Pasien Baru'}
+            </h3>
+            <p className="text-500 text-sm m-0">
+              Isi formulir rekam medis pasien secara lengkap di bawah ini.
+            </p>
+          </div>
 
-        {formData.no_rm && (
-          <Tag value={`No. RM: ${formData.no_rm}`} severity="info" className="text-sm px-3 py-2 font-bold" />
-        )}
-      </div>
+          {formData.no_rm && (
+            <Tag value={`No. RM: ${formData.no_rm}`} severity="info" className="text-sm px-3 py-2 font-bold" />
+          )}
+        </div>
+      )}
 
       <TabView activeIndex={activeFormTab} onTabChange={(e) => setActiveFormTab(e.index)}>
         {/* TAB 1: DATA DIRI */}
@@ -838,27 +841,29 @@ export const PasienFormCard: React.FC<Props> = ({
                 loading={loading}
                 type="button"
               />
-              <Button
-                label="Simpan Perubahan & Pilih Layanan"
-                icon="pi pi-check-circle"
-                severity="success"
-                className="border-round-lg font-bold"
-                onClick={() => {
-                  setSubmittedTabs(new Set([0, 1, 2, 3]));
-                  handleSubmit(true);
-                }}
-                loading={loading}
-                type="button"
-              />
+              {!hidePilihLayanan && (
+                <Button
+                  label="Simpan Perubahan & Pilih Layanan"
+                  icon="pi pi-check-circle"
+                  severity="success"
+                  className="border-round-lg font-bold"
+                  onClick={() => {
+                    setSubmittedTabs(new Set([0, 1, 2, 3]));
+                    handleSubmit(true);
+                  }}
+                  loading={loading}
+                  type="button"
+                />
+              )}
             </>
           ) : (
             <Button
-              label={submitLabel || 'Daftarkan Pasien Baru & Lanjut Pilih Layanan'}
+              label={submitLabel || (hidePilihLayanan ? 'Daftarkan Pasien Baru' : 'Daftarkan Pasien Baru & Lanjut Pilih Layanan')}
               icon="pi pi-check"
               className="p-button-success border-round-lg font-bold"
               onClick={() => {
                 setSubmittedTabs(new Set([0, 1, 2, 3]));
-                handleSubmit(true);
+                handleSubmit(!hidePilihLayanan);
               }}
               loading={loading}
               type="button"

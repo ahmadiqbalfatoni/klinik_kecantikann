@@ -150,47 +150,52 @@
   border: 1px solid rgba(179, 135, 63, 0.2);
 }
 
-/* Badge Pill Kategori B: Jabatan Tabel (Perawat, Terapis) */
+/* Badge Pill Kategori B: Jabatan Tabel (Dokter, Perawat, Terapis) */
 .clinic-pill-role {
   display: inline-flex;
   align-items: center;
   justify-content: center;
-  height: 20px;
-  padding: 3px 8px;
+  height: 22px;
+  padding: 3px 10px;
   border-radius: 100px;
   font-family: 'Inter', sans-serif;
-  font-size: 10px;
+  font-size: 11px;
   font-weight: 600;
   line-height: 1;
   white-space: nowrap;
 }
 
+.clinic-pill-role-dokter {
+  background-color: #ECFDF5;
+  color: #047857;
+  border: 1px solid #A7F3D0;
+}
+
 .clinic-pill-role-perawat {
-  background-color: #D9EBE2;
-  color: #154F3B;
-  border: 1px solid rgba(31, 111, 82, 0.15);
+  background-color: #EFF6FF;
+  color: #1D4ED8;
+  border: 1px solid #BFDBFE;
 }
 
 .clinic-pill-role-terapis {
-  background-color: #F1E3C8;
-  color: #78531E;
-  border: 1px solid rgba(179, 135, 63, 0.2);
+  background-color: #F5F3FF;
+  color: #6D28D9;
+  border: 1px solid #DDD6FE;
 }
 
-/* Avatar Initials Bulat: Diameter 32px seragam di semua tabel */
+/* Avatar Initials Bulat */
 .clinic-avatar {
-  width: 32px;
-  height: 32px;
+  width: 36px;
+  height: 36px;
   border-radius: 50%;
-  background-color: #D9EBE2;
-  color: #154F3B;
   font-family: 'Inter', sans-serif;
   font-weight: 700;
-  font-size: 11px;
+  font-size: 12px;
   display: flex;
   align-items: center;
   justify-content: center;
   flex-shrink: 0;
+  box-shadow: 0 1px 2px rgba(0, 0, 0, 0.04);
 }
 
 /* Card Header & Title Standardization */
@@ -198,16 +203,17 @@
   display: flex;
   justify-content: space-between;
   align-items: center;
-  margin-bottom: 20px;
+  margin-bottom: 18px;
 }
 
 .clinic-card-title {
-  font-family: 'Fraunces', serif;
+  font-family: 'Inter', system-ui, -apple-system, sans-serif;
   font-size: 16px;
-  font-weight: 500;
-  color: var(--clinic-emerald-deep);
-  line-height: 1.2;
+  font-weight: 700;
+  color: #154F3B;
+  line-height: 1.3;
   margin: 0;
+  letter-spacing: -0.01em;
 }
 
 /* Responsive Grid Layouts with consistent 24px gap */
@@ -287,16 +293,21 @@
   }
 }
 
-/* Table Row: Padding dan divider rapi */
+/* Table Row: Padding, rounded hover, dan divider rapi */
 .clinic-table-row {
-  min-height: 48px;
-  padding: 10px 0;
-  border-bottom: 1px solid #F3F4F6;
-  transition: background-color 0.15s ease;
-}
+  min-height: 52px;
+  padding: 10px 12px;
+  border-bottom: 1px solid #F1F5F9;
+  border-radius: 8px;
+  transition: all 0.15s ease;
 
-.clinic-table-row:last-child {
-  border-bottom: none;
+  &:hover {
+    background-color: #F8FAFC;
+  }
+
+  &:last-child {
+    border-bottom: none;
+  }
 }
 
 .clinic-table-row:hover {

@@ -283,44 +283,47 @@ export const PaymentDonutPanel: React.FC<PaymentDonutPanelProps> = ({
                 onMouseEnter={() => setHoveredIndex(idx)}
                 onMouseLeave={() => setHoveredIndex(null)}
               >
-                <div className="flex justify-content-between align-items-center text-xs">
-                  <div className="flex align-items-center gap-2">
+                <div
+                  className="flex justify-content-between align-items-center"
+                  style={{ fontSize: '13px', lineHeight: 1.3 }}
+                >
+                  <div className="flex align-items-center" style={{ gap: '8px' }}>
                     <span
                       style={{
-                        width: '10px',
-                        height: '10px',
+                        width: '12px',
+                        height: '12px',
                         borderRadius: '3px',
                         backgroundColor: item.color,
                         display: 'inline-block',
                         flexShrink: 0,
                       }}
                     />
-                    <span className="font-semibold" style={{ color: '#202A26' }}>
+                    <span className="font-semibold text-900" style={{ color: '#202A26' }}>
                       {item.displayName}
                     </span>
                   </div>
-                  <div className="tabular-nums font-normal" style={{ color: '#6F7A74' }}>
-                    <span className="font-semibold" style={{ color: '#202A26' }}>
+                  <div className="tabular-nums flex align-items-center" style={{ gap: '6px', color: '#6F7A74' }}>
+                    <strong className="font-bold text-900" style={{ color: '#202A26', fontSize: '13px' }}>
                       {formatRupiah(item.nominal)}
-                    </span>{' '}
-                    ·{' '}
-                    <span className="font-medium" style={{ color: item.color }}>
+                    </strong>
+                    <span style={{ color: '#9CA3AF' }}>·</span>
+                    <span className="font-bold" style={{ color: item.color, fontSize: '13px' }}>
                       {item.realPct}%
                     </span>
                   </div>
                 </div>
 
-                {/* Progress bar proporsional (minimum 3% agar 2% tetap tampak jelas) */}
+                {/* Progress bar proporsional tebal 7px (minimum 4% agar persentase kecil tetap tampak jelas) */}
                 <div
                   className="w-full overflow-hidden"
-                  style={{ height: '4px', backgroundColor: '#F3F4F6', borderRadius: '2px' }}
+                  style={{ height: '7px', backgroundColor: '#F1F5F9', borderRadius: '4px' }}
                 >
                   <div
                     style={{
-                      width: `${Math.max(item.realPct, 3)}%`,
+                      width: `${Math.max(item.realPct, 4)}%`,
                       backgroundColor: item.color,
                       height: '100%',
-                      borderRadius: '2px',
+                      borderRadius: '4px',
                       transition: 'width 0.4s ease',
                     }}
                   />

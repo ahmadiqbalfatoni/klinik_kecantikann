@@ -23,7 +23,6 @@ import { Tooltip } from 'primereact/tooltip';
 import { OverlayPanel } from 'primereact/overlaypanel';
 import postData from '@/lib/axios/postData';
 import { showError, showSuccess } from '@/lib/tools/generalTools';
-import { DialogQuickAddPasien } from './DialogQuickAddPasien';
 import { DialogDetailBooking } from './DialogDetailBooking';
 import { DialogJadwalMingguanRuangan, RoomTabOption } from './DialogJadwalMingguanRuangan';
 import {
@@ -34,7 +33,6 @@ import {
 } from '@/app/(main)/pendaftaran-antrean/components/shared/LayananCard';
 import {
   User,
-  UserPlus,
   Clock,
   MapPin,
   CheckCircle2,
@@ -47,12 +45,18 @@ import {
 } from 'lucide-react';
 
 interface Pasien {
+  id?: number;
   no_rm: string;
   nama: string;
   nik?: string;
   no_hp?: string;
   jenis_kelamin?: string;
+  tanggal_lahir?: string;
   alamat?: string;
+  provinsi?: string;
+  kota_kabupaten?: string;
+  kecamatan?: string;
+  kelurahan_desa?: string;
 }
 
 interface SlotItem {
@@ -101,7 +105,6 @@ export const BuatBookingTab: React.FC<Props> = ({ toast, onSuccessCreated }) => 
   const [pasienList, setPasienList] = useState<Pasien[]>([]);
   const [loadingPasien, setLoadingPasien] = useState(false);
   const [selectedPasien, setSelectedPasien] = useState<Pasien | null>(null);
-  const [showQuickAddPasien, setShowQuickAddPasien] = useState(false);
   const searchDebounceRef = useRef<NodeJS.Timeout | null>(null);
 
   // 2. Tanggal & Layanan State (Pola Tab Ruangan & Multi-Select Card)
@@ -1153,17 +1156,6 @@ export const BuatBookingTab: React.FC<Props> = ({ toast, onSuccessCreated }) => 
 
   return (
     <div className="p-2 sm:p-3">
-      {/* Dialog Pasien Baru Cepat */}
-      <DialogQuickAddPasien
-        visible={showQuickAddPasien}
-        toast={toast}
-        onHide={() => setShowQuickAddPasien(false)}
-        onSuccess={(pasienBaru) => {
-          setSelectedPasien(pasienBaru);
-          setPasienSearch(pasienBaru.nama || pasienBaru.no_rm);
-          setPasienList([]);
-        }}
-      />
 
       {/* Dialog Detail / Bukti Booking Setelah Berhasil */}
       <DialogDetailBooking
@@ -1187,43 +1179,75 @@ export const BuatBookingTab: React.FC<Props> = ({ toast, onSuccessCreated }) => 
                 </span>
                 <span className="font-bold text-lg text-900">Pilih Pasien</span>
               </div>
-
-              {!selectedPasien && (
-                <Button
-                  label="Pasien Baru"
-                  icon={<UserPlus size={16} className="mr-1" />}
-                  className="p-button-outlined p-button-primary p-button-sm"
-                  onClick={() => setShowQuickAddPasien(true)}
-                />
-              )}
             </div>
 
             {selectedPasien ? (
-              <div className="p-3 surface-50 border-1 border-primary-300 border-round-lg flex flex-column sm:flex-row justify-content-between align-items-start sm:align-items-center gap-3">
+              <div className="border-1 surface-border border-round-xl p-3 bg-white flex flex-column sm:flex-row align-items-start sm:align-items-center justify-content-between gap-3">
                 <div className="flex align-items-center gap-3">
-                  <div className="surface-200 border-circle p-3 text-primary">
-                    <User size={28} />
+                  <div
+                    className="border-round-circle flex align-items-center justify-content-center flex-shrink-0"
+                    style={{
+                      width: 44,
+                      height: 44,
+                      backgroundColor: '#ecfdf5',
+                      color: '#059669',
+                      border: '1px solid #a7f3d0',
+                    }}
+                  >
+                    <User size={24} />
                   </div>
                   <div>
-                    <div className="flex align-items-center gap-2">
+                    <div className="flex align-items-center gap-2 mb-2">
                       <span className="font-bold text-lg text-900">{selectedPasien.nama}</span>
-                      <Tag value={selectedPasien.no_rm} severity="info" />
+                      <Tag
+                        value={selectedPasien.no_rm}
+                        severity="info"
+                        className="text-xs font-mono font-bold px-2 py-0.5 border-round-md"
+                        style={{ backgroundColor: '#0ea5e9', color: '#ffffff' }}
+                      />
                     </div>
-                    <div className="text-xs text-600 mt-1 flex flex-wrap gap-3">
-                      {selectedPasien.nik && <span>NIK: {selectedPasien.nik}</span>}
-                      {selectedPasien.no_hp && <span>No. HP: {selectedPasien.no_hp}</span>}
-                      {selectedPasien.jenis_kelamin && (
-                        <span>
-                          Gender: {selectedPasien.jenis_kelamin === 'L' ? 'Laki-laki' : 'Perempuan'}
+
+                    {/* BARIS 1: NIK · NO. HP · GENDER */}
+                    <div className="text-xs text-500 flex flex-wrap align-items-center mb-1">
+                      <span>
+                        NIK: <span className="font-medium text-800 font-mono">{selectedPasien.nik || '-'}</span>
+                      </span>
+                      <span className="text-400 mx-2">·</span>
+                      <span>
+                        No. HP: <span className="font-medium text-800">{selectedPasien.no_hp || '-'}</span>
+                      </span>
+                      <span className="text-400 mx-2">·</span>
+                      <span>
+                        Gender:{' '}
+                        <span className="font-medium text-800">
+                          {selectedPasien.jenis_kelamin === 'L'
+                            ? 'Laki-laki'
+                            : selectedPasien.jenis_kelamin === 'P'
+                            ? 'Perempuan'
+                            : '-'}
                         </span>
-                      )}
+                      </span>
                     </div>
+
+                    {/* BARIS 2: ALAMAT LENGKAP */}
+                    {(selectedPasien.kota_kabupaten || selectedPasien.kecamatan || selectedPasien.alamat || selectedPasien.kelurahan_desa) && (
+                      <div className="text-xs text-500 flex align-items-center flex-wrap">
+                        <span>
+                          Alamat:{' '}
+                          <span className="font-medium text-800">
+                            {[selectedPasien.kelurahan_desa, selectedPasien.kecamatan, selectedPasien.kota_kabupaten]
+                              .filter(Boolean)
+                              .join(', ') || selectedPasien.alamat || selectedPasien.provinsi || '-'}
+                          </span>
+                        </span>
+                      </div>
+                    )}
                   </div>
                 </div>
                 <Button
                   label="Ganti Pasien"
                   icon="pi pi-refresh"
-                  className="p-button-text p-button-secondary p-button-sm"
+                  className="p-button-text p-button-secondary p-button-sm text-xs font-semibold"
                   onClick={() => setSelectedPasien(null)}
                 />
               </div>
@@ -1252,7 +1276,7 @@ export const BuatBookingTab: React.FC<Props> = ({ toast, onSuccessCreated }) => 
                     <DataTable
                       value={pasienList}
                       size="small"
-                      className="p-datatable-sm"
+                      className="p-datatable-sm text-sm"
                       rowClassName={() => 'cursor-pointer hover:surface-100 transition-colors transition-duration-150'}
                       onRowClick={(e) => {
                         setSelectedPasien(e.data as Pasien);
@@ -1263,9 +1287,9 @@ export const BuatBookingTab: React.FC<Props> = ({ toast, onSuccessCreated }) => 
                       <Column
                         field="no_rm"
                         header="No. RM"
-                        style={{ width: '130px', verticalAlign: 'middle' }}
-                        body={(rowData) => (
-                          <span className="font-bold text-primary text-sm flex align-items-center">
+                        style={{ width: '110px' }}
+                        body={(rowData: Pasien) => (
+                          <span className="font-bold font-mono text-primary">
                             {rowData.no_rm}
                           </span>
                         )}
@@ -1273,34 +1297,69 @@ export const BuatBookingTab: React.FC<Props> = ({ toast, onSuccessCreated }) => 
                       <Column
                         field="nama"
                         header="Nama Pasien"
-                        style={{ verticalAlign: 'middle' }}
-                        body={(rowData) => (
-                          <span className="font-semibold text-900 text-sm flex align-items-center">
+                        style={{ minWidth: '150px' }}
+                        body={(rowData: Pasien) => (
+                          <span className="font-semibold text-900">
                             {rowData.nama}
                           </span>
                         )}
                       />
                       <Column
+                        field="nik"
+                        header="NIK"
+                        style={{ width: '140px' }}
+                        body={(rowData: Pasien) => (
+                          <span className="font-mono text-700 text-xs">
+                            {rowData.nik || '-'}
+                          </span>
+                        )}
+                      />
+                      <Column
+                        header="L/P"
+                        align="center"
+                        style={{ width: '100px' }}
+                        body={(rowData: Pasien) => {
+                          if (!rowData.jenis_kelamin) return <span className="text-400 text-xs">-</span>;
+                          const isMale = rowData.jenis_kelamin === 'L';
+                          return (
+                            <Tag
+                              value={isMale ? 'Laki-Laki' : 'Perempuan'}
+                              severity={isMale ? 'info' : 'success'}
+                              className="text-xs px-2 py-0.5"
+                            />
+                          );
+                        }}
+                      />
+                      <Column
                         field="no_hp"
                         header="No. HP"
-                        style={{ verticalAlign: 'middle' }}
-                        body={(rowData) => (
-                          <span className="text-600 text-sm flex align-items-center">
+                        style={{ width: '130px' }}
+                        body={(rowData: Pasien) => (
+                          <span className="text-700 font-mono text-xs">
                             {rowData.no_hp || '-'}
                           </span>
                         )}
                       />
                       <Column
+                        header="Alamat / Wilayah"
+                        style={{ minWidth: '180px' }}
+                        body={(rowData: Pasien) => {
+                          const wilayah = [rowData.kelurahan_desa, rowData.kecamatan, rowData.kota_kabupaten].filter(Boolean).join(', ');
+                          return <span className="text-600 text-xs">{wilayah || rowData.alamat || rowData.provinsi || '-'}</span>;
+                        }}
+                      />
+                      <Column
                         header="Aksi"
                         align="center"
-                        headerStyle={{ textAlign: 'center' }}
-                        style={{ width: '90px', verticalAlign: 'middle', textAlign: 'center' }}
-                        body={(rowData) => (
+                        style={{ width: '85px' }}
+                        body={(rowData: Pasien) => (
                           <div className="flex align-items-center justify-content-center">
                             <Button
                               label="Pilih"
                               icon="pi pi-check"
-                              className="p-button-sm p-button-primary py-1 px-3 text-xs m-0 shadow-none font-semibold"
+                              size="small"
+                              severity="success"
+                              className="py-1 px-2.5 text-xs font-bold"
                               onClick={(e) => {
                                 e.stopPropagation();
                                 setSelectedPasien(rowData);
@@ -1315,14 +1374,8 @@ export const BuatBookingTab: React.FC<Props> = ({ toast, onSuccessCreated }) => 
                 )}
 
                 {pasienSearch && !loadingPasien && pasienList.length === 0 && (
-                  <div className="text-xs text-500 mt-2 p-2 surface-100 border-round flex justify-content-between align-items-center">
-                    <span>Pasien tidak ditemukan dengan kata kunci &ldquo;{pasienSearch}&rdquo;</span>
-                    <Button
-                      label="Daftarkan Pasien Baru"
-                      icon={<UserPlus size={14} className="mr-1" />}
-                      className="p-button-text p-button-primary text-xs py-0"
-                      onClick={() => setShowQuickAddPasien(true)}
-                    />
+                  <div className="text-xs text-500 mt-2 p-2 surface-100 border-round">
+                    <span>Pasien tidak ditemukan dengan kata kunci &ldquo;{pasienSearch}&rdquo;. Pastikan pasien sudah terdaftar di menu Pasien Baru.</span>
                   </div>
                 )}
               </div>
@@ -2443,16 +2496,7 @@ export const BuatBookingTab: React.FC<Props> = ({ toast, onSuccessCreated }) => 
         </div>
       </div>
 
-      {/* Dialog Pendaftaran Cepat Pasien Baru */}
-      <DialogQuickAddPasien
-        visible={showQuickAddPasien}
-        onHide={() => setShowQuickAddPasien(false)}
-        onSuccess={(newPasien: any) => {
-          setSelectedPasien(newPasien);
-          setPasienList([]);
-        }}
-        toast={toast}
-      />
+
 
       {/* Dialog Detail / Bukti Booking */}
       <DialogDetailBooking

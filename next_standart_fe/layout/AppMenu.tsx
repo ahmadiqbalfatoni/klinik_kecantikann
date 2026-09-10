@@ -103,34 +103,51 @@ const AppMenu = () => {
 
                     const groupLabel = (newItem.label || '').toLowerCase();
                     if (groupLabel.includes('pendaftaran') && groupLabel.includes('antrean')) {
-                        const registrasiItem: AppMenuItem = {
-                            label: 'Registrasi Pasien',
+                        const pasienBaruItem: AppMenuItem = {
+                            label: 'Pasien Baru',
                             to: '/pendaftaran-antrean/registrasi-pasien',
-                            icon: 'pi pi-fw pi-user-plus',
+                            icon: 'UserPlus',
                         };
 
-                        const hasRegistrasi = subItems.some(
-                            (it) => it.to === '/pendaftaran-antrean/registrasi-pasien' || (it.label || '').toLowerCase().includes('registrasi pasien')
+                        const hasPasienBaru = subItems.some(
+                            (it) => it.to === '/pendaftaran-antrean/registrasi-pasien' || (it.label || '').toLowerCase().includes('registrasi pasien') || (it.label || '').toLowerCase().includes('pasien baru')
                         );
-                        if (!hasRegistrasi) {
+                        if (!hasPasienBaru) {
                             const antreanIdx = subItems.findIndex(
                                 (it) => (it.label || '').toLowerCase().includes('antrean pendaftaran') || it.to === '/antrian-awal'
                             );
                             if (antreanIdx !== -1) {
-                                subItems.splice(antreanIdx + 1, 0, registrasiItem);
+                                subItems.splice(antreanIdx + 1, 0, pasienBaruItem);
                             } else {
-                                subItems.unshift(registrasiItem);
+                                subItems.unshift(pasienBaruItem);
                             }
                         } else {
                             subItems = subItems.map((it) => {
-                                if (it.to === '/pendaftaran-antrean/registrasi-pasien' || (it.label || '').toLowerCase().includes('registrasi pasien')) {
-                                    return { ...it, label: 'Registrasi Pasien', to: '/pendaftaran-antrean/registrasi-pasien', icon: 'pi pi-fw pi-user-plus' };
+                                if (it.to === '/pendaftaran-antrean/registrasi-pasien' || (it.label || '').toLowerCase().includes('registrasi pasien') || (it.label || '').toLowerCase().includes('pasien baru')) {
+                                    return { ...it, label: 'Pasien Baru', to: '/pendaftaran-antrean/registrasi-pasien', icon: 'UserPlus' };
                                 }
                                 return it;
                             });
                         }
 
-                        // Fitur Booking sudah dipindahkan menjadi tab di Pendaftaran Pasien,
+                        // Update nama menu: Pendaftaran Pasien -> Pendaftaran Kunjungan
+                        subItems = subItems.map((it) => {
+                            if (
+                                it.to === '/pendaftaran-antrean/pendaftaran-pasien' ||
+                                (it.label || '').toLowerCase().includes('pendaftaran pasien') ||
+                                (it.label || '').toLowerCase().includes('pendaftaran kunjungan')
+                            ) {
+                                return {
+                                    ...it,
+                                    label: 'Pendaftaran Kunjungan',
+                                    to: '/pendaftaran-antrean/pendaftaran-pasien',
+                                    icon: 'ClipboardList'
+                                };
+                            }
+                            return it;
+                        });
+
+                        // Fitur Booking sudah dipindahkan menjadi tab di Pendaftaran Kunjungan,
                         // hapus dari sidebar agar tidak duplikat
                         subItems = subItems.filter(
                             (it) => !it.to?.includes('/booking') && !(it.label || '').toLowerCase().includes('booking')
@@ -138,14 +155,15 @@ const AppMenu = () => {
 
                         // Pastikan urutan item konsisten:
                         // 1. Antrean Pendaftaran
-                        // 2. Registrasi Pasien (Baru)
-                        // 3. Pendaftaran Pasien (Pilih Layanan & Booking & Paket)
+                        // 2. Pasien Baru
+                        // 3. Pendaftaran Kunjungan
                         const getOrderScore = (it: AppMenuItem) => {
                             const to = (it.to || '').toLowerCase();
                             const lbl = (it.label || '').toLowerCase();
                             if (to === '/antrian-awal' || lbl.includes('antrean pendaftaran') || lbl.includes('antrian awal')) return 1;
-                            if (to === '/pendaftaran-antrean/registrasi-pasien' || lbl.includes('registrasi pasien')) return 2;
-                            if (to === '/pendaftaran-antrean/pendaftaran-pasien' || lbl.includes('pendaftaran pasien')) return 3;
+                            if (to === '/pendaftaran-antrean/registrasi-pasien' || lbl.includes('pasien baru') || lbl.includes('registrasi pasien')) return 2;
+                            if (to === '/pendaftaran-antrean/pendaftaran-pasien' || lbl.includes('pendaftaran kunjungan') || lbl.includes('pendaftaran pasien')) return 3;
+                            if (to === '/pendaftaran-antrean/booking' || lbl.includes('booking')) return 4;
                             return 99;
                         };
                         subItems.sort((a, b) => getOrderScore(a) - getOrderScore(b));

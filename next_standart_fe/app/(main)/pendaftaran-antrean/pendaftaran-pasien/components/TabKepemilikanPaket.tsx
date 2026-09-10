@@ -15,6 +15,7 @@ import postData from '@/lib/axios/postData';
 import { showError, showSuccess } from '@/lib/tools/generalTools';
 import { apiPasienKepemilikanPaket, apiPasienAmbilAntrianLayanan } from './endpoints';
 import { KarcisAntrianLayananModal } from './dialogs/KarcisAntrianLayananModal';
+import { Package } from 'lucide-react';
 
 interface DetailKepemilikan {
   kode_detail_kepemilikan_paket_layanan: string;
@@ -304,18 +305,19 @@ export const TabKepemilikanPaket: React.FC<TabKepemilikanPaketProps> = ({ toast,
         data={antrianLayananData}
       />
 
-      {/* CARD KEPEMILIKAN PAKET DENGAN POLA KONSISTEN MASTER DATA */}
-      <div className="card border-round-xl p-4 shadow-1 surface-card mb-4 mt-3">
-        {/* Page Header */}
-        <div className="mb-4">
-          <h3 className="text-2xl font-bold text-900 flex align-items-center gap-2 mb-1">
-            <i className="pi pi-box text-blue-600 text-2xl" />
-            Data Kepemilikan Paket Pasien
-          </h3>
-          <p className="text-500 text-sm m-0">
-            Cari data pasien terdaftar yang memiliki paket layanan aktif / multi-sesi beserta rincian sisa sesinya.
-          </p>
+      {/* HEADER SECTION */}
+      <div className="card surface-card border-1 surface-border border-round-xl p-4 shadow-1 mb-3">
+        <div className="flex align-items-center gap-2 mb-1">
+          <Package className="text-primary" size={24} />
+          <h2 className="text-xl font-bold text-900 m-0">Data Kepemilikan Paket Pasien</h2>
         </div>
+        <p className="text-xs text-500 mt-1 mb-0">
+          Cari data pasien terdaftar yang memiliki paket layanan aktif atau multi-sesi beserta rincian sisa sesinya.
+        </p>
+      </div>
+
+      {/* CARD KEPEMILIKAN PAKET DENGAN POLA KONSISTEN MASTER DATA */}
+      <div className="card border-round-xl p-4 shadow-1 surface-card mb-4">
 
         {/* Baris Tombol Aksi di bagian paling atas sebelum tabel */}
         <div className="flex flex-row flex-wrap align-items-center gap-2 mb-4">
