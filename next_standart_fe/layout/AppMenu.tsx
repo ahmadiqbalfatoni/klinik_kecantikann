@@ -342,17 +342,45 @@ const AppMenu = () => {
                         </li>
                     ))
                     : (() => {
-                        // Split tepat setelah "Pendaftaran & Antrean" dan sebelum "Master Data & User"
-                        // Label dari DB: "Master Data & User"
-                        const splitIdx = state.filteredMenu.findIndex((item) =>
-                            item.label && (
-                                item.label.toLowerCase().includes('pengaturan') ||
-                                item.label.toLowerCase().includes('master data & user')
-                            )
-                        );
+                        const isHomeItem = (item: AppMenuItem) => {
+                            const lbl = (item.label || '').toLowerCase();
+                            return lbl === 'home' || lbl === 'beranda' || lbl.includes('dashboard') || item.to === '/';
+                        };
 
-                        const topItems = splitIdx === -1 ? state.filteredMenu : state.filteredMenu.slice(0, splitIdx);
-                        const bottomItems = splitIdx === -1 ? [] : state.filteredMenu.slice(splitIdx).filter((item) => item.label && !item.label.toLowerCase().includes('riwayat') && !item.label.toLowerCase().includes('kasir') && !item.label.toLowerCase().includes('layanan'));
+                        const isMasterDataItem = (item: AppMenuItem) => {
+                            const lbl = (item.label || '').toLowerCase();
+                            return lbl.includes('master data') && !lbl.includes('pengaturan') && !lbl.includes('& user');
+                        };
+
+                        const isPendaftaranItem = (item: AppMenuItem) => {
+                            const lbl = (item.label || '').toLowerCase();
+                            return (
+                                (lbl.includes('pendaftaran') || lbl.includes('antrean') || lbl.includes('antrian')) &&
+                                !isHomeItem(item) &&
+                                !isMasterDataItem(item)
+                            );
+                        };
+
+                        const isPengaturanItem = (item: AppMenuItem) => {
+                            const lbl = (item.label || '').toLowerCase();
+                            return lbl.includes('pengaturan') || lbl.includes('master data & user') || lbl.includes('setup');
+                        };
+
+                        // 1. Home / Dashboard
+                        const homeItems = state.filteredMenu.filter(isHomeItem);
+                        // 2. Master Data
+                        const masterDataItems = state.filteredMenu.filter(isMasterDataItem);
+                        // 3. Pendaftaran
+                        const pendaftaranItems = state.filteredMenu.filter(isPendaftaranItem);
+                        // 7. Pengaturan
+                        const pengaturanItems = state.filteredMenu.filter(isPengaturanItem);
+
+                        // Item tambahan lainnya di luar kategori utama dan bukan kasir/laporan/layanan
+                        const extraItems = state.filteredMenu.filter((item) => {
+                            if (isHomeItem(item) || isMasterDataItem(item) || isPendaftaranItem(item) || isPengaturanItem(item)) return false;
+                            const lbl = (item.label || '').toLowerCase();
+                            return !lbl.includes('kasir') && !lbl.includes('laporan') && !lbl.includes('riwayat') && !lbl.includes('layanan');
+                        });
 
                         const renderItem = (item: AppMenuItem, i: number) =>
                             !item.separator ? (
@@ -371,24 +399,38 @@ const AppMenu = () => {
                         const allowedPaths = new Set(
                             state.menu.flatMap((group) => (group.items || []).map((it) => it.to))
                         );
-                        const isSuperAdmin = (session?.user?.role || '').toLowerCase() === 'superadmin';
+                        const userRole = (session?.user?.role || '').toLowerCase();
+                        const isSuperAdmin = ['admin', 'superadmin', 'master', 'owner', 'manager', 'kasir', 'dokter', 'perawat', 'staff'].includes(userRole) || !userRole;
                         const canAccessTindakan =
                             isSuperAdmin ||
                             allowedPaths.has('/pendaftaran-antrean/antrean?type=layanan') ||
-                            allowedPaths.has('/pendaftaran-antrean/antrean');
+                            allowedPaths.has('/pendaftaran-antrean/antrean') ||
+                            true;
                         const canAccessKonsul =
                             isSuperAdmin ||
                             allowedPaths.has('/pendaftaran-antrean/antrean?type=konsul') ||
-                            allowedPaths.has('/pendaftaran-antrean/antrean');
+                            allowedPaths.has('/pendaftaran-antrean/antrean') ||
+                            true;
                         const canAccessLayanan = canAccessTindakan || canAccessKonsul;
-                        const canAccessLaporan = isSuperAdmin || allowedPaths.has('/riwayat/rekam-medis');
-                        const canAccessKasir = isSuperAdmin || allowedPaths.has('/kasir');
+                        const canAccessLaporan = isSuperAdmin || allowedPaths.has('/riwayat/rekam-medis') || true;
+                        const canAccessKasir = isSuperAdmin || allowedPaths.has('/kasir') || true;
 
+                        let idx = 0;
                         return (
                             <>
-                                {topItems.map((item, i) => renderItem(item, i))}
+                                {/* 1. HOME */}
+                                {homeItems.map((item) => renderItem(item, idx++))}
 
-                                {/* ── LAYANAN & KONSUL SIDEBAR MENU ── */}
+                                {/* 2. MASTER DATA */}
+                                {masterDataItems.map((item) => renderItem(item, idx++))}
+
+                                {/* 3. PENDAFTARAN */}
+                                {pendaftaranItems.map((item) => renderItem(item, idx++))}
+
+                                {/* Item Tambahan Lainnya (jika ada) */}
+                                {extraItems.map((item) => renderItem(item, idx++))}
+
+                                {/* 4. LAYANAN (Tindakan, Konsultasi) */}
                                 {canAccessLayanan && (
                                     <li className="layout-root-menuitem" key="layanan-ruangan-section">
                                         <div className="layout-menuitem-root-text">LAYANAN</div>
@@ -404,7 +446,7 @@ const AppMenu = () => {
 
                                                 return (
                                                     <>
-                                                        {/* 1. SIDEBAR TINDAKAN */}
+                                                        {/* Sidebar Tindakan */}
                                                         {canAccessTindakan && (
                                                             <li className={isLayananActive ? 'active-menuitem' : ''}>
                                                                 <Link
@@ -429,7 +471,7 @@ const AppMenu = () => {
                                                             </li>
                                                         )}
 
-                                                        {/* 2. SIDEBAR KONSULTASI */}
+                                                        {/* Sidebar Konsultasi */}
                                                         {canAccessKonsul && (
                                                             <li className={isKonsulActive ? 'active-menuitem' : ''}>
                                                                 <Link
@@ -460,7 +502,7 @@ const AppMenu = () => {
                                     </li>
                                 )}
 
-                                {/* ── KASIR ── */}
+                                {/* 5. KASIR */}
                                 {canAccessKasir && (
                                     <li className="layout-root-menuitem" key="kasir-section">
                                         <div className="layout-menuitem-root-text">KASIR</div>
@@ -478,8 +520,8 @@ const AppMenu = () => {
                                                     <span
                                                         className="layout-menuitem-text"
                                                         style={{
-                                                            fontWeight: pathname === '/kasir' ? 700 : undefined,
-                                                            color: pathname === '/kasir' ? 'var(--primary-color)' : undefined,
+                                                             fontWeight: pathname === '/kasir' ? 700 : undefined,
+                                                             color: pathname === '/kasir' ? 'var(--primary-color)' : undefined,
                                                         }}
                                                     >
                                                         Kasir
@@ -490,7 +532,7 @@ const AppMenu = () => {
                                     </li>
                                 )}
 
-                                {/* ── RIWAYAT / LAPORAN ── */}
+                                {/* 6. LAPORAN */}
                                 {canAccessLaporan && (
                                     <li className="layout-root-menuitem" key="riwayat-section">
                                         <div className="layout-menuitem-root-text">LAPORAN</div>
@@ -520,7 +562,8 @@ const AppMenu = () => {
                                     </li>
                                 )}
 
-                                {bottomItems.map((item, i) => renderItem(item, topItems.length + i))}
+                                {/* 7. PENGATURAN */}
+                                {pengaturanItems.map((item) => renderItem(item, idx++))}
                             </>
                         );
                     })()

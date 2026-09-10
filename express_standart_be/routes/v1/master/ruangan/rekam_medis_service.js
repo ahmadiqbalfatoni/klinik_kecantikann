@@ -52,19 +52,26 @@ export async function syncRekamMedisPerAntrian({
     let resolvedKodeKaryawan = null;
     let resolvedNoSip = "-";
 
-    const targetKaryawanParam = kode_karyawan || existingHeaderRM?.kode_karyawan;
+    const targetKaryawanParam = kode_karyawan || existingHeaderRM?.kode_karyawan || hasil_form?.dokter_pelaksana?.no_sip || hasil_form?.dokter_pelaksana?.nama;
     if (targetKaryawanParam) {
+      const cleanSip = String(targetKaryawanParam).split("#")[0].trim();
       const karyawanRec = await db("mst_karyawan")
         .where("kode_karyawan", targetKaryawanParam)
+        .orWhere("kode_karyawan", cleanSip)
         .orWhere("no_sip", targetKaryawanParam)
+        .orWhere("no_sip", cleanSip)
         .orWhere("kode_user", targetKaryawanParam)
+        .orWhere("kode_user", cleanSip)
+        .orWhere("nama", targetKaryawanParam)
+        .orWhere("nama", "like", `%${cleanSip.replace(/^dr\.\s*/i, "")}%`)
         .first();
 
       if (karyawanRec) {
         resolvedKodeKaryawan = karyawanRec.kode_karyawan;
-        resolvedNoSip = karyawanRec.no_sip || "-";
+        resolvedNoSip = karyawanRec.no_sip || cleanSip;
       } else {
-        resolvedNoSip = targetKaryawanParam;
+        resolvedKodeKaryawan = cleanSip;
+        resolvedNoSip = cleanSip;
       }
     }
 
@@ -236,7 +243,7 @@ export async function syncRekamMedisPerAntrian({
     const roomColsData = {
       kode_antrian_layanan: kode_antrian_layanan || existingRoomRM?.kode_antrian_layanan || null,
       nama_ruangan: resolvedNamaRuangan,
-      kode_karyawan: kode_karyawan || existingRoomRM?.kode_karyawan || null,
+      kode_karyawan: resolvedKodeKaryawan || resolvedNoSip || kode_karyawan || existingRoomRM?.kode_karyawan || null,
       area_yang_ditangani: areaYangDitangani,
       kondisi_kulit: kondisiKulit,
       produk_bahan_digunakan: produkBahanDigunakan,

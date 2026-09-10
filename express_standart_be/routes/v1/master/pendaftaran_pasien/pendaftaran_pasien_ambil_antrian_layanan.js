@@ -105,22 +105,28 @@ router.post("/", async (req, res) => {
         .first();
 
       if (!antrianAwalTersedia) {
+        const prefixAntrianAwal = `A-${todayStr}-`;
         const lastRecord = await trx("trx_antrian_awal")
           .where(function () {
             this.where("created_at", ">=", todayYmd + " 00:00:00")
-              .orWhere("kode_antrian_awal", "like", `A-${todayStr}-%`);
+              .orWhere("kode_antrian_awal", "like", `${prefixAntrianAwal}%`);
           })
-          .orderByRaw("CAST(nomor_antrian AS UNSIGNED) DESC, id DESC")
+          .orderBy("id", "desc")
           .first();
 
         let nextNum = 1;
-        if (lastRecord && lastRecord.nomor_antrian) {
-          const parsed = parseInt(String(lastRecord.nomor_antrian).replace(/\D/g, ""), 10);
-          if (!isNaN(parsed)) nextNum = parsed + 1;
+        if (lastRecord) {
+          if (lastRecord.kode_antrian_awal && lastRecord.kode_antrian_awal.startsWith(prefixAntrianAwal)) {
+            const parts = lastRecord.kode_antrian_awal.split("-");
+            const parsed = parseInt(parts[parts.length - 1], 10);
+            if (!isNaN(parsed)) nextNum = parsed + 1;
+          } else if (lastRecord.nomor_antrian) {
+            const parsed = parseInt(lastRecord.nomor_antrian, 10);
+            if (!isNaN(parsed)) nextNum = parsed + 1;
+          }
         }
 
         const cNoAntrianAwal = String(nextNum).padStart(2, "0");
-        const prefixAntrianAwal = `A-${todayStr}-`;
         const cKodeAntrianAwal = `${prefixAntrianAwal}${String(nextNum).padStart(3, "0")}`;
 
         const [newAntrianAwalId] = await trx("trx_antrian_awal").insert({

@@ -29,6 +29,7 @@ const handleHasilTreatmentSave = async (req, res) => {
     kode_rekam_medis,
     kode_ruangan = "",
     nama_ruangan = "Ruangan Treatment",
+    foto_before = "",
     foto_after = "",
     catatan = "",
     produk_items = [], // [{ kode_produk, qty }] — produk tambahan dari dokter
@@ -73,13 +74,19 @@ const handleHasilTreatmentSave = async (req, res) => {
 
       const targetKodeRuangan = kode_ruangan || currentAL?.kode_ruangan || "RNG-000";
 
+      const formPayload = {
+        ...(oPayload.hasil_form || {}),
+        ...(foto_before ? { foto_before } : {}),
+        ...(foto_after ? { foto_after } : {}),
+      };
+
       // Panggil syncRekamMedisPerAntrian untuk memastikan baris ruangan ada & ter-update
       const rmSyncResult = await syncRekamMedisPerAntrian({
         kode_kunjungan,
         kode_antrian_layanan: resolvedKodeAntrian,
         kode_ruangan: targetKodeRuangan,
         nama_ruangan,
-        hasil_form: foto_after ? { foto_after } : null,
+        hasil_form: Object.keys(formPayload).length > 0 ? formPayload : null,
         catatan_hasil_treatment: catatan || null,
         kode_karyawan: oPayload.kode_karyawan || currentAL?.kode_karyawan,
         username,

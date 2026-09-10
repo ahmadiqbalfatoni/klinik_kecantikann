@@ -158,8 +158,20 @@ const handleGetRekamMedis = async (req, res) => {
         "p.nama as nama_pasien",
         "p.nik",
         "p.jenis_kelamin",
+        "p.tempat_lahir",
         "p.tanggal_lahir",
+        "p.golongan_darah",
+        "p.agama",
+        "p.status_perkawinan",
+        "p.pekerjaan",
+        "p.provinsi",
+        "p.kota_kabupaten",
+        "p.kecamatan",
+        "p.kelurahan_desa",
+        "p.patokan",
+        "p.kode_pos",
         "p.no_hp",
+        "p.email",
         "p.alergi"
       )
       .orderBy("k.tanggal_kunjungan", "desc")
@@ -176,10 +188,22 @@ const handleGetRekamMedis = async (req, res) => {
     if (kodeKunjunganList.length > 0) {
       // 4. Ambil header trx_rekam_medis per kunjungan
       const vaHeaderRM = await DB("trx_rekam_medis as rm")
+        .leftJoin("trx_kunjungan as k", "rm.kode_kunjungan", "k.kode_kunjungan")
+        .leftJoin("trx_booking as b", "k.kode_booking", "b.kode_booking")
+        .leftJoin("mst_jadwal_karyawan as j_book", "b.kode_jadwal", "j_book.kode_jadwal")
+        .leftJoin("mst_karyawan as kar_book", function () {
+          this.on("j_book.no_sip", "=", "kar_book.no_sip")
+            .orOn("j_book.no_sip", "=", "kar_book.kode_karyawan")
+            .orOn(DB.raw("kar_book.no_sip = SUBSTRING_INDEX(j_book.no_sip, '#', 1)"));
+        })
         .leftJoin("mst_karyawan as d", function () {
-          this.on("rm.kode_karyawan", "=", "d.no_sip")
+          this.on("rm.kode_karyawan", "=", "d.kode_karyawan")
+            .orOn("rm.kode_karyawan", "=", "d.no_sip")
             .orOn("rm.kode_karyawan", "=", "d.kode_user")
-            .orOn("rm.kode_karyawan", "=", "d.kode_karyawan");
+            .orOn("rm.no_sip", "=", "d.no_sip")
+            .orOn("rm.no_sip", "=", "d.kode_karyawan")
+            .orOn(DB.raw("d.no_sip = SUBSTRING_INDEX(rm.no_sip, '#', 1)"))
+            .orOn(DB.raw("d.no_sip = SUBSTRING_INDEX(rm.kode_karyawan, '#', 1)"));
         })
         .whereIn("rm.kode_kunjungan", kodeKunjunganList)
         .select(
@@ -203,8 +227,8 @@ const handleGetRekamMedis = async (req, res) => {
           "rm.assessment",
           "rm.plan",
           "rm.kode_karyawan",
-          "d.nama as dokter_nama",
-          "d.jabatan as dokter_jabatan"
+          DB.raw("COALESCE(d.nama, kar_book.nama) as dokter_nama"),
+          DB.raw("COALESCE(d.jabatan, kar_book.jabatan) as dokter_jabatan")
         );
 
       const rmHeaderIds = [];
@@ -215,10 +239,19 @@ const handleGetRekamMedis = async (req, res) => {
 
       // 5. Ambil data sesi antrian layanan per kunjungan
       const vaAntrianLayanan = await DB("trx_antrian_layanan as al")
+        .leftJoin("trx_kunjungan as k", "al.kode_kunjungan", "k.kode_kunjungan")
+        .leftJoin("trx_booking as b", "k.kode_booking", "b.kode_booking")
+        .leftJoin("mst_jadwal_karyawan as j_book", "b.kode_jadwal", "j_book.kode_jadwal")
+        .leftJoin("mst_karyawan as kar_book", function () {
+          this.on("j_book.no_sip", "=", "kar_book.no_sip")
+            .orOn("j_book.no_sip", "=", "kar_book.kode_karyawan")
+            .orOn(DB.raw("kar_book.no_sip = SUBSTRING_INDEX(j_book.no_sip, '#', 1)"));
+        })
         .leftJoin("mst_karyawan as p", function () {
           this.on("al.kode_karyawan", "=", "p.kode_karyawan")
             .orOn("al.kode_karyawan", "=", "p.no_sip")
-            .orOn("al.kode_karyawan", "=", "p.kode_user");
+            .orOn("al.kode_karyawan", "=", "p.kode_user")
+            .orOn(DB.raw("p.no_sip = SUBSTRING_INDEX(al.kode_karyawan, '#', 1)"));
         })
         .leftJoin("trx_detail_antrian_layanan as dal", "al.kode_antrian_layanan", "dal.kode_antrian_layanan")
         .whereIn("al.kode_kunjungan", kodeKunjunganList)
@@ -232,8 +265,12 @@ const handleGetRekamMedis = async (req, res) => {
           "al.dipanggil_at",
           "al.selesai_at",
           "al.kode_karyawan as al_kode_karyawan",
-          "p.nama as petugas_nama",
-          "p.jabatan as petugas_jabatan",
+          "al.hasil_form as al_hasil_form",
+          DB.raw("COALESCE(p.nama, kar_book.nama) as petugas_nama"),
+          DB.raw("COALESCE(p.jabatan, kar_book.jabatan) as petugas_jabatan"),
+          "j_book.no_sip as booking_no_sip",
+          "kar_book.nama as booking_nama_petugas",
+          "kar_book.jabatan as booking_jabatan_petugas",
           "dal.nama_layanan as dal_nama_layanan",
           "dal.jenis_layanan as dal_jenis_layanan",
           "dal.harga"
@@ -244,6 +281,57 @@ const handleGetRekamMedis = async (req, res) => {
         if (!mapLayanan[kKunjungan]) mapLayanan[kKunjungan] = {};
         const key = al.kode_antrian_layanan;
         const headerRM = headerRmMap[kKunjungan] || {};
+
+        let parsedAlForm = {};
+        if (al.al_hasil_form) {
+          try {
+            parsedAlForm = typeof al.al_hasil_form === "string" ? JSON.parse(al.al_hasil_form) : al.al_hasil_form;
+          } catch (_) {
+            parsedAlForm = {};
+          }
+        }
+
+        const terapisList = Array.isArray(parsedAlForm.terapis_pendamping) && parsedAlForm.terapis_pendamping.length > 0
+          ? parsedAlForm.terapis_pendamping
+          : (Array.isArray(parsedAlForm.petugas_pendamping) ? parsedAlForm.petugas_pendamping : []);
+
+        const dokterInfo = parsedAlForm.dokter_pelaksana || (
+          al.petugas_nama || al.booking_nama_petugas || al.al_kode_karyawan ? {
+            nama: al.petugas_nama || al.booking_nama_petugas || al.al_kode_karyawan,
+            no_sip: al.al_kode_karyawan || al.booking_no_sip || "-",
+            jabatan: al.petugas_jabatan || al.booking_jabatan_petugas || "Dokter",
+          } : (headerRM.dokter_nama ? {
+            nama: headerRM.dokter_nama,
+            no_sip: headerRM.no_sip || headerRM.kode_karyawan || "-",
+            jabatan: headerRM.dokter_jabatan || "Dokter",
+          } : null)
+        );
+
+        const daftarPetugas = [];
+        if (dokterInfo && dokterInfo.nama) {
+          daftarPetugas.push({
+            nama: dokterInfo.nama,
+            role: (dokterInfo.jabatan || 'DOKTER').toUpperCase(),
+            jabatan: dokterInfo.jabatan || 'Dokter',
+            no_sip: dokterInfo.no_sip || '-',
+            is_dokter_pj: true,
+          });
+        }
+        terapisList.forEach((t) => {
+          if (t && (t.nama || t.nama_petugas)) {
+            const tName = t.nama || t.nama_petugas;
+            if (!daftarPetugas.some((p) => p.nama === tName)) {
+              daftarPetugas.push({
+                nama: tName,
+                role: (t.role || t.jabatan || 'TERAPIS').toUpperCase(),
+                jabatan: t.jabatan || 'Terapis',
+                no_sip: t.no_sip || t.sip || '-',
+                shift: t.shift || (t.jam_mulai && t.jam_selesai ? `${t.jam_mulai.slice(0, 5)} - ${t.jam_selesai.slice(0, 5)}` : ''),
+                is_dokter_pj: false,
+              });
+            }
+          }
+        });
 
         mapLayanan[kKunjungan][key] = {
           kode_antrian_layanan: al.kode_antrian_layanan,
@@ -259,13 +347,15 @@ const handleGetRekamMedis = async (req, res) => {
           catatan_tindakan: null,
           catatan_petugas: al.al_catatan_petugas || null,
           catatan_hasil_treatment: null,
-          petugas: al.al_kode_karyawan
+          terapis_pendamping: terapisList,
+          daftar_petugas: daftarPetugas,
+          petugas: dokterInfo || (al.al_kode_karyawan
             ? {
                 kode_karyawan: al.al_kode_karyawan,
                 nama: al.petugas_nama || al.al_kode_karyawan,
                 jabatan: al.petugas_jabatan || "petugas",
               }
-            : null,
+            : null),
           rekam_medis: {
             kode_rekam_medis: headerRM.kode_rekam_medis || `RM-${headerRM.header_rm_id || key}`,
             no_sip: headerRM.no_sip || null,
@@ -286,9 +376,9 @@ const handleGetRekamMedis = async (req, res) => {
             data_form: {},
             formatted_data_form: [],
             fotos: [],
-            dokter_penanggung_jawab: headerRM.kode_karyawan
+            dokter_penanggung_jawab: headerRM.kode_karyawan || headerRM.dokter_nama
               ? {
-                  kode_karyawan: headerRM.kode_karyawan,
+                  kode_karyawan: headerRM.kode_karyawan || headerRM.no_sip,
                   nama: headerRM.dokter_nama || headerRM.kode_karyawan,
                   jabatan: headerRM.dokter_jabatan || "dokter",
                 }
@@ -299,10 +389,19 @@ const handleGetRekamMedis = async (req, res) => {
 
       // 6. Ambil data terstruktur per ruangan dari trx_rekam_medis_ruangan
       const vaRuanganRows = await DB("trx_rekam_medis_ruangan as rmr")
+        .leftJoin("trx_kunjungan as k", "rmr.kode_kunjungan", "k.kode_kunjungan")
+        .leftJoin("trx_booking as b", "k.kode_booking", "b.kode_booking")
+        .leftJoin("mst_jadwal_karyawan as j_book", "b.kode_jadwal", "j_book.kode_jadwal")
+        .leftJoin("mst_karyawan as kar_book", function () {
+          this.on("j_book.no_sip", "=", "kar_book.no_sip")
+            .orOn("j_book.no_sip", "=", "kar_book.kode_karyawan")
+            .orOn(DB.raw("kar_book.no_sip = SUBSTRING_INDEX(j_book.no_sip, '#', 1)"));
+        })
         .leftJoin("mst_karyawan as p", function () {
           this.on("rmr.kode_karyawan", "=", "p.no_sip")
             .orOn("rmr.kode_karyawan", "=", "p.kode_user")
-            .orOn("rmr.kode_karyawan", "=", "p.kode_karyawan");
+            .orOn("rmr.kode_karyawan", "=", "p.kode_karyawan")
+            .orOn(DB.raw("p.no_sip = SUBSTRING_INDEX(rmr.kode_karyawan, '#', 1)"));
         })
         .leftJoin("trx_antrian_layanan as al", "rmr.kode_antrian_layanan", "al.kode_antrian_layanan")
         .leftJoin("trx_detail_antrian_layanan as dal", "al.kode_antrian_layanan", "dal.kode_antrian_layanan")
@@ -322,8 +421,12 @@ const handleGetRekamMedis = async (req, res) => {
           "rmr.status as status_ruangan",
           "rmr.created_at",
           "rmr.kode_karyawan as rmr_kode_karyawan",
-          "p.nama as petugas_nama",
-          "p.jabatan as petugas_jabatan",
+          "al.hasil_form as al_hasil_form",
+          DB.raw("COALESCE(p.nama, kar_book.nama) as petugas_nama"),
+          DB.raw("COALESCE(p.jabatan, kar_book.jabatan) as petugas_jabatan"),
+          "j_book.no_sip as booking_no_sip",
+          "kar_book.nama as booking_nama_petugas",
+          "kar_book.jabatan as booking_jabatan_petugas",
           "dal.nama_layanan",
           "dal.jenis_layanan",
           "dal.harga",
@@ -377,12 +480,68 @@ const handleGetRekamMedis = async (req, res) => {
             parsedDataForm = {};
           }
         }
+        let parsedAlForm = {};
+        if (item.al_hasil_form) {
+          try {
+            parsedAlForm = typeof item.al_hasil_form === "string" ? JSON.parse(item.al_hasil_form) : item.al_hasil_form;
+          } catch (_) {
+            parsedAlForm = {};
+          }
+        }
+
+        const terapisList = Array.isArray(parsedDataForm.terapis_pendamping) && parsedDataForm.terapis_pendamping.length > 0
+          ? parsedDataForm.terapis_pendamping
+          : (Array.isArray(parsedAlForm.terapis_pendamping) && parsedAlForm.terapis_pendamping.length > 0
+              ? parsedAlForm.terapis_pendamping
+              : (Array.isArray(parsedDataForm.petugas_pendamping) ? parsedDataForm.petugas_pendamping : []));
+
+        const dokterInfo = parsedDataForm.dokter_pelaksana || parsedAlForm.dokter_pelaksana || (
+          item.petugas_nama || item.booking_nama_petugas || item.rmr_kode_karyawan
+            ? {
+                nama: item.petugas_nama || item.booking_nama_petugas || item.rmr_kode_karyawan,
+                no_sip: item.rmr_kode_karyawan || item.booking_no_sip || "-",
+                jabatan: item.petugas_jabatan || item.booking_jabatan_petugas || "Dokter",
+              }
+            : (headerRM.dokter_nama ? {
+                nama: headerRM.dokter_nama,
+                no_sip: headerRM.no_sip || headerRM.kode_karyawan || "-",
+                jabatan: headerRM.dokter_jabatan || "Dokter",
+              } : null)
+        );
+
+        const daftarPetugas = [];
+        if (dokterInfo && dokterInfo.nama) {
+          daftarPetugas.push({
+            nama: dokterInfo.nama,
+            role: (dokterInfo.jabatan || 'DOKTER').toUpperCase(),
+            jabatan: dokterInfo.jabatan || 'Dokter',
+            no_sip: dokterInfo.no_sip || '-',
+            is_dokter_pj: true,
+          });
+        }
+        terapisList.forEach((t) => {
+          if (t && (t.nama || t.nama_petugas)) {
+            const tName = t.nama || t.nama_petugas;
+            if (!daftarPetugas.some((p) => p.nama === tName)) {
+              daftarPetugas.push({
+                nama: tName,
+                role: (t.role || t.jabatan || 'TERAPIS').toUpperCase(),
+                jabatan: t.jabatan || 'Terapis',
+                no_sip: t.no_sip || t.sip || '-',
+                shift: t.shift || (t.jam_mulai && t.jam_selesai ? `${t.jam_mulai.slice(0, 5)} - ${t.jam_selesai.slice(0, 5)}` : ''),
+                is_dokter_pj: false,
+              });
+            }
+          }
+        });
 
         const roomLabels = labelMap[item.kode_ruangan] || {};
-        const formattedForm = Object.entries(parsedDataForm || {}).map(([k, v]) => {
-          const label = roomLabels[k] || k.split("_").map((w) => w.charAt(0).toUpperCase() + w.slice(1)).join(" ");
-          return { key: k, label: label, value: v };
-        });
+        const formattedForm = Object.entries(parsedDataForm || {})
+          .filter(([k]) => !['terapis_pendamping', 'petugas_pendamping', 'dokter_pelaksana', 'foto_before', 'foto_after'].includes(k))
+          .map(([k, v]) => {
+            const label = roomLabels[k] || k.split("_").map((w) => w.charAt(0).toUpperCase() + w.slice(1)).join(" ");
+            return { key: k, label: label, value: v };
+          });
 
         const fotosRoom = mapFotosRmr[`RMR_${item.rmr_id}`] || mapFotosRmr[`RM_${item.id_rekam_medis}`] || [];
 
@@ -400,13 +559,15 @@ const handleGetRekamMedis = async (req, res) => {
           catatan_tindakan: item.catatan_tindakan || null,
           catatan_petugas: item.catatan_petugas || null,
           catatan_hasil_treatment: item.catatan_hasil_treatment || null,
-          petugas: item.rmr_kode_karyawan
+          terapis_pendamping: terapisList,
+          daftar_petugas: daftarPetugas.length > 0 ? daftarPetugas : (mapLayanan[kKunjungan]?.[keyRuangan]?.daftar_petugas || []),
+          petugas: dokterInfo || (item.rmr_kode_karyawan
             ? {
                 kode_karyawan: item.rmr_kode_karyawan,
-                nama: item.petugas_nama || item.rmr_kode_karyawan,
-                jabatan: item.petugas_jabatan || "petugas",
+                nama: item.petugas_nama || item.booking_nama_petugas || item.rmr_kode_karyawan,
+                jabatan: item.petugas_jabatan || item.booking_jabatan_petugas || "petugas",
               }
-            : mapLayanan[kKunjungan]?.[keyRuangan]?.petugas || null,
+            : mapLayanan[kKunjungan]?.[keyRuangan]?.petugas || null),
           rekam_medis: {
             kode_rekam_medis: headerRM.kode_rekam_medis || `RM-${headerRM.header_rm_id || item.rmr_id}`,
             no_sip: headerRM.no_sip || null,
@@ -427,9 +588,9 @@ const handleGetRekamMedis = async (req, res) => {
             data_form: parsedDataForm,
             formatted_data_form: formattedForm,
             fotos: fotosRoom,
-            dokter_penanggung_jawab: headerRM.kode_karyawan
+            dokter_penanggung_jawab: (headerRM.kode_karyawan || headerRM.dokter_nama)
               ? {
-                  kode_karyawan: headerRM.kode_karyawan,
+                  kode_karyawan: headerRM.kode_karyawan || headerRM.no_sip,
                   nama: headerRM.dokter_nama || headerRM.kode_karyawan,
                   jabatan: headerRM.dokter_jabatan || "dokter",
                 }
@@ -443,6 +604,63 @@ const handleGetRekamMedis = async (req, res) => {
     const kunjunganMap = {};
     vaKunjungan.forEach((k) => {
       const headerRM = headerRmMap[k.kode_kunjungan] || {};
+      const layananList = mapLayanan[k.kode_kunjungan] ? Object.values(mapLayanan[k.kode_kunjungan]) : [];
+
+      // Resolusi dokter dan terapis terlengkap
+      let resolvedDokterNama = headerRM.dokter_nama || null;
+      let resolvedDokterJabatan = headerRM.dokter_jabatan || null;
+      let resolvedNoSip = headerRM.no_sip || null;
+      const allDaftarPetugas = [];
+      const allTerapisList = [];
+
+      layananList.forEach((lay) => {
+        if (!resolvedDokterNama) {
+          if (lay.petugas?.nama) {
+            resolvedDokterNama = lay.petugas.nama;
+            resolvedDokterJabatan = lay.petugas.jabatan || 'Dokter';
+            resolvedNoSip = lay.petugas.no_sip || lay.petugas.kode_karyawan || resolvedNoSip;
+          } else if (lay.rekam_medis?.dokter_penanggung_jawab?.nama) {
+            resolvedDokterNama = lay.rekam_medis.dokter_penanggung_jawab.nama;
+            resolvedDokterJabatan = lay.rekam_medis.dokter_penanggung_jawab.jabatan || 'Dokter';
+          }
+        }
+        if (Array.isArray(lay.daftar_petugas)) {
+          lay.daftar_petugas.forEach((dp) => {
+            if (dp && dp.nama && !allDaftarPetugas.some((x) => x.nama === dp.nama)) {
+              allDaftarPetugas.push(dp);
+            }
+          });
+        }
+        if (Array.isArray(lay.terapis_pendamping)) {
+          lay.terapis_pendamping.forEach((tp) => {
+            if (tp && (tp.nama || tp.nama_petugas)) {
+              const tpName = tp.nama || tp.nama_petugas;
+              if (!allTerapisList.some((x) => (x.nama || x.nama_petugas) === tpName)) {
+                allTerapisList.push(tp);
+              }
+            }
+          });
+        }
+      });
+
+      if (!resolvedDokterNama && allDaftarPetugas.length > 0) {
+        const pj = allDaftarPetugas.find((p) => p.is_dokter_pj || p.role === 'DOKTER') || allDaftarPetugas[0];
+        if (pj) {
+          resolvedDokterNama = pj.nama;
+          resolvedDokterJabatan = pj.jabatan || 'Dokter';
+          resolvedNoSip = pj.no_sip;
+        }
+      }
+
+      const mergedHeaderRM = {
+        ...headerRM,
+        dokter_nama: resolvedDokterNama,
+        dokter_jabatan: resolvedDokterJabatan,
+        no_sip: resolvedNoSip,
+        daftar_petugas: allDaftarPetugas,
+        terapis_list: allTerapisList,
+      };
+
       kunjunganMap[k.kode_kunjungan] = {
         kode_kunjungan: k.kode_kunjungan,
         no_rm: k.no_rm,
@@ -455,8 +673,8 @@ const handleGetRekamMedis = async (req, res) => {
         tanggal_kunjungan: k.tanggal_kunjungan,
         jam_datang: k.jam_datang ? String(k.jam_datang).slice(0, 5) : "-",
         status_kunjungan: k.status_kunjungan || "selesai",
-        header_rekam_medis: headerRM,
-        layanan: mapLayanan[k.kode_kunjungan] ? Object.values(mapLayanan[k.kode_kunjungan]) : [],
+        header_rekam_medis: mergedHeaderRM,
+        layanan: layananList,
       };
     });
 

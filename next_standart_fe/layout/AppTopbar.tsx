@@ -18,12 +18,13 @@ const AppTopbar = forwardRef<AppTopbarRef>((props, ref) => {
     const [realZonedTime, setRealZonedTime] = useState<String | null>("-");
 
     useEffect(() => {
+        setRealZonedTime(formatDateSystem(new Date(), "EEEE, dd MMMM yyyy HH:mm:ss", null, 'id'));
         const timer = setInterval(() => {
             setRealZonedTime(formatDateSystem(new Date(), "EEEE, dd MMMM yyyy HH:mm:ss", null, 'id'));
         }, 1000);
 
         return () => clearInterval(timer);
-    }, [session]);
+    }, []);
 
     const handleLogout = () => {
         signOut()

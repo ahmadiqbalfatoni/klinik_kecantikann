@@ -1066,16 +1066,58 @@ const LaporanPage = () => {
                             </div>
                           </div>
                           <div className="text-right">
-                            {dpjpOrPetugas ? (
-                              <div className="flex align-items-center gap-1.5 justify-content-end">
-                                <span className="text-xs text-gray-500 font-medium">Dokter / Petugas:</span>
-                                <span className={getJabatanBadge(dpjpOrPetugas.jabatan)}>
-                                  {dpjpOrPetugas.nama}
-                                </span>
-                              </div>
-                            ) : (
-                              <div className="text-xs text-gray-400 italic">Dokter / Petugas: -</div>
-                            )}
+                            {(() => {
+                              const terapisList: any[] = Array.isArray((item as any).terapis_pendamping) ? (item as any).terapis_pendamping : [];
+                              const allDaftarPetugas: any[] = Array.isArray((item as any).daftar_petugas) ? (item as any).daftar_petugas : [];
+
+                              if (allDaftarPetugas.length > 0) {
+                                return (
+                                  <div className="flex flex-column gap-1 align-items-end">
+                                    <span className="text-[10px] text-gray-500 font-semibold uppercase">Petugas Pelaksana ({allDaftarPetugas.length}):</span>
+                                    <div className="flex align-items-center gap-1.5 flex-wrap justify-content-end">
+                                      {allDaftarPetugas.map((p, pIdx) => (
+                                        <span key={pIdx} className={getJabatanBadge(p.role || p.jabatan)}>
+                                          {p.nama}
+                                        </span>
+                                      ))}
+                                    </div>
+                                  </div>
+                                );
+                              }
+
+                              if (terapisList.length > 0) {
+                                return (
+                                  <div className="flex flex-column gap-1 align-items-end">
+                                    <span className="text-[10px] text-gray-500 font-semibold uppercase">Dokter &amp; Terapis ({terapisList.length + (dpjpOrPetugas ? 1 : 0)}):</span>
+                                    <div className="flex align-items-center gap-1.5 flex-wrap justify-content-end">
+                                      {dpjpOrPetugas && (
+                                        <span className={getJabatanBadge(dpjpOrPetugas.jabatan)}>
+                                          {dpjpOrPetugas.nama}
+                                        </span>
+                                      )}
+                                      {terapisList.map((t, tIdx) => (
+                                        <span key={tIdx} className={getJabatanBadge(t.role || t.jabatan || 'terapis')}>
+                                          {t.nama || t.nama_petugas}
+                                        </span>
+                                      ))}
+                                    </div>
+                                  </div>
+                                );
+                              }
+
+                              if (dpjpOrPetugas) {
+                                return (
+                                  <div className="flex align-items-center gap-1.5 justify-content-end">
+                                    <span className="text-xs text-gray-500 font-medium">Dokter / Petugas:</span>
+                                    <span className={getJabatanBadge(dpjpOrPetugas.jabatan)}>
+                                      {dpjpOrPetugas.nama}
+                                    </span>
+                                  </div>
+                                );
+                              }
+
+                              return <div className="text-xs text-gray-400 italic">Dokter / Petugas: -</div>;
+                            })()}
                           </div>
                         </div>
 
