@@ -103,31 +103,52 @@ const AppMenu = () => {
 
                     const groupLabel = (newItem.label || '').toLowerCase();
                     if (groupLabel.includes('pendaftaran') && groupLabel.includes('antrean')) {
-                        const hasBooking = subItems.some(
-                            (it) => (it.label || '').toLowerCase().includes('booking') || it.to === '/pendaftaran-antrean/booking'
+                        const registrasiItem: AppMenuItem = {
+                            label: 'Registrasi Pasien',
+                            to: '/pendaftaran-antrean/registrasi-pasien',
+                            icon: 'pi pi-fw pi-user-plus',
+                        };
+
+                        const hasRegistrasi = subItems.some(
+                            (it) => it.to === '/pendaftaran-antrean/registrasi-pasien' || (it.label || '').toLowerCase().includes('registrasi pasien')
                         );
-                        if (!hasBooking) {
-                            const bookingItem: AppMenuItem = {
-                                label: 'Booking / Reservasi',
-                                to: '/pendaftaran-antrean/booking',
-                                icon: 'CalendarCheck',
-                            };
+                        if (!hasRegistrasi) {
                             const antreanIdx = subItems.findIndex(
                                 (it) => (it.label || '').toLowerCase().includes('antrean pendaftaran') || it.to === '/antrian-awal'
                             );
                             if (antreanIdx !== -1) {
-                                subItems.splice(antreanIdx + 1, 0, bookingItem);
+                                subItems.splice(antreanIdx + 1, 0, registrasiItem);
                             } else {
-                                subItems.splice(1, 0, bookingItem);
+                                subItems.unshift(registrasiItem);
                             }
                         } else {
                             subItems = subItems.map((it) => {
-                                if ((it.label || '').toLowerCase().includes('booking') || it.to === '/pendaftaran-antrean/booking') {
-                                    return { ...it, icon: 'CalendarCheck' };
+                                if (it.to === '/pendaftaran-antrean/registrasi-pasien' || (it.label || '').toLowerCase().includes('registrasi pasien')) {
+                                    return { ...it, label: 'Registrasi Pasien', to: '/pendaftaran-antrean/registrasi-pasien', icon: 'pi pi-fw pi-user-plus' };
                                 }
                                 return it;
                             });
                         }
+
+                        // Fitur Booking sudah dipindahkan menjadi tab di Pendaftaran Pasien,
+                        // hapus dari sidebar agar tidak duplikat
+                        subItems = subItems.filter(
+                            (it) => !it.to?.includes('/booking') && !(it.label || '').toLowerCase().includes('booking')
+                        );
+
+                        // Pastikan urutan item konsisten:
+                        // 1. Antrean Pendaftaran
+                        // 2. Registrasi Pasien (Baru)
+                        // 3. Pendaftaran Pasien (Pilih Layanan & Booking & Paket)
+                        const getOrderScore = (it: AppMenuItem) => {
+                            const to = (it.to || '').toLowerCase();
+                            const lbl = (it.label || '').toLowerCase();
+                            if (to === '/antrian-awal' || lbl.includes('antrean pendaftaran') || lbl.includes('antrian awal')) return 1;
+                            if (to === '/pendaftaran-antrean/registrasi-pasien' || lbl.includes('registrasi pasien')) return 2;
+                            if (to === '/pendaftaran-antrean/pendaftaran-pasien' || lbl.includes('pendaftaran pasien')) return 3;
+                            return 99;
+                        };
+                        subItems.sort((a, b) => getOrderScore(a) - getOrderScore(b));
                     }
                     if (groupLabel.includes('master data')) {
                         const hasInventori = subItems.some(

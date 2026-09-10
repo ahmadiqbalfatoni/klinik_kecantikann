@@ -94,21 +94,28 @@ router.post("/", async (req, res) => {
 
       await trx("trx_kunjungan").insert(oKunjunganData);
 
-      // C. Alokasi 1 trx_antrian_awal status 'tersedia' terkecil (Auto-generate jika belum ada)
+      // C. Alokasi 1 trx_antrian_awal status 'tersedia' terkecil hari ini (Auto-generate jika belum ada)
       let antrianAwalTersedia = await trx("trx_antrian_awal")
         .where("status", "tersedia")
+        .where(function () {
+          this.where("created_at", ">=", todayYmd + " 00:00:00")
+            .orWhere("kode_antrian_awal", "like", `A-${todayStr}-%`);
+        })
         .orderBy("id", "asc")
         .first();
 
       if (!antrianAwalTersedia) {
         const lastRecord = await trx("trx_antrian_awal")
-          .where("created_at", ">=", todayYmd + " 00:00:00")
-          .orderBy("id", "desc")
+          .where(function () {
+            this.where("created_at", ">=", todayYmd + " 00:00:00")
+              .orWhere("kode_antrian_awal", "like", `A-${todayStr}-%`);
+          })
+          .orderByRaw("CAST(nomor_antrian AS UNSIGNED) DESC, id DESC")
           .first();
 
         let nextNum = 1;
         if (lastRecord && lastRecord.nomor_antrian) {
-          const parsed = parseInt(lastRecord.nomor_antrian, 10);
+          const parsed = parseInt(String(lastRecord.nomor_antrian).replace(/\D/g, ""), 10);
           if (!isNaN(parsed)) nextNum = parsed + 1;
         }
 

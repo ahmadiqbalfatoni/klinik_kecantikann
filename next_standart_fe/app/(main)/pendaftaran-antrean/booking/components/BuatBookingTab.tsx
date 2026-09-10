@@ -1115,10 +1115,6 @@ export const BuatBookingTab: React.FC<Props> = ({ toast, onSuccessCreated }) => 
 
         // Reset form
         handleResetForm();
-
-        if (onSuccessCreated) {
-          onSuccessCreated();
-        }
       } else {
         showError(toast, res.data?.message || 'Gagal membuat booking');
       }
@@ -2462,7 +2458,12 @@ export const BuatBookingTab: React.FC<Props> = ({ toast, onSuccessCreated }) => 
       <DialogDetailBooking
         visible={showDetailDialog}
         booking={createdBookingData}
-        onHide={() => setShowDetailDialog(false)}
+        onHide={() => {
+          setShowDetailDialog(false);
+          if (onSuccessCreated) {
+            onSuccessCreated();
+          }
+        }}
       />
 
       {/* Dialog Jadwal Mingguan Ruangan (Konsultasi Dokter & Ruangan Treatment Lain) */}
