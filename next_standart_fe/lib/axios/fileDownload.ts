@@ -20,11 +20,8 @@ import { logout } from '../tools/serverTools';
 import { signOut } from "next-auth/react";
 
 const Axios = axios.create({
-    baseURL: process.env.NEXT_PUBLIC_API_DIR_DOWNLOAD_PATH,
-    headers: {
-        'Content-Type': 'application/json',
-
-    },
+    baseURL: process.env.NEXT_PUBLIC_API_DIR_DOWNLOAD_PATH || '/api/interceptor_download',
+    responseType: 'blob',
     withCredentials: true,
 });
 

@@ -336,7 +336,7 @@ export const generateUserTokens = async (user, rememberMe = false) => {
     throw new Error("FATAL: Data user tidak lengkap untuk pembuatan token. Pastikan user_code dan role tersedia.");
   }
 
-  const secretKey = new TextEncoder().encode(process.env.USER_SECRET);
+  const secretKey = new TextEncoder().encode(process.env.USER_SECRET || "random");
 
   const accessExpireTime = rememberMe ? "1d" : "7h";
   const refreshExpireInSeconds = rememberMe ? (7 * 24 * 60 * 60) : (24 * 60 * 60);

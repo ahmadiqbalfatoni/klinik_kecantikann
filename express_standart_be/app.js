@@ -28,14 +28,23 @@ import Logger from "./middleware/logger.js";
 
 const app = express();
 
-const allowedOrigins = process.env.ORIGIN
-  ? process.env.ORIGIN.split(",").map((origin) => origin.trim())
-  : ["*"];
+const allowedOrigins = (process.env.ORIGIN || process.env.FRONTEND_URL || "")
+  .split(",")
+  .map((origin) => origin.trim())
+  .filter((o) => Boolean(o) && !o.includes("<") && !o.includes(">"));
 
 app.use(
   cors({
     origin: (origin, callback) => {
-      if (!origin || !process.env.ORIGIN || allowedOrigins.includes("*") || allowedOrigins.includes(origin)) {
+      if (
+        !origin ||
+        allowedOrigins.length === 0 ||
+        allowedOrigins.includes("*") ||
+        allowedOrigins.includes(origin) ||
+        origin.endsWith(".up.railway.app") ||
+        origin.includes("localhost") ||
+        origin.includes("127.0.0.1")
+      ) {
         callback(null, true);
       } else {
         callback(new Error("Not allowed by CORS"));

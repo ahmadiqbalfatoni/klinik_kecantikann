@@ -20,6 +20,8 @@ import { jwtVerify, SignJWT } from "jose";
 import { User } from "next-auth";
 import { NextRequest, NextResponse } from "next/server";
 
+import { getBackendApiUrl } from "@/lib/tools/apiConfig";
+
 interface Credentials {
     username: string;
     password: string;
@@ -66,8 +68,10 @@ export const POST = async (req: NextRequest) => {
             'X-Timestamp': formatDateISO(new Date()),
         };
 
+        const apiUrl = getBackendApiUrl();
+
         const result = await axios.post<AuthResponse & User>(
-            `${process.env.API_URL}/auth/login`,
+            `${apiUrl}/auth/login`,
             credential,
             { headers }
         );

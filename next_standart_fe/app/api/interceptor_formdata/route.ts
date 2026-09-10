@@ -20,6 +20,7 @@ import axios from 'axios';
 import { formatDateISO, formatDateSystem } from '@/lib/tools/dateTools';
 import { SignJWT } from 'jose';
 import { auth } from '@/lib/tools/authTools';
+import { getBackendApiUrl } from '@/lib/tools/apiConfig';
 
 interface CustomHeaders {
     'x-endpoint'?: string;
@@ -124,8 +125,9 @@ async function postCRUD(request: NextRequest, accessToken: string) {
             }
         }
 
+        const apiUrl = getBackendApiUrl();
         const result = await axios.post(
-            `${process.env.API_URL}${endpoint}`,
+            `${apiUrl}${endpoint}`,
             newFormData,
             { headers: requestHeaders }
         );

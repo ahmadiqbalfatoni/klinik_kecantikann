@@ -28,6 +28,7 @@ import NextAuth from 'next-auth';
 import { auth } from "./authTools";
 import { cookies } from "next/headers";
 import { formatDateISO } from "./dateTools";
+import { getBackendApiUrl } from "./apiConfig";
 
 let isLoggingOut = false;
 
@@ -140,8 +141,9 @@ const refreshToken = async (userCode: string, refreshToken: string, rememberMe: 
 
     const encryptedBody = credentialPayload;
 
+    const apiUrl = getBackendApiUrl();
     const refreshResponse = await axios.post(
-        `${process.env.API_URL}/auth/refresh-token`,
+        `${apiUrl}/auth/refresh-token`,
         encryptedBody,
         {
             headers: {

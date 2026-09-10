@@ -19,7 +19,7 @@ import { logout } from '../tools/serverTools';
 import { signOut } from "next-auth/react";
 
 const Axios = axios.create({
-    baseURL: process.env.NEXT_PUBLIC_API_DIR_PATH_NO_AUTH,
+    baseURL: process.env.NEXT_PUBLIC_API_DIR_PATH_NO_AUTH || '/api/auth/no_auth',
     headers: {
         'Content-Type': 'application/json',
     },

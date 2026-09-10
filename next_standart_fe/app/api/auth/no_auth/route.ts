@@ -19,6 +19,7 @@ import axios from "axios";
 import { jwtVerify, SignJWT } from "jose";
 import { User } from "next-auth";
 import { NextRequest, NextResponse } from "next/server";
+import { getBackendApiUrl } from "@/lib/tools/apiConfig";
 
 interface CustomHeaders {
     'x-endpoint'?: string;
@@ -78,8 +79,9 @@ export const POST = async (req: NextRequest) => {
             ...customHeader,
         };
 
+        const apiUrl = getBackendApiUrl();
         const result = await axios.post(
-            `${process.env.API_URL}${endpoint}`,
+            `${apiUrl}${endpoint}`,
             body,
             { headers: requestHeaders }
         );

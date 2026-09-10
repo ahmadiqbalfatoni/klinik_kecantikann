@@ -97,9 +97,9 @@ router.post("/", async (req, res) => {
       .first();
 
     if (oUser) {
-      const secret = process.env.USER_SECRET;
-      const cPassword =
-        process.env.USER_KEY + oUser.user_code + oPayload.password;
+      const secret = process.env.USER_SECRET || "random";
+      const userKey = process.env.USER_KEY || "random";
+      const cPassword = userKey + oUser.user_code + oPayload.password;
 
       if (!hashEquals(hmac(cPassword, secret, "sha512"), oUser.password)) {
         return res.status(400).json({
