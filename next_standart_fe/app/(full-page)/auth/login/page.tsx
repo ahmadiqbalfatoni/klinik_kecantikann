@@ -173,15 +173,17 @@ export default function LoginPage() {
           }
         }
 
-        /* ── LEFT SHOWCASE PANEL (Aesthetic Botanicals) ── */
+        /* ── LEFT SHOWCASE PANEL (Aesthetic Medical & Dermatology Showcase) ── */
         .kk-left-card {
-          background: linear-gradient(165deg, #064e3b 0%, #065f46 55%, #047857 100%);
+          background: 
+            linear-gradient(165deg, rgba(6, 78, 59, 0.92) 0%, rgba(6, 95, 70, 0.82) 45%, rgba(4, 120, 87, 0.94) 100%),
+            url('/layout/images/login-hero.jpg') center/cover no-repeat;
           border-radius: 26px;
-          border: 1px solid rgba(52, 211, 153, 0.25);
-          box-shadow: 0 20px 48px rgba(6, 78, 59, 0.28);
+          border: 1px solid rgba(52, 211, 153, 0.3);
+          box-shadow: 0 20px 50px rgba(6, 78, 59, 0.28);
           position: relative;
           overflow: hidden;
-          padding: 26px 30px;
+          padding: 28px 30px;
           display: flex;
           flex-direction: column;
           justify-content: space-between;
@@ -189,47 +191,39 @@ export default function LoginPage() {
 
         .kk-glow-top {
           position: absolute;
-          right: -60px;
-          top: -60px;
-          width: 250px;
-          height: 250px;
+          right: -50px;
+          top: -50px;
+          width: 240px;
+          height: 240px;
           border-radius: 50%;
-          background: rgba(16, 185, 129, 0.2);
-          filter: blur(50px);
+          background: radial-gradient(circle, rgba(52, 211, 153, 0.28) 0%, transparent 70%);
+          filter: blur(40px);
           pointer-events: none;
         }
 
         .kk-glow-bottom {
           position: absolute;
-          left: -60px;
+          left: -50px;
           bottom: -30px;
-          width: 230px;
-          height: 230px;
+          width: 220px;
+          height: 220px;
           border-radius: 50%;
-          background: rgba(5, 150, 105, 0.25);
-          filter: blur(50px);
-          pointer-events: none;
-        }
-
-        .kk-dot-pattern {
-          position: absolute;
-          inset: 0;
-          width: 100%;
-          height: 100%;
-          opacity: 0.16;
+          background: radial-gradient(circle, rgba(16, 185, 129, 0.24) 0%, transparent 70%);
+          filter: blur(40px);
           pointer-events: none;
         }
 
         .kk-tag-pill {
           display: inline-flex;
           align-items: center;
-          gap: 6px;
-          padding: 4px 11px;
+          gap: 7px;
+          padding: 5px 12px;
           background: rgba(255, 255, 255, 0.12);
-          backdrop-filter: blur(8px);
-          border: 1px solid rgba(255, 255, 255, 0.18);
+          backdrop-filter: blur(10px);
+          -webkit-backdrop-filter: blur(10px);
+          border: 1px solid rgba(255, 255, 255, 0.2);
           border-radius: 999px;
-          margin-bottom: 8px;
+          margin-bottom: 10px;
         }
 
         .kk-pulsing-dot {
@@ -237,7 +231,7 @@ export default function LoginPage() {
           height: 6px;
           border-radius: 50%;
           background: #34d399;
-          box-shadow: 0 0 6px #34d399;
+          box-shadow: 0 0 8px #34d399;
           animation: pulseAnim 2s infinite ease-in-out;
         }
 
@@ -256,252 +250,63 @@ export default function LoginPage() {
 
         .kk-headline {
           font-family: 'Playfair Display', Georgia, serif;
-          font-size: clamp(23px, 2.3vw, 30px);
+          font-size: clamp(22px, 2.2vw, 28px);
           font-weight: 700;
           color: #ffffff;
-          line-height: 1.2;
-          margin: 0 0 12px 0;
+          line-height: 1.22;
+          margin: 0 0 8px 0;
           letter-spacing: -0.3px;
         }
 
         .kk-headline-highlight {
           color: #6ee7b7;
-          text-decoration: underline;
-          text-decoration-style: wavy;
-          text-decoration-color: rgba(110, 231, 183, 0.45);
-          text-underline-offset: 6px;
+          font-style: italic;
+          font-weight: 600;
         }
 
-        /* Floating Card Stack */
-        .kk-floating-stack {
+        .kk-lead-desc {
+          font-size: 11.5px;
+          color: rgba(209, 250, 229, 0.9);
+          line-height: 1.5;
+          margin: 0 0 14px 0;
+        }
+
+        /* Feature List (3 Sleek Frosted Glass Cards) */
+        .kk-feature-list {
+          display: flex;
+          flex-direction: column;
+          gap: 8px;
+          margin: 0 0 12px 0;
           position: relative;
           z-index: 10;
-          margin: 4px 0 10px 0;
         }
 
-        .kk-badge-verified-wrap {
+        .kk-feature-card {
           display: flex;
-          justify-content: flex-end;
-          margin-bottom: -11px;
-          margin-right: 14px;
-          position: relative;
-          z-index: 20;
-        }
-
-        .kk-badge-verified {
-          display: inline-flex;
           align-items: center;
-          gap: 5px;
-          padding: 4px 12px;
-          background: #ffffff;
-          color: #065f46;
-          border-radius: 999px;
-          font-size: 11px;
-          font-weight: 600;
-          box-shadow: 0 6px 18px rgba(0, 0, 0, 0.14);
-          border: 1px solid #d1fae5;
-        }
-
-        .kk-card-katalog {
-          background: rgba(255, 255, 255, 0.96);
+          gap: 12px;
+          background: rgba(255, 255, 255, 0.1);
           backdrop-filter: blur(14px);
           -webkit-backdrop-filter: blur(14px);
-          border-radius: 16px;
-          padding: 13px 16px;
-          box-shadow: 0 12px 28px rgba(0, 0, 0, 0.16);
-          border: 1px solid rgba(255, 255, 255, 0.6);
+          border: 1px solid rgba(255, 255, 255, 0.16);
+          border-radius: 13px;
+          padding: 9px 13px;
+          box-shadow: 0 4px 16px rgba(0, 0, 0, 0.08);
+          transition: all 0.25s ease;
         }
 
-        .kk-katalog-header {
-          display: flex;
-          align-items: center;
-          justify-content: space-between;
-          border-bottom: 1px solid #e5e7eb;
-          padding-bottom: 8px;
-          margin-bottom: 8px;
+        .kk-feature-card:hover {
+          background: rgba(255, 255, 255, 0.15);
+          border-color: rgba(110, 231, 183, 0.35);
+          transform: translateY(-2px);
         }
 
-        .kk-katalog-left {
-          display: flex;
-          align-items: center;
-          gap: 8px;
-        }
-
-        .kk-katalog-icon {
-          width: 28px;
-          height: 28px;
-          border-radius: 8px;
-          background: #d1fae5;
-          display: flex;
-          align-items: center;
-          justify-content: center;
-          color: #059669;
-        }
-
-        .kk-katalog-title {
-          font-size: 13.5px;
-          font-weight: 700;
-          color: #0d1f18;
-          margin: 0;
-          line-height: 1.15;
-        }
-
-        .kk-katalog-desc {
-          font-size: 10.5px;
-          color: #404944;
-          margin: 1px 0 0 0;
-        }
-
-        .kk-badge-reservasi {
-          font-size: 10px;
-          font-weight: 600;
-          padding: 2px 8px;
-          background: #ecfdf5;
-          color: #047857;
-          border: 1px solid #a7f3d0;
-          border-radius: 999px;
-        }
-
-        .kk-item-row {
-          display: flex;
-          align-items: center;
-          justify-content: space-between;
-          padding: 7px 11px;
+        .kk-feature-icon-box {
+          width: 34px;
+          height: 34px;
           border-radius: 10px;
-          background: #f0fdf4;
-          border: 1px solid #d1fae5;
-          margin-bottom: 6px;
-        }
-
-        .kk-item-row:last-child {
-          margin-bottom: 0;
-        }
-
-        .kk-item-left {
-          display: flex;
-          align-items: center;
-          gap: 10px;
-        }
-
-        .kk-item-icon-box {
-          width: 28px;
-          height: 28px;
-          border-radius: 8px;
-          display: flex;
-          align-items: center;
-          justify-content: center;
-        }
-
-        .kk-item-title {
-          font-size: 12px;
-          font-weight: 600;
-          color: #0d1f18;
-          margin: 0;
-        }
-
-        .kk-item-subtitle {
-          font-size: 10px;
-          color: #404944;
-          margin: 0;
-        }
-
-        .kk-status-pill {
-          display: inline-flex;
-          align-items: center;
-          gap: 4px;
-          padding: 2px 8px;
-          border-radius: 999px;
-          font-size: 10px;
-          font-weight: 700;
-          background: #d1fae5;
-          color: #065f46;
-        }
-
-        .kk-status-dot {
-          width: 5px;
-          height: 5px;
-          border-radius: 50%;
-          background: #10b981;
-        }
-
-        /* 2 Subcards */
-        .kk-subcards-grid {
-          display: grid;
-          grid-template-columns: 1fr 1fr;
-          gap: 10px;
-          margin-top: 8px;
-        }
-
-        .kk-subcard {
-          background: rgba(255, 255, 255, 0.94);
-          backdrop-filter: blur(10px);
-          border-radius: 12px;
-          padding: 8px 12px;
-          border: 1px solid rgba(255, 255, 255, 0.5);
-          box-shadow: 0 4px 14px rgba(0, 0, 0, 0.08);
-          display: flex;
-          align-items: center;
-          gap: 10px;
-        }
-
-        .kk-subcard-icon {
-          width: 30px;
-          height: 30px;
-          border-radius: 8px;
-          background: #ecfdf5;
-          display: flex;
-          align-items: center;
-          justify-content: center;
-          flex-shrink: 0;
-        }
-
-        .kk-subcard-tag {
-          font-size: 9px;
-          font-weight: 700;
-          letter-spacing: 0.6px;
-          text-transform: uppercase;
-          display: block;
-        }
-
-        .kk-subcard-title {
-          font-size: 11px;
-          font-weight: 600;
-          color: #0d1f18;
-          margin-top: 1px;
-          display: block;
-          white-space: nowrap;
-          overflow: hidden;
-          text-overflow: ellipsis;
-        }
-
-        /* Bottom Narrative Banner */
-        .kk-narrative-banner {
-          background: rgba(0, 0, 0, 0.32);
-          backdrop-filter: blur(12px);
-          -webkit-backdrop-filter: blur(12px);
-          border: 1px solid rgba(255, 255, 255, 0.12);
-          border-radius: 14px;
-          padding: 10px 14px;
-          color: #ffffff;
-          position: relative;
-          z-index: 10;
-        }
-
-        .kk-banner-top {
-          display: flex;
-          align-items: center;
-          gap: 10px;
-          border-bottom: 1px solid rgba(255, 255, 255, 0.1);
-          padding-bottom: 7px;
-          margin-bottom: 7px;
-        }
-
-        .kk-shield-icon {
-          width: 30px;
-          height: 30px;
-          border-radius: 9px;
-          background: rgba(16, 185, 129, 0.2);
-          border: 1px solid rgba(16, 185, 129, 0.35);
+          background: linear-gradient(135deg, rgba(16, 185, 129, 0.35) 0%, rgba(5, 150, 105, 0.2) 100%);
+          border: 1px solid rgba(52, 211, 153, 0.4);
           display: flex;
           align-items: center;
           justify-content: center;
@@ -509,64 +314,110 @@ export default function LoginPage() {
           flex-shrink: 0;
         }
 
-        .kk-banner-heading-wrap {
+        .kk-feature-title {
+          font-size: 12px;
+          font-weight: 700;
+          color: #ffffff;
+          margin: 0 0 2px 0;
+          display: flex;
+          align-items: center;
+          gap: 6px;
+        }
+
+        .kk-feature-pill {
+          font-size: 8.5px;
+          font-weight: 700;
+          padding: 1.5px 5px;
+          border-radius: 999px;
+          background: rgba(16, 185, 129, 0.25);
+          color: #6ee7b7;
+          border: 1px solid rgba(52, 211, 153, 0.3);
+        }
+
+        .kk-feature-sub {
+          font-size: 10.5px;
+          color: rgba(229, 231, 235, 0.85);
+          margin: 0;
+          line-height: 1.35;
+        }
+
+        /* Bottom Trust & Rating Strip */
+        .kk-trust-strip {
+          background: rgba(0, 0, 0, 0.26);
+          backdrop-filter: blur(14px);
+          -webkit-backdrop-filter: blur(14px);
+          border: 1px solid rgba(255, 255, 255, 0.12);
+          border-radius: 13px;
+          padding: 10px 14px;
+          display: flex;
+          flex-direction: column;
+          gap: 7px;
+          position: relative;
+          z-index: 10;
+        }
+
+        .kk-trust-main {
+          display: flex;
+          align-items: center;
+          justify-content: space-between;
+          flex-wrap: wrap;
+          gap: 8px;
+        }
+
+        .kk-rating-badge {
+          display: flex;
+          align-items: center;
+          gap: 7px;
+        }
+
+        .kk-stars-row {
+          display: flex;
+          color: #fbbf24;
+          font-size: 13px;
+          gap: 1px;
+        }
+
+        .kk-rating-num {
+          font-size: 12.5px;
+          font-weight: 800;
+          color: #ffffff;
+        }
+
+        .kk-rating-label {
+          font-size: 10.5px;
+          color: rgba(209, 250, 229, 0.85);
+        }
+
+        .kk-trust-pills {
           display: flex;
           align-items: center;
           gap: 6px;
           flex-wrap: wrap;
         }
 
-        .kk-banner-heading {
-          font-size: 12.5px;
-          font-weight: 700;
-          color: #ffffff;
-        }
-
-        .kk-spesialis-badge {
-          font-size: 9px;
+        .kk-trust-badge {
+          display: inline-flex;
+          align-items: center;
+          gap: 4px;
+          padding: 2.5px 7px;
+          border-radius: 6px;
+          background: rgba(255, 255, 255, 0.08);
+          border: 1px solid rgba(255, 255, 255, 0.14);
+          font-size: 9.5px;
           font-weight: 600;
-          background: rgba(16, 185, 129, 0.2);
-          color: #a7f3d0;
-          padding: 1.5px 6px;
-          border-radius: 999px;
-          border: 1px solid rgba(16, 185, 129, 0.35);
+          color: #e6fffa;
         }
 
-        .kk-banner-sub {
-          font-size: 10.5px;
-          color: rgba(255, 255, 255, 0.82);
-          margin: 1px 0 0 0;
-        }
-
-        .kk-banner-grid {
-          display: grid;
-          grid-template-columns: 1fr 1fr 1fr;
-          gap: 6px;
-        }
-
-        .kk-banner-mini-card {
-          background: rgba(255, 255, 255, 0.06);
-          border: 1px solid rgba(255, 255, 255, 0.08);
-          border-radius: 8px;
-          padding: 6px 8px;
+        .kk-trust-quote {
+          font-size: 10px;
+          font-style: italic;
+          color: rgba(209, 250, 229, 0.8);
+          border-top: 1px solid rgba(255, 255, 255, 0.08);
+          padding-top: 5px;
+          margin: 0;
           display: flex;
           align-items: center;
-          gap: 6px;
-        }
-
-        .kk-mini-card-title {
-          font-size: 9.5px;
-          font-weight: 700;
-          color: #ffffff;
-          line-height: 1.15;
-          display: block;
-        }
-
-        .kk-mini-card-sub {
-          font-size: 8.5px;
-          color: rgba(255, 255, 255, 0.7);
-          display: block;
-          margin-top: 1px;
+          gap: 4px;
         }
 
         /* ── RIGHT AUTHENTICATION PANEL (Clean Natural Form) ── */
@@ -798,176 +649,115 @@ export default function LoginPage() {
               <div className="kk-glow-top"></div>
               <div className="kk-glow-bottom"></div>
 
-              {/* Dot Matrix SVG Pattern */}
-              <svg className="kk-dot-pattern" xmlns="http://www.w3.org/2000/svg">
-                <defs>
-                  <pattern id="kk-dots-v3" width="22" height="22" patternUnits="userSpaceOnUse">
-                    <circle cx="2" cy="2" r="1.2" fill="#a7f3d0"></circle>
-                  </pattern>
-                </defs>
-                <rect width="100%" height="100%" fill="url(#kk-dots-v3)"></rect>
-              </svg>
-
               {/* Top Brand Tag & Headline */}
               <div style={{ position: 'relative', zIndex: 10 }}>
                 <div className="kk-tag-pill">
                   <span className="kk-pulsing-dot"></span>
-                  <span className="kk-tag-text">KLINIK KECANTIKAN</span>
+                  <span className="material-symbols-outlined" style={{ fontSize: '14px', color: '#6ee7b7' }}>spa</span>
+                  <span className="kk-tag-text">KLINIK KECANTIKAN &amp; ESTETIKA</span>
                 </div>
 
                 <h1 className="kk-headline">
-                  Eksplorasi Perawatan <br />
-                  <span className="kk-headline-highlight">Estetika Terbaik</span>
+                  Pancarkan Pesona Alami <br />
+                  <span className="kk-headline-highlight">Kulit Sehat &amp; Bersinar</span>
                 </h1>
+                <p className="kk-lead-desc">
+                  Pelayanan dermatologi profesional berstandar medis dengan teknologi terkini dan sentuhan perawatan personal.
+                </p>
               </div>
 
-              {/* Dynamic Showcase Floating Stack */}
-              <div className="kk-floating-stack">
-                {/* Floating Top Right Badge */}
-                <div className="kk-badge-verified-wrap">
-                  <div className="kk-badge-verified">
-                    <span className="material-symbols-outlined material-symbols-filled" style={{ color: '#047857', fontSize: '15px' }}>
-                      verified
-                    </span>
-                    <span>Terverifikasi</span>
-                    <span style={{ color: '#bfc9c2' }}>|</span>
-                    <span style={{ color: '#059669', display: 'inline-flex', alignItems: 'center', gap: '2px' }}>
-                      <span>Lihat Semua</span>
-                      <span className="material-symbols-outlined" style={{ fontSize: '13px' }}>arrow_forward</span>
+              {/* 3 Luxury Feature Glass Cards */}
+              <div className="kk-feature-list">
+                {/* Feature 1 */}
+                <div className="kk-feature-card">
+                  <div className="kk-feature-icon-box">
+                    <span className="material-symbols-outlined" style={{ fontSize: '18px' }}>
+                      stethoscope
                     </span>
                   </div>
-                </div>
-
-                {/* Main Floating Card: Katalog Perawatan */}
-                <div className="kk-card-katalog">
-                  <div className="kk-katalog-header">
-                    <div className="kk-katalog-left">
-                      <div className="kk-katalog-icon">
-                        <span className="material-symbols-outlined" style={{ fontSize: '17px' }}>spa</span>
-                      </div>
-                      <div>
-                        <h2 className="kk-katalog-title">Katalog Perawatan</h2>
-                        <p className="kk-katalog-desc">Solusi kecantikan &amp; estetika terpadu</p>
-                      </div>
+                  <div style={{ flex: 1, minWidth: 0 }}>
+                    <div className="kk-feature-title">
+                      <span>Dokter Spesialis Kulit</span>
+                      <span className="kk-feature-pill">Sp.D.V.E</span>
                     </div>
-                    <span className="kk-badge-reservasi">Siap Reservasi</span>
-                  </div>
-
-                  <div>
-                    {/* Item 1: Facial */}
-                    <div className="kk-item-row">
-                      <div className="kk-item-left">
-                        <div className="kk-item-icon-box" style={{ background: '#d1fae5', color: '#047857' }}>
-                          <span className="material-symbols-outlined" style={{ fontSize: '18px' }}>face</span>
-                        </div>
-                        <div>
-                          <h3 className="kk-item-title">Facial &amp; Skin Rejuvenation</h3>
-                          <p className="kk-item-subtitle">Dermatology Care</p>
-                        </div>
-                      </div>
-                      <span className="kk-status-pill">
-                        <span className="kk-status-dot"></span>
-                        Aktif
-                      </span>
-                    </div>
-
-                    {/* Item 2: Laser */}
-                    <div className="kk-item-row">
-                      <div className="kk-item-left">
-                        <div className="kk-item-icon-box" style={{ background: '#fedeb2', color: '#4e3a1b' }}>
-                          <span className="material-symbols-outlined" style={{ fontSize: '18px' }}>auto_awesome</span>
-                        </div>
-                        <div>
-                          <h3 className="kk-item-title">Laser &amp; Anti-Aging</h3>
-                          <p className="kk-item-subtitle">Teknologi Medis Modern</p>
-                        </div>
-                      </div>
-                      <span className="kk-status-pill">
-                        <span className="kk-status-dot"></span>
-                        Aktif
-                      </span>
-                    </div>
-                  </div>
-                </div>
-
-                {/* Subcards: Konsultasi & Resep */}
-                <div className="kk-subcards-grid">
-                  <div className="kk-subcard">
-                    <div className="kk-subcard-icon">
-                      <span className="material-symbols-outlined" style={{ color: '#059669', fontSize: '18px' }}>
-                        medical_services
-                      </span>
-                    </div>
-                    <div style={{ minWidth: 0 }}>
-                      <span className="kk-subcard-tag" style={{ color: '#059669' }}>KONSULTASI DOKTER</span>
-                      <span className="kk-subcard-title">Dokter Spesialis</span>
-                    </div>
-                  </div>
-
-                  <div className="kk-subcard">
-                    <div className="kk-subcard-icon">
-                      <span className="material-symbols-outlined" style={{ color: '#4e3a1b', fontSize: '18px' }}>
-                        prescriptions
-                      </span>
-                    </div>
-                    <div style={{ minWidth: 0 }}>
-                      <span className="kk-subcard-tag" style={{ color: '#4e3a1b' }}>RESEP &amp; PRODUK</span>
-                      <span className="kk-subcard-title">BPOM &amp; Halal Certified</span>
-                    </div>
-                  </div>
-                </div>
-              </div>
-
-              {/* Bottom Narrative Banner */}
-              <div className="kk-narrative-banner">
-                <div className="kk-banner-top">
-                  <div className="kk-shield-icon">
-                    <span className="material-symbols-outlined material-symbols-filled" style={{ fontSize: '18px' }}>
-                      verified_user
-                    </span>
-                  </div>
-                  <div>
-                    <div className="kk-banner-heading-wrap">
-                      <span className="kk-banner-heading">10.000+ Pasien Terpercaya</span>
-                      <span className="kk-spesialis-badge">Spesialis Sp.KK/Sp.DVE</span>
-                    </div>
-                    <p className="kk-banner-sub">
-                      Ditangani dokter spesialis berlisensi resmi &amp; teknologi bersertifikasi FDA
+                    <p className="kk-feature-sub">
+                      Konsultasi mendalam &amp; diagnosa akurat langsung oleh dokter spesialis berpengalaman.
                     </p>
                   </div>
                 </div>
 
-                <div className="kk-banner-grid">
-                  <div className="kk-banner-mini-card">
-                    <span className="material-symbols-outlined" style={{ color: '#a7f3d0', fontSize: '16px' }}>
-                      clinical_notes
+                {/* Feature 2 */}
+                <div className="kk-feature-card">
+                  <div className="kk-feature-icon-box">
+                    <span className="material-symbols-outlined" style={{ fontSize: '18px' }}>
+                      auto_awesome
                     </span>
+                  </div>
+                  <div style={{ flex: 1, minWidth: 0 }}>
+                    <div className="kk-feature-title">
+                      <span>Teknologi Laser &amp; Facial Medis</span>
+                      <span className="kk-feature-pill">FDA Approved</span>
+                    </div>
+                    <p className="kk-feature-sub">
+                      Treatment peremajaan kulit modern, higienis, steril, dan minim downtime.
+                    </p>
+                  </div>
+                </div>
+
+                {/* Feature 3 */}
+                <div className="kk-feature-card">
+                  <div className="kk-feature-icon-box">
+                    <span className="material-symbols-outlined" style={{ fontSize: '18px' }}>
+                      verified
+                    </span>
+                  </div>
+                  <div style={{ flex: 1, minWidth: 0 }}>
+                    <div className="kk-feature-title">
+                      <span>Skincare Teruji Klinis</span>
+                      <span className="kk-feature-pill">BPOM &amp; Halal</span>
+                    </div>
+                    <p className="kk-feature-sub">
+                      Formulasi bahan aktif medis yang aman dan teruji klinis untuk hasil kulit jangka panjang.
+                    </p>
+                  </div>
+                </div>
+              </div>
+
+              {/* Bottom Trust & Accreditation Strip */}
+              <div className="kk-trust-strip">
+                <div className="kk-trust-main">
+                  <div className="kk-rating-badge">
+                    <div className="kk-stars-row">
+                      ★ ★ ★ ★ ★
+                    </div>
                     <div>
-                      <span className="kk-mini-card-title">100% Medis</span>
-                      <span className="kk-mini-card-sub">Dokter Berlisensi</span>
+                      <span className="kk-rating-num">4.9 / 5.0</span>
+                      <span className="kk-rating-label"> (10.000+ Pasien Percaya)</span>
                     </div>
                   </div>
 
-                  <div className="kk-banner-mini-card">
-                    <span className="material-symbols-outlined" style={{ color: '#a7f3d0', fontSize: '16px' }}>
-                      biomedical
-                    </span>
-                    <div>
-                      <span className="kk-mini-card-title">Alat Canggih</span>
-                      <span className="kk-mini-card-sub">FDA &amp; CE Approved</span>
+                  <div className="kk-trust-pills">
+                    <div className="kk-trust-badge">
+                      <span className="material-symbols-outlined" style={{ fontSize: '13px', color: '#6ee7b7' }}>
+                        verified_user
+                      </span>
+                      <span>Standar Medis RS</span>
                     </div>
-                  </div>
-
-                  <div className="kk-banner-mini-card">
-                    <span className="material-symbols-outlined" style={{ color: '#a7f3d0', fontSize: '16px' }}>
-                      sanitizer
-                    </span>
-                    <div>
-                      <span className="kk-mini-card-title">Higienis &amp; Steril</span>
-                      <span className="kk-mini-card-sub">Standar Medis RS</span>
+                    <div className="kk-trust-badge">
+                      <span className="material-symbols-outlined" style={{ fontSize: '13px', color: '#6ee7b7' }}>
+                        sanitizer
+                      </span>
+                      <span>Higienis &amp; Steril</span>
                     </div>
                   </div>
                 </div>
+
+                <p className="kk-trust-quote">
+                  <span className="material-symbols-outlined" style={{ fontSize: '13px', color: '#6ee7b7' }}>
+                    favorite
+                  </span>
+                  Dedikasi profesional untuk kecantikan kulit yang sehat, alami, dan percaya diri.
+                </p>
               </div>
             </div>
 

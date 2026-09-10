@@ -129,6 +129,26 @@ const AppMenu = () => {
                             });
                         }
                     }
+                    if (groupLabel.includes('master data')) {
+                        const hasInventori = subItems.some(
+                            (it) => (it.label || '').toLowerCase() === 'inventori' || it.to === '/master-data/inventori'
+                        );
+                        if (!hasInventori) {
+                            const inventoriItem: AppMenuItem = {
+                                label: 'Inventori',
+                                to: '/master-data/inventori',
+                                icon: 'pi pi-fw pi-box',
+                            };
+                            const supIdx = subItems.findIndex(
+                                (it) => (it.label || '').toLowerCase().includes('supplier') || it.to === '/master-data/supplier'
+                            );
+                            if (supIdx !== -1) {
+                                subItems.splice(supIdx, 0, inventoriItem);
+                            } else {
+                                subItems.push(inventoriItem);
+                            }
+                        }
+                    }
                     newItem.items = subItems;
                 }
                 return newItem;

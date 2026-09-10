@@ -39,8 +39,6 @@ const Page = () => {
         satuan: 'Pcs',
         harga_beli: 0,
         harga_jual: 0,
-        stok_tersedia: 0,
-        stok_minimum: 5,
         status: 'aktif',
     });
     const [saving, setSaving] = useState<boolean>(false);
@@ -86,8 +84,6 @@ const Page = () => {
             satuan: 'Pcs',
             harga_beli: 0,
             harga_jual: 0,
-            stok_tersedia: 0,
-            stok_minimum: 5,
             status: 'aktif',
         });
         setDialogVisible(true);
@@ -220,7 +216,6 @@ const Page = () => {
                     onSelectionChange={(e) => setSelectedRows(e.value as any[])}
                     dataKey="kode_produk"
                     className="p-datatable-sm"
-                    rowClassName={(r) => ((r.stok_tersedia ?? 0) < (r.stok_minimum ?? 0) ? 'bg-red-50' : '')}
                     emptyMessage="Data produk tidak ditemukan."
                     responsiveLayout="scroll"
                     rowsPerPageOptions={[10, 25, 50]}
@@ -259,10 +254,6 @@ const Page = () => {
                                     <span style={{ display:'inline-block', width:'12px', height:'12px', borderRadius:'3px', backgroundColor:'#ef4444', boxShadow:'0 1px 3px #ef444455' }} />
                                     Status Tidak Aktif
                                 </span>
-                                <span className="flex align-items-center gap-1 ml-2 text-red-600 font-bold">
-                                    <span style={{ display:'inline-block', width:'12px', height:'12px', borderRadius:'3px', backgroundColor:'#ef4444', boxShadow:'0 1px 3px #ef444455' }} />
-                                    Baris Merah: Stok Dibawah Minimum
-                                </span>
                             </div>
                         </div>
                     }
@@ -292,18 +283,6 @@ const Page = () => {
                     <Column field="satuan" header="Satuan"></Column>
                     <Column field="harga_beli" header="Harga Beli" body={(r) => formatRupiah(r.harga_beli)}></Column>
                     <Column field="harga_jual" header="Harga Jual" body={(r) => <span className="font-semibold text-green-600">{formatRupiah(r.harga_jual)}</span>}></Column>
-                    <Column field="stok_tersedia" header="Stok Tersedia" sortable body={(r) => {
-                        const isBelowMin = (r.stok_tersedia ?? 0) < (r.stok_minimum ?? 0);
-                        return (
-                            <span className={`px-2 py-1 border-round text-xs font-bold inline-flex align-items-center gap-1 ${
-                                isBelowMin ? 'bg-red-500 text-white shadow-1' : 'bg-blue-100 text-blue-800'
-                            }`}>
-                                {isBelowMin && <i className="pi pi-exclamation-triangle text-xs" />}
-                                {r.stok_tersedia ?? 0} {r.satuan || ''}
-                            </span>
-                        );
-                    }}></Column>
-                    <Column field="stok_minimum" header="Stok Min" body={(r) => <Tag value={`${r.stok_minimum}`} severity="warning" />}></Column>
                     <Column
                         header="Aksi"
                         align="center"
@@ -341,29 +320,11 @@ const Page = () => {
                         />
                     </div>
                     <div className="grid">
-                        <div className="col-4">
+                        <div className="col-6">
                             <label className="block text-sm font-semibold mb-1">Satuan *</label>
                             <InputText value={formData.satuan} onChange={(e) => setFormData({ ...formData, satuan: e.target.value })} placeholder="misal: Pcs, Botol" className="w-full text-sm" />
                         </div>
-                        <div className="col-4">
-                            <label className="block text-sm font-semibold mb-1">Harga Beli *</label>
-                            <InputNumber value={formData.harga_beli} onValueChange={(e) => setFormData({ ...formData, harga_beli: e.value })} mode="currency" currency="IDR" locale="id-ID" className="w-full text-sm" />
-                        </div>
-                        <div className="col-4">
-                            <label className="block text-sm font-semibold mb-1">Harga Jual *</label>
-                            <InputNumber value={formData.harga_jual} onValueChange={(e) => setFormData({ ...formData, harga_jual: e.value })} mode="currency" currency="IDR" locale="id-ID" className="w-full text-sm" />
-                        </div>
-                    </div>
-                    <div className="grid">
-                        <div className="col-4">
-                            <label className="block text-sm font-semibold mb-1">Stok Tersedia *</label>
-                            <InputNumber value={formData.stok_tersedia} onValueChange={(e) => setFormData({ ...formData, stok_tersedia: e.value ?? 0 })} className="w-full text-sm" min={0} />
-                        </div>
-                        <div className="col-4">
-                            <label className="block text-sm font-semibold mb-1">Stok Minimum *</label>
-                            <InputNumber value={formData.stok_minimum} onValueChange={(e) => setFormData({ ...formData, stok_minimum: e.value ?? 0 })} className="w-full text-sm" min={0} />
-                        </div>
-                        <div className="col-4">
+                        <div className="col-6">
                             <label className="block text-sm font-semibold mb-1">Status *</label>
                             <Dropdown
                                 value={formData.status}
@@ -372,6 +333,20 @@ const Page = () => {
                                 className="w-full text-sm"
                             />
                         </div>
+                    </div>
+                    <div className="grid">
+                        <div className="col-6">
+                            <label className="block text-sm font-semibold mb-1">Harga Beli *</label>
+                            <InputNumber value={formData.harga_beli} onValueChange={(e) => setFormData({ ...formData, harga_beli: e.value })} mode="currency" currency="IDR" locale="id-ID" className="w-full text-sm" />
+                        </div>
+                        <div className="col-6">
+                            <label className="block text-sm font-semibold mb-1">Harga Jual *</label>
+                            <InputNumber value={formData.harga_jual} onValueChange={(e) => setFormData({ ...formData, harga_jual: e.value })} mode="currency" currency="IDR" locale="id-ID" className="w-full text-sm" />
+                        </div>
+                    </div>
+                    <div className="p-2 border-round surface-100 text-xs text-color-secondary flex align-items-center gap-2 mt-1">
+                        <i className="pi pi-info-circle text-primary text-sm" />
+                        <span>Kuantitas stok fisik, batas minimum, dan restock produk dikelola melalui menu <strong>Inventori</strong>.</span>
                     </div>
                 </div>
                 <div className="flex justify-content-end gap-2 mt-4">
