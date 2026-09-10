@@ -40,6 +40,12 @@ import supplierCreate from "./supplier/supplier_create.js";
 import supplierUpdate from "./supplier/supplier_update.js";
 import supplierDelete from "./supplier/supplier_delete.js";
 
+import inventoriData from "./inventori/inventori_data.js";
+import inventoriBeliBaru from "./inventori/inventori_beli_baru.js";
+import inventoriRestock from "./inventori/inventori_restock.js";
+import inventoriPoData from "./inventori/inventori_po_data.js";
+import inventoriMutasiData from "./inventori/inventori_mutasi_data.js";
+
 import karyawanData from "./karyawan/karyawan_data.js";
 import karyawanCreate from "./karyawan/karyawan_create.js";
 import karyawanUpdate from "./karyawan/karyawan_update.js";
@@ -156,6 +162,13 @@ router.use("/supplier-data", supplierData);
 router.use("/supplier-create", supplierCreate);
 router.use("/supplier-update", supplierUpdate);
 router.use("/supplier-delete", supplierDelete);
+
+// Inventori
+router.use("/inventori-data", inventoriData);
+router.use("/inventori-beli-baru", inventoriBeliBaru);
+router.use("/inventori-restock", inventoriRestock);
+router.use("/inventori-po-data", inventoriPoData);
+router.use("/inventori-mutasi-data", inventoriMutasiData);
 
 // Karyawan
 router.use("/karyawan-data", karyawanData);
