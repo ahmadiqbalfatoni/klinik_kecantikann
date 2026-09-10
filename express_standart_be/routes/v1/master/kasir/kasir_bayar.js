@@ -39,16 +39,22 @@ router.post("/", async (req, res) => {
     }
 
     const totalBayar = parseFloat(existing.total_bayar || 0);
-    const nominalBayar = parseFloat(nominal_bayar || totalBayar);
+    const dpNominal = parseFloat(existing.dp_nominal || 0);
+    const tagihanPelunasan = existing.sisa_bayar !== null && existing.sisa_bayar !== undefined
+      ? parseFloat(existing.sisa_bayar)
+      : Math.max(0, totalBayar - dpNominal);
 
-    if (metode_bayar === "tunai" && nominalBayar < totalBayar) {
-      return res.status(400).json({ status: status.BAD_REQUEST, message: `Nominal bayar kurang. Diperlukan: Rp ${totalBayar.toLocaleString("id-ID")}`, datetime: formatDateSystem() });
+    const nominalBayar = parseFloat(nominal_bayar !== undefined && nominal_bayar !== null ? nominal_bayar : tagihanPelunasan);
+
+    if (metode_bayar === "tunai" && nominalBayar < tagihanPelunasan) {
+      return res.status(400).json({ status: status.BAD_REQUEST, message: `Nominal bayar kurang. Diperlukan: Rp ${tagihanPelunasan.toLocaleString("id-ID")}`, datetime: formatDateSystem() });
     }
 
-    const kembalian = metode_bayar === "tunai" ? Math.max(0, nominalBayar - totalBayar) : 0;
+    const kembalian = metode_bayar === "tunai" ? Math.max(0, nominalBayar - tagihanPelunasan) : 0;
 
     await DB("trx_transaksi").where("kode_transaksi", kode_transaksi).update({
       metode_bayar,
+      sisa_bayar: tagihanPelunasan,
       status: "lunas",
       updated_by: username,
       updated_at: DB.fn.now(),
@@ -69,7 +75,12 @@ router.post("/", async (req, res) => {
       data: {
         kode_transaksi,
         metode_bayar,
+        total_harga: parseFloat(existing.total_harga || 0),
+        total_diskon: parseFloat(existing.total_diskon || 0),
         total_bayar: totalBayar,
+        dp_nominal: dpNominal,
+        metode_pembayaran_dp: existing.metode_pembayaran_dp || null,
+        sisa_bayar: tagihanPelunasan,
         nominal_bayar: nominalBayar,
         kembalian,
       },

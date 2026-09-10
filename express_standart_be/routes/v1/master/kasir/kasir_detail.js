@@ -24,12 +24,17 @@ router.post("/", async (req, res) => {
     const trx = await DB("trx_transaksi as t")
       .leftJoin("mst_pasien as p", "t.no_rm", "p.no_rm")
       .leftJoin("trx_kunjungan as k", "t.kode_kunjungan", "k.kode_kunjungan")
+      .leftJoin("trx_booking as b", "k.kode_booking", "b.kode_booking")
       .leftJoin("mst_promo as pr", "t.kode_promo", "pr.kode_promo")
       .where("t.kode_transaksi", kode_transaksi)
       .select(
         "t.*",
         "p.nama as nama_pasien",
         "p.no_hp",
+        "k.kode_booking",
+        "b.dp_nominal as booking_dp_nominal",
+        "b.dp_status as booking_dp_status",
+        "b.metode_pembayaran_dp as booking_metode_dp",
         "pr.nama as nama_promo",
         "pr.jenis_diskon",
         "pr.nilai_diskon as nilai_diskon_promo"
@@ -39,6 +44,17 @@ router.post("/", async (req, res) => {
     if (!trx) {
       return res.status(404).json({ status: status.BAD_REQUEST, message: "Transaksi tidak ditemukan", datetime: formatDateSystem() });
     }
+
+    // Resolusi DP & sisa bayar
+    const resolvedDpNominal = parseFloat(trx.dp_nominal || 0) > 0
+      ? parseFloat(trx.dp_nominal)
+      : (["sudah_bayar", "dipotong_treatment"].includes(trx.booking_dp_status) ? parseFloat(trx.booking_dp_nominal || 0) : 0);
+    const resolvedMetodeDp = trx.metode_pembayaran_dp || (resolvedDpNominal > 0 ? trx.booking_metode_dp : null);
+    const resolvedSisaBayar = Math.max(0, parseFloat(trx.total_bayar || 0) - resolvedDpNominal);
+
+    trx.dp_nominal = resolvedDpNominal;
+    trx.metode_pembayaran_dp = resolvedMetodeDp;
+    trx.sisa_bayar = resolvedSisaBayar;
 
     // ─── AUTO-SELECT IDEMPOTENT LAYANAN/PAKET DARI ANTRIAN (JIKA DRAFT & KODE_KUNJUNGAN ADA) ───
     if (trx.kode_kunjungan && trx.status === "draft") {
@@ -172,6 +188,7 @@ router.post("/", async (req, res) => {
           }
 
           const newTotalBayar = Math.max(0, newTotalHarga - newTotalDiskon);
+          const newSisaBayar = Math.max(0, newTotalBayar - resolvedDpNominal);
 
           await DB("trx_transaksi")
             .where("kode_transaksi", kode_transaksi)
@@ -179,6 +196,9 @@ router.post("/", async (req, res) => {
               total_harga: newTotalHarga,
               total_diskon: newTotalDiskon,
               total_bayar: newTotalBayar,
+              dp_nominal: resolvedDpNominal,
+              metode_pembayaran_dp: resolvedMetodeDp,
+              sisa_bayar: newSisaBayar,
               updated_by: username,
               updated_at: DB.fn.now(),
             });
@@ -187,6 +207,9 @@ router.post("/", async (req, res) => {
           trx.total_harga = newTotalHarga;
           trx.total_diskon = newTotalDiskon;
           trx.total_bayar = newTotalBayar;
+          trx.dp_nominal = resolvedDpNominal;
+          trx.metode_pembayaran_dp = resolvedMetodeDp;
+          trx.sisa_bayar = newSisaBayar;
         }
       }
     }

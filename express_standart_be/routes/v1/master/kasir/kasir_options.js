@@ -20,15 +20,20 @@ router.post("/", async (req, res) => {
     // 1. Pasien dengan kunjungan aktif hari ini
     const vaKunjungan = await DB("trx_kunjungan as k")
       .join("mst_pasien as p", "k.no_rm", "p.no_rm")
+      .leftJoin("trx_booking as b", "k.kode_booking", "b.kode_booking")
       .where("k.tanggal_kunjungan", todayStr)
       .where("k.status", "berlangsung")
       .select(
         "k.kode_kunjungan",
+        "k.kode_booking",
         "k.no_rm",
         "p.nama as nama_pasien",
         "p.no_hp",
         "k.jam_datang",
-        "k.status as status_kunjungan"
+        "k.status as status_kunjungan",
+        "b.dp_nominal",
+        "b.dp_status",
+        "b.metode_pembayaran_dp"
       )
       .orderBy("k.jam_datang", "asc");
 
@@ -103,6 +108,9 @@ router.post("/", async (req, res) => {
       });
       return {
         ...k,
+        dp_nominal: parseFloat(k.dp_nominal || 0),
+        dp_status: k.dp_status || null,
+        metode_pembayaran_dp: k.metode_pembayaran_dp || null,
         layanan_pendaftaran: Object.values(uniqueItemsMap),
       };
     });

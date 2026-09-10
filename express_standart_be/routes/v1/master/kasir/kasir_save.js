@@ -115,6 +115,31 @@ router.post("/", async (req, res) => {
 
     let kode_trx = kode_transaksi;
 
+    // Deteksi DP dari Booking jika ada kode_kunjungan
+    let dp_nominal = 0;
+    let metode_pembayaran_dp = null;
+
+    let targetKodeKunjungan = kode_kunjungan || null;
+    if (!targetKodeKunjungan && kode_trx) {
+      const existingKunj = await trx("trx_transaksi").where("kode_transaksi", kode_trx).select("kode_kunjungan").first();
+      targetKodeKunjungan = existingKunj?.kode_kunjungan || null;
+    }
+
+    if (targetKodeKunjungan) {
+      const bookingData = await trx("trx_kunjungan as k")
+        .leftJoin("trx_booking as b", "k.kode_booking", "b.kode_booking")
+        .where("k.kode_kunjungan", targetKodeKunjungan)
+        .select("b.dp_nominal", "b.dp_status", "b.metode_pembayaran_dp")
+        .first();
+
+      if (bookingData && ["sudah_bayar", "dipotong_treatment"].includes(bookingData.dp_status)) {
+        dp_nominal = parseFloat(bookingData.dp_nominal || 0);
+        metode_pembayaran_dp = dp_nominal > 0 ? bookingData.metode_pembayaran_dp : null;
+      }
+    }
+
+    let sisa_bayar = Math.max(0, total_bayar - dp_nominal);
+
     if (kode_trx) {
       // UPDATE existing draft
       const existing = await trx("trx_transaksi").where("kode_transaksi", kode_trx).first();
@@ -133,6 +158,7 @@ router.post("/", async (req, res) => {
         total_harga = 0;
         items.forEach((item) => { total_harga += parseFloat(item.harga_satuan || 0) * parseInt(item.qty || 1); });
         total_bayar = Math.max(0, total_harga - total_diskon);
+        sisa_bayar = Math.max(0, total_bayar - dp_nominal);
       }
 
       await trx("trx_transaksi").where("kode_transaksi", kode_trx).update({
@@ -141,6 +167,9 @@ router.post("/", async (req, res) => {
         total_harga,
         total_diskon,
         total_bayar,
+        dp_nominal,
+        metode_pembayaran_dp,
+        sisa_bayar,
         metode_bayar,
         is_product_only: existing.is_product_only || 0,
         updated_by: username,
@@ -161,6 +190,9 @@ router.post("/", async (req, res) => {
         total_harga,
         total_diskon,
         total_bayar,
+        dp_nominal,
+        metode_pembayaran_dp,
+        sisa_bayar,
         metode_bayar,
         status: "draft",
         tz,
@@ -217,6 +249,9 @@ router.post("/", async (req, res) => {
         total_harga,
         total_diskon,
         total_bayar,
+        dp_nominal,
+        metode_pembayaran_dp,
+        sisa_bayar,
       },
     });
   } catch (error) {

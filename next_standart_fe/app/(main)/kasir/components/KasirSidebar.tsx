@@ -214,7 +214,14 @@ export const KasirSidebar: React.FC<KasirSidebarProps> = ({
 
                   <div className="flex align-items-center justify-content-between text-xs pt-1 border-top-1 surface-border">
                     <span className="text-[11px] text-500">RM: {item.no_rm}</span>
-                    <span className="font-black text-teal-700">{formatRupiah(parseFloat(String(item.total_bayar || 0)))}</span>
+                    <div className="text-right">
+                      <span className="font-black text-teal-700 block">{formatRupiah(parseFloat(String(item.total_bayar || 0)))}</span>
+                      {parseFloat(String(item.dp_nominal || 0)) > 0 && (
+                        <span className="text-[10px] text-teal-600 font-bold block">
+                          DP: -{formatRupiah(parseFloat(String(item.dp_nominal)))}
+                        </span>
+                      )}
+                    </div>
                   </div>
 
                   {item.metode_bayar && isLunas && (

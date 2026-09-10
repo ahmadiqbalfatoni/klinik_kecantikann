@@ -28,26 +28,111 @@ router.post("/role-data", async (req, res) => {
     const totalPasien = await DB("mst_pasien").count("id as count").first();
     const totalLayanan = await DB("mst_layanan").where("status", "aktif").count("id as count").first();
 
-    // Omzet hari ini
-    const omzetToday = await DB("trx_transaksi")
+    const tanggalDari = body.tanggal_dari || null;
+    const tanggalSampai = body.tanggal_sampai || null;
+
+    // Omzet hari ini (Pelunasan hari ini + DP booking diterima hari ini)
+    const pelunasanToday = await DB("trx_transaksi")
       .whereRaw("DATE(tanggal_transaksi) = ?", [todayStr])
       .whereIn("status", ["lunas", "selesai"])
-      .sum("total_bayar as total")
+      .sum(DB.raw("COALESCE(sisa_bayar, total_bayar) as total"))
       .first();
 
-    // Total omzet keseluruhan
-    const omzetTotal = await DB("trx_transaksi")
+    const dpReceivedToday = await DB("trx_booking")
+      .whereRaw("DATE(COALESCE(dp_dibayar_at, created_at)) = ?", [todayStr])
+      .whereIn("dp_status", ["sudah_bayar", "dipotong_treatment", "hangus"])
+      .sum("dp_nominal as total")
+      .first();
+
+    const omzetTodayVal = parseFloat(pelunasanToday?.total || 0) + parseFloat(dpReceivedToday?.total || 0);
+
+    // Total omzet keseluruhan (Nilai transaksi tindakan lunas + DP hangus)
+    const omzetTrxTotal = await DB("trx_transaksi")
       .whereIn("status", ["lunas", "selesai"])
       .sum("total_bayar as total")
       .first();
 
-    // Breakdown metode bayar
-    const metodeBreakdown = await DB("trx_transaksi")
-      .whereIn("status", ["lunas", "selesai"])
-      .select("metode_bayar")
-      .count("id as jumlah_trx")
-      .sum("total_bayar as nominal")
-      .groupBy("metode_bayar");
+    const dpHangusTotal = await DB("trx_booking")
+      .where("status", "tidak_hadir")
+      .where("dp_status", "hangus")
+      .sum("dp_nominal as total")
+      .first();
+
+    const omzetTotalVal = parseFloat(omzetTrxTotal?.total || 0) + parseFloat(dpHangusTotal?.total || 0);
+
+    // ── Breakdown metode bayar akurat (UNION Pelunasan Kasir + DP Booking Terlaksana + DP Hangus) ──
+    let qPelunasanWhere = "status IN ('lunas', 'selesai') AND COALESCE(sisa_bayar, total_bayar) > 0";
+    let qDpBookingWhere = "t.status IN ('lunas', 'selesai') AND t.dp_nominal > 0 AND t.metode_pembayaran_dp IS NOT NULL";
+    let qDpHangusWhere = "b.status = 'tidak_hadir' AND b.dp_status = 'hangus' AND b.dp_nominal > 0 AND b.metode_pembayaran_dp IS NOT NULL";
+
+    const pelunasanBindings = [];
+    const dpBookingBindings = [];
+    const dpHangusBindings = [];
+
+    if (tanggalDari) {
+      qPelunasanWhere += " AND DATE(tanggal_transaksi) >= ?";
+      pelunasanBindings.push(tanggalDari);
+
+      qDpBookingWhere += " AND DATE(COALESCE(b.dp_dibayar_at, b.created_at)) >= ?";
+      dpBookingBindings.push(tanggalDari);
+
+      qDpHangusWhere += " AND DATE(COALESCE(b.dp_dibayar_at, b.created_at)) >= ?";
+      dpHangusBindings.push(tanggalDari);
+    }
+    if (tanggalSampai) {
+      qPelunasanWhere += " AND DATE(tanggal_transaksi) <= ?";
+      pelunasanBindings.push(tanggalSampai);
+
+      qDpBookingWhere += " AND DATE(COALESCE(b.dp_dibayar_at, b.created_at)) <= ?";
+      dpBookingBindings.push(tanggalSampai);
+
+      qDpHangusWhere += " AND DATE(COALESCE(b.dp_dibayar_at, b.created_at)) <= ?";
+      dpHangusBindings.push(tanggalSampai);
+    }
+
+    const unionSql = `
+      SELECT
+        LOWER(TRIM(metode)) as metode_bayar,
+        COUNT(id) as jumlah_trx,
+        SUM(nominal) as nominal
+      FROM (
+        SELECT
+          id,
+          metode_bayar as metode,
+          COALESCE(sisa_bayar, total_bayar) as nominal
+        FROM trx_transaksi
+        WHERE ${qPelunasanWhere}
+
+        UNION ALL
+
+        SELECT
+          t.id,
+          t.metode_pembayaran_dp as metode,
+          t.dp_nominal as nominal
+        FROM trx_transaksi as t
+        JOIN trx_kunjungan as k ON t.kode_kunjungan = k.kode_kunjungan
+        JOIN trx_booking as b ON k.kode_booking = b.kode_booking
+        WHERE ${qDpBookingWhere}
+
+        UNION ALL
+
+        SELECT
+          b.id,
+          b.metode_pembayaran_dp as metode,
+          b.dp_nominal as nominal
+        FROM trx_booking as b
+        WHERE ${qDpHangusWhere}
+      ) as combined
+      GROUP BY LOWER(TRIM(metode))
+    `;
+
+    const allBindings = [...pelunasanBindings, ...dpBookingBindings, ...dpHangusBindings];
+    const metodeBreakdownRaw = await DB.raw(unionSql, allBindings);
+    const metodeBreakdown = (metodeBreakdownRaw[0] || []).map((row) => ({
+      metode_bayar: row.metode_bayar,
+      jumlah_trx: parseInt(row.jumlah_trx || 0, 10),
+      nominal: parseFloat(row.nominal || 0),
+    }));
 
     // Top Treatment
     const topTreatments = await DB("trx_detail_antrian_layanan")
@@ -209,8 +294,8 @@ router.post("/role-data", async (req, res) => {
             kunjungan_hari_ini: parseInt(kunjunganToday?.count || 0, 10),
             total_pasien: parseInt(totalPasien?.count || 0, 10),
             total_layanan: parseInt(totalLayanan?.count || 0, 10),
-            omzet_hari_ini: parseFloat(omzetToday?.total || 0),
-            omzet_total: parseFloat(omzetTotal?.total || 0),
+            omzet_hari_ini: omzetTodayVal,
+            omzet_total: omzetTotalVal,
           },
           metode_bayar: metodeBreakdown || [],
           top_treatment: topTreatments || [],

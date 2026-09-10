@@ -41,6 +41,9 @@ export interface TransaksiListItem {
   total_harga: number;
   total_diskon: number;
   total_bayar: number;
+  dp_nominal?: number;
+  metode_pembayaran_dp?: string | null;
+  sisa_bayar?: number;
   metode_bayar: string;
   status: 'draft' | 'lunas' | 'batal';
 }
@@ -48,7 +51,12 @@ export interface TransaksiListItem {
 export interface BayarResult {
   kode_transaksi: string;
   metode_bayar: string;
+  total_harga?: number;
+  total_diskon?: number;
   total_bayar: number;
+  dp_nominal?: number;
+  metode_pembayaran_dp?: string | null;
+  sisa_bayar?: number;
   nominal_bayar: number;
   kembalian: number;
   nama_pasien?: string;
@@ -56,7 +64,6 @@ export interface BayarResult {
   items?: CartItem[];
   kode_promo?: string | null;
   nama_promo?: string | null;
-  total_diskon?: number;
 }
 
 export default function KasirPage() {
@@ -76,6 +83,10 @@ export default function KasirPage() {
   const [pendingBayarPayload, setPendingBayarPayload] = useState<{
     kode_transaksi: string;
     total_bayar: number;
+    total_harga?: number;
+    dp_nominal?: number;
+    metode_pembayaran_dp?: string | null;
+    sisa_bayar?: number;
     nama_pasien: string;
     no_rm: string;
     items: CartItem[];
@@ -173,7 +184,10 @@ export default function KasirPage() {
       {/* MODAL BAYAR */}
       <KasirBayarModal
         visible={showBayarModal}
-        totalBayar={pendingBayarPayload?.total_bayar || 0}
+        totalBayar={pendingBayarPayload?.sisa_bayar !== undefined ? pendingBayarPayload.sisa_bayar : (pendingBayarPayload?.total_bayar || 0)}
+        totalTagihanAsli={pendingBayarPayload?.total_bayar || 0}
+        dpNominal={pendingBayarPayload?.dp_nominal || 0}
+        metodeDp={pendingBayarPayload?.metode_pembayaran_dp || null}
         onHide={() => setShowBayarModal(false)}
         onConfirm={handleBayarConfirm}
       />

@@ -241,10 +241,28 @@ export const KasirStrukModal: React.FC<KasirStrukModalProps> = ({ visible, resul
             </div>
           )}
 
-          <div className="flex justify-content-between pt-1 border-top-1 border-slate-200 mt-1 mb-2 font-bold text-sm text-slate-900">
-            <span>Total Bayar</span>
-            <span className="text-teal-700">{formatRupiah(result.total_bayar)}</span>
-          </div>
+          {result.dp_nominal != null && result.dp_nominal > 0 ? (
+            <>
+              <div className="flex justify-content-between mb-1 text-slate-700">
+                <span>Total Biaya</span>
+                <span className="font-semibold text-slate-900">{formatRupiah(result.total_bayar)}</span>
+              </div>
+              <div className="flex justify-content-between mb-1 text-teal-700 font-semibold">
+                <span>Uang Muka (DP {result.metode_pembayaran_dp ? result.metode_pembayaran_dp.toUpperCase() : 'Terbayar'})</span>
+                <span>- {formatRupiah(result.dp_nominal)}</span>
+              </div>
+              <div className="border-top-1 border-dashed surface-border my-1" />
+              <div className="flex justify-content-between pt-1 font-bold text-sm text-slate-900 mb-2">
+                <span>Sisa Pelunasan</span>
+                <span className="text-teal-700">{formatRupiah(result.sisa_bayar !== undefined ? result.sisa_bayar : Math.max(0, result.total_bayar - result.dp_nominal))}</span>
+              </div>
+            </>
+          ) : (
+            <div className="flex justify-content-between pt-1 border-top-1 border-slate-200 mt-1 mb-2 font-bold text-sm text-slate-900">
+              <span>Total Bayar</span>
+              <span className="text-teal-700">{formatRupiah(result.total_bayar)}</span>
+            </div>
+          )}
 
           <div className="border-top-1 border-dashed surface-border my-2" />
 

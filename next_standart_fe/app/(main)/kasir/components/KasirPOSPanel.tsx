@@ -16,10 +16,14 @@ import type { CartItem } from '../page';
 
 interface KunjunganOption {
   kode_kunjungan: string;
+  kode_booking?: string | null;
   no_rm: string;
   nama_pasien: string;
   no_hp: string;
   jam_datang: string;
+  dp_nominal?: number;
+  dp_status?: string | null;
+  metode_pembayaran_dp?: string | null;
   layanan_pendaftaran?: CartItem[];
 }
 
@@ -50,6 +54,10 @@ interface KasirPOSPanelProps {
   onOpenBayar: (payload: {
     kode_transaksi: string;
     total_bayar: number;
+    total_harga?: number;
+    dp_nominal?: number;
+    metode_pembayaran_dp?: string | null;
+    sisa_bayar?: number;
     nama_pasien: string;
     no_rm: string;
     items: CartItem[];
@@ -84,6 +92,8 @@ export const KasirPOSPanel: React.FC<KasirPOSPanelProps> = ({
   const [editingKodeTrx, setEditingKodeTrx] = useState<string | null>(null);
   const [trxStatus, setTrxStatus] = useState<'draft' | 'lunas' | 'batal' | null>(null);
   const [selectedPromos, setSelectedPromos] = useState<PromoOption[]>([]);
+  const [dpNominal, setDpNominal] = useState<number>(0);
+  const [metodeDp, setMetodeDp] = useState<string | null>(null);
 
   useEffect(() => {
     fetchOptions();
@@ -104,6 +114,8 @@ export const KasirPOSPanel: React.FC<KasirPOSPanelProps> = ({
     setTrxStatus(null);
     setSelectedPromos([]);
     setSearchItem('');
+    setDpNominal(0);
+    setMetodeDp(null);
   };
 
   const fetchOptions = async () => {
@@ -131,14 +143,20 @@ export const KasirPOSPanel: React.FC<KasirPOSPanelProps> = ({
         const trx = res.data.data;
         setEditingKodeTrx(trx.kode_transaksi);
         setTrxStatus(trx.status);
+        setDpNominal(parseFloat(String(trx.dp_nominal || 0)));
+        setMetodeDp(trx.metode_pembayaran_dp || null);
 
         const kunjungan = kunjunganList.find((k) => k.kode_kunjungan === trx.kode_kunjungan) ||
           (trx.kode_kunjungan ? {
             kode_kunjungan: trx.kode_kunjungan,
+            kode_booking: trx.kode_booking || null,
             no_rm: trx.no_rm,
             nama_pasien: trx.nama_pasien || trx.no_rm,
             no_hp: trx.no_hp || '',
             jam_datang: '',
+            dp_nominal: parseFloat(String(trx.dp_nominal || 0)),
+            dp_status: trx.dp_status || null,
+            metode_pembayaran_dp: trx.metode_pembayaran_dp || null,
           } : null);
         setSelectedKunjungan(kunjungan);
 
@@ -184,8 +202,13 @@ export const KasirPOSPanel: React.FC<KasirPOSPanelProps> = ({
       setEditingKodeTrx(null);
       setTrxStatus(null);
       setSelectedPromos([]);
+      setDpNominal(0);
+      setMetodeDp(null);
       return;
     }
+
+    setDpNominal(parseFloat(String(kunjungan.dp_nominal || 0)));
+    setMetodeDp(kunjungan.metode_pembayaran_dp || null);
 
     if (!editingKodeTrx) {
       const itemsFromPendaftaran = kunjungan.layanan_pendaftaran || [];
@@ -263,6 +286,7 @@ export const KasirPOSPanel: React.FC<KasirPOSPanelProps> = ({
   }, [cart, totalHarga, selectedPromos]);
 
   const totalBayar = Math.max(0, totalHarga - totalDiskon);
+  const sisaBayar = Math.max(0, totalBayar - dpNominal);
 
   const filteredItems = useMemo(() => {
     const list = activeItemTab === 'layanan' ? layananList : produkList;
@@ -341,6 +365,10 @@ export const KasirPOSPanel: React.FC<KasirPOSPanelProps> = ({
         onOpenBayar({
           kode_transaksi: kodeTrx,
           total_bayar: totalBayar,
+          total_harga: totalHarga,
+          dp_nominal: dpNominal,
+          metode_pembayaran_dp: metodeDp,
+          sisa_bayar: sisaBayar,
           nama_pasien: selectedKunjungan.nama_pasien,
           no_rm: selectedKunjungan.no_rm,
           items: cart,
@@ -763,7 +791,7 @@ export const KasirPOSPanel: React.FC<KasirPOSPanelProps> = ({
           {/* Totals Summary */}
           <div className="surface-card border-round-xl border-1 surface-border shadow-1 p-3 flex flex-column gap-1.5">
             <div className="flex justify-content-between align-items-center text-xs text-slate-600">
-              <span>Subtotal</span>
+              <span>Subtotal Layanan & Produk</span>
               <span className="font-bold text-slate-800">{formatRupiah(totalHarga)}</span>
             </div>
 
@@ -775,9 +803,28 @@ export const KasirPOSPanel: React.FC<KasirPOSPanelProps> = ({
               </div>
             ))}
 
+            {dpNominal > 0 && (
+              <div className="flex justify-content-between align-items-center text-xs bg-teal-50/70 p-2 border-round-md border-1 border-teal-200">
+                <span className="text-teal-900 font-bold flex align-items-center gap-1.5">
+                  <i className="pi pi-check-circle text-xs text-teal-600" />
+                  Uang Muka (DP {metodeDp ? metodeDp.toUpperCase() : 'Terbayar'})
+                </span>
+                <span className="font-extrabold text-teal-800">- {formatRupiah(dpNominal)}</span>
+              </div>
+            )}
+
             <div className="flex justify-content-between align-items-center pt-2 border-top-1 surface-border">
-              <span className="font-extrabold text-xs text-slate-800 uppercase tracking-wide">Total Bayar</span>
-              <span className="font-black text-base text-teal-700">{formatRupiah(totalBayar)}</span>
+              <div>
+                <span className="font-extrabold text-xs text-slate-800 uppercase tracking-wide block">
+                  {dpNominal > 0 ? 'Sisa Pelunasan' : 'Total Bayar'}
+                </span>
+                {dpNominal > 0 && (
+                  <span className="text-[10px] text-slate-400">Total Tindakan: {formatRupiah(totalBayar)}</span>
+                )}
+              </div>
+              <span className="font-black text-base text-teal-700">
+                {formatRupiah(dpNominal > 0 ? sisaBayar : totalBayar)}
+              </span>
             </div>
           </div>
 
@@ -795,7 +842,7 @@ export const KasirPOSPanel: React.FC<KasirPOSPanelProps> = ({
                 className="font-bold text-xs border-round-lg flex-1 py-2"
               />
               <Button
-                label="Bayar"
+                label={dpNominal > 0 ? 'Pelunasan' : 'Bayar'}
                 icon="pi pi-credit-card"
                 severity="success"
                 onClick={handleBayar}

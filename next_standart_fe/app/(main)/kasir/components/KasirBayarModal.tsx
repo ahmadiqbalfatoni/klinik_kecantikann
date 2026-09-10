@@ -18,22 +18,34 @@ const formatRupiah = (val: number) =>
 
 interface KasirBayarModalProps {
   visible: boolean;
-  totalBayar: number;
+  totalBayar: number; // Ini adalah Sisa Pelunasan yang harus diterima kasir
+  totalTagihanAsli?: number;
+  dpNominal?: number;
+  metodeDp?: string | null;
   onHide: () => void;
   onConfirm: (metode: string, nominal: number) => Promise<void>;
 }
 
-export const KasirBayarModal: React.FC<KasirBayarModalProps> = ({ visible, totalBayar, onHide, onConfirm }) => {
+export const KasirBayarModal: React.FC<KasirBayarModalProps> = ({
+  visible,
+  totalBayar,
+  totalTagihanAsli,
+  dpNominal = 0,
+  metodeDp,
+  onHide,
+  onConfirm,
+}) => {
   const [selectedMetode, setSelectedMetode] = useState('tunai');
   const [nominal, setNominal] = useState<number>(0);
   const [loading, setLoading] = useState(false);
 
+  const hasDp = dpNominal > 0;
   const kembalian = selectedMetode === 'tunai' ? Math.max(0, (nominal || 0) - totalBayar) : 0;
   const nominalValid = selectedMetode !== 'tunai' || (nominal || 0) >= totalBayar;
 
   // Quick nominal buttons for tunai
   const quickAmounts = [totalBayar, Math.ceil(totalBayar / 50000) * 50000, Math.ceil(totalBayar / 100000) * 100000];
-  const uniqueAmounts = [...new Set(quickAmounts)];
+  const uniqueAmounts = [...new Set(quickAmounts)].filter((a) => a >= totalBayar);
 
   const handleConfirm = async () => {
     if (!nominalValid) return;
@@ -50,7 +62,7 @@ export const KasirBayarModal: React.FC<KasirBayarModalProps> = ({ visible, total
       visible={visible}
       onHide={onHide}
       header={null}
-      style={{ width: '420px', borderRadius: '16px', overflow: 'hidden' }}
+      style={{ width: '430px', borderRadius: '16px', overflow: 'hidden' }}
       contentStyle={{ padding: 0 }}
       closable={!loading}
     >
@@ -61,12 +73,21 @@ export const KasirBayarModal: React.FC<KasirBayarModalProps> = ({ visible, total
             <i className="pi pi-credit-card text-white" style={{ fontSize: '18px' }} />
           </div>
           <div>
-            <div style={{ fontSize: '16px', fontWeight: 800, color: '#ffffff' }}>Proses Pembayaran</div>
-            <div style={{ fontSize: '12px', color: '#94a3b8' }}>Pilih metode & konfirmasi</div>
+            <div style={{ fontSize: '16px', fontWeight: 800, color: '#ffffff' }}>Proses Pembayaran Kasir</div>
+            <div style={{ fontSize: '12px', color: '#94a3b8' }}>Pilih metode & konfirmasi pelunasan</div>
           </div>
         </div>
+
         <div style={{ background: 'rgba(255,255,255,0.07)', borderRadius: '12px', padding: '12px 16px', textAlign: 'center' }}>
-          <div style={{ fontSize: '12px', color: '#94a3b8', marginBottom: '4px' }}>Total Tagihan</div>
+          {hasDp && (
+            <div className="flex justify-content-between align-items-center text-xs text-slate-400 mb-2 pb-2 border-bottom-1 border-white-alpha-10">
+              <span>Total Tindakan: <strong className="text-white">{formatRupiah(totalTagihanAsli || (totalBayar + dpNominal))}</strong></span>
+              <span className="text-teal-300 font-bold">DP {metodeDp ? `(${metodeDp.toUpperCase()})` : ''}: -{formatRupiah(dpNominal)}</span>
+            </div>
+          )}
+          <div style={{ fontSize: '11px', color: '#94a3b8', marginBottom: '4px', textTransform: 'uppercase', letterSpacing: '0.05em' }}>
+            {hasDp ? 'Sisa Pelunasan Wajib Dibayar' : 'Total Tagihan'}
+          </div>
           <div style={{ fontSize: '28px', fontWeight: 900, color: '#34d399' }}>{formatRupiah(totalBayar)}</div>
         </div>
       </div>
