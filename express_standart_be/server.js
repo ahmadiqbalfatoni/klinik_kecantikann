@@ -22,6 +22,9 @@ const port = process.env.PORT || process.env.APP_PORT || 8010;
 app
   .listen(port, "0.0.0.0", () => {
     console.log(`Server running on port ${port} (0.0.0.0)`);
+    import("./core/init_db.js")
+      .then(({ checkAndInitDatabase }) => checkAndInitDatabase())
+      .catch((err) => console.error("Auto DB Init Error:", err.message));
   })
   .on("error", (err) => {
     if (err.code === "EADDRINUSE") {

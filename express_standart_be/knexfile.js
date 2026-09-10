@@ -41,7 +41,7 @@ const getConnectionConfig = ({ dbms, host, port, username, password, database })
       ...baseConfig,
       timezone: MYSQL_TZ,
       dateStrings: false,
-
+      multipleStatements: true,
     };
   }
 
@@ -59,7 +59,11 @@ const getConnectionConfig = ({ dbms, host, port, username, password, database })
 const knexConfig = {
   default: {
     client: process.env.DB_DBMS || "mysql2",
-    connection: process.env.DATABASE_URL || getConnectionConfig({
+    connection: process.env.DATABASE_URL
+      ? (process.env.DATABASE_URL.includes("?")
+          ? `${process.env.DATABASE_URL}&multipleStatements=true`
+          : `${process.env.DATABASE_URL}?multipleStatements=true`)
+      : getConnectionConfig({
       dbms: process.env.DB_DBMS || "mysql2",
       host: process.env.DB_HOST || process.env.MYSQLHOST || process.env.MYSQL_HOST,
       port: process.env.DB_PORT || process.env.MYSQLPORT || process.env.MYSQL_PORT,

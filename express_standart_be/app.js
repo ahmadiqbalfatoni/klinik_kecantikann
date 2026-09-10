@@ -68,6 +68,8 @@ app.use(Logger);
 app.use(express.json({ limit: "50mb" }));
 app.use(express.urlencoded({ limit: "50mb", extended: true }));
 
+import { checkAndInitDatabase } from "./core/init_db.js";
+
 // Healthcheck / Root endpoint
 app.get("/", (req, res) => {
   return res.status(200).json({
@@ -79,6 +81,18 @@ app.get("/", (req, res) => {
 
 app.get("/health", (req, res) => {
   return res.status(200).send("OK");
+});
+
+app.get("/init-db", async (req, res) => {
+  const force = req.query.force === "true";
+  const result = await checkAndInitDatabase(force);
+  return res.status(result.status === "error" ? 500 : 200).json(result);
+});
+
+app.get("/api/v1/init-db", async (req, res) => {
+  const force = req.query.force === "true";
+  const result = await checkAndInitDatabase(force);
+  return res.status(result.status === "error" ? 500 : 200).json(result);
 });
 
 // useragentMiddleware,
