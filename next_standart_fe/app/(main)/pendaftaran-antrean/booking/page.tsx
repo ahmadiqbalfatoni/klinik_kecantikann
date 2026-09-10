@@ -1,62 +1,27 @@
 'use client';
 
-import React, { useState, useRef } from 'react';
-import { TabView, TabPanel } from 'primereact/tabview';
-import { Toast } from 'primereact/toast';
-import { CalendarCheck, CalendarPlus, List } from 'lucide-react';
-import { DaftarBookingTab } from './components/DaftarBookingTab';
-import { BuatBookingTab } from './components/BuatBookingTab';
+import { useEffect } from 'react';
+import { useRouter } from 'next/navigation';
 
 export default function BookingReservasiPage() {
-  const toast = useRef<Toast>(null);
-  const [activeIndex, setActiveIndex] = useState(0);
+  const router = useRouter();
 
-  React.useEffect(() => {
+  useEffect(() => {
+    // Fitur booking telah dipindahkan ke Tab 2 pada halaman Pendaftaran Pasien
     if (typeof window !== 'undefined') {
-      const params = new URLSearchParams(window.location.search);
-      if (params.get('tab') === '1') {
-        setActiveIndex(1);
-      }
+      const search = window.location.search || '?tab=1';
+      const hasTab = search.includes('tab=');
+      const targetUrl = hasTab
+        ? `/pendaftaran-antrean/pendaftaran-pasien${search}`
+        : `/pendaftaran-antrean/pendaftaran-pasien?tab=1${search.startsWith('?') ? `&${search.slice(1)}` : ''}`;
+      router.replace(targetUrl);
     }
-  }, []);
+  }, [router]);
 
   return (
-    <div className="layout-booking-page">
-      <Toast ref={toast} />
-
-      <TabView
-        activeIndex={activeIndex}
-        onTabChange={(e) => setActiveIndex(e.index)}
-        className="booking-tabview"
-      >
-        <TabPanel
-          header={
-            <div className="flex align-items-center gap-2">
-              <List size={18} />
-              <span className="font-semibold">Daftar & Kelola Booking</span>
-            </div>
-          }
-        >
-          <DaftarBookingTab
-            toast={toast}
-            onNavigateToCreate={() => setActiveIndex(1)}
-          />
-        </TabPanel>
-
-        <TabPanel
-          header={
-            <div className="flex align-items-center gap-2">
-              <CalendarPlus size={18} />
-              <span className="font-semibold">Buat Booking Baru</span>
-            </div>
-          }
-        >
-          <BuatBookingTab
-            toast={toast}
-            onSuccessCreated={() => setActiveIndex(0)}
-          />
-        </TabPanel>
-      </TabView>
+    <div className="flex flex-column align-items-center justify-content-center min-h-20rem text-500 gap-2">
+      <i className="pi pi-spin pi-spinner text-3xl text-primary" />
+      <span className="text-sm font-medium">Mengalihkan ke Tab Booking & Reservasi...</span>
     </div>
   );
 }

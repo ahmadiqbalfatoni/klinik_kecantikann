@@ -30,8 +30,16 @@ router.post("/", async (req, res) => {
 
     await DB.transaction(async (trx) => {
       const now = formatDateSystem();
+      const todayYmd = formatDateSystem(new Date(), "yyyy-MM-dd");
+      const todayStr = todayYmd.replace(/-/g, "");
+      const prefixAntrian = `A-${todayStr}-`;
+
       let record = await trx("trx_antrian_awal")
         .where("status", "tersedia")
+        .where(function () {
+          this.where("created_at", ">=", todayYmd + " 00:00:00")
+            .orWhere("kode_antrian_awal", "like", `${prefixAntrian}%`);
+        })
         .orderByRaw("CAST(nomor_antrian AS UNSIGNED) ASC, nomor_antrian ASC")
         .forUpdate()
         .first();
@@ -71,15 +79,19 @@ router.post("/", async (req, res) => {
           trx
         );
       } else {
-        // 2b. Jika TIDAK ada nomor tersedia (kuota habis / master kosong), otomatis insert nomor baru
+        // 2b. Jika TIDAK ada nomor tersedia (kuota habis / master kosong), otomatis insert nomor baru hari ini
         isNewInsert = true;
 
         const maxRecord = await trx("trx_antrian_awal")
+          .where(function () {
+            this.where("created_at", ">=", todayYmd + " 00:00:00")
+              .orWhere("kode_antrian_awal", "like", `${prefixAntrian}%`);
+          })
           .orderByRaw("CAST(nomor_antrian AS UNSIGNED) DESC, id DESC")
           .first();
 
         let nextNum = 1;
-        let padLen = 3;
+        let padLen = 2;
         if (maxRecord && maxRecord.nomor_antrian) {
           const digits = parseInt(String(maxRecord.nomor_antrian).replace(/\D/g, ""), 10);
           if (!isNaN(digits)) {
@@ -92,14 +104,12 @@ router.post("/", async (req, res) => {
           } else if (String(maxRecord.nomor_antrian).length >= 2) {
             padLen = String(maxRecord.nomor_antrian).length;
           } else {
-            padLen = 1;
+            padLen = 2;
           }
         }
 
-        finalNoAntrian = padLen > 1 ? String(nextNum).padStart(padLen, "0") : String(nextNum);
+        finalNoAntrian = String(nextNum).padStart(padLen, "0");
 
-        const todayStr = new Date().toISOString().slice(0, 10).replace(/-/g, "");
-        const prefixAntrian = `A-${todayStr}-`;
         const lastRecordCode = await trx("trx_antrian_awal")
           .where("kode_antrian_awal", "like", `${prefixAntrian}%`)
           .orderBy("id", "desc")

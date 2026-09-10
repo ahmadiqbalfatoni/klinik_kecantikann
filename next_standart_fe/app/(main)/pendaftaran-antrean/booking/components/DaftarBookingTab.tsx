@@ -77,9 +77,10 @@ interface BookingRow {
 interface Props {
   toast: React.RefObject<Toast>;
   onNavigateToCreate: () => void;
+  refreshTrigger?: number;
 }
 
-export const DaftarBookingTab: React.FC<Props> = ({ toast, onNavigateToCreate }) => {
+export const DaftarBookingTab: React.FC<Props> = ({ toast, onNavigateToCreate, refreshTrigger }) => {
   const [data, setData] = useState<BookingRow[]>([]);
   const [loading, setLoading] = useState(false);
   const [totalRecords, setTotalRecords] = useState(0);
@@ -126,7 +127,7 @@ export const DaftarBookingTab: React.FC<Props> = ({ toast, onNavigateToCreate })
 
   useEffect(() => {
     fetchBookingData();
-  }, [page, rows, keyword, filterStatus, filterDpStatus, filterTanggal]);
+  }, [page, rows, keyword, filterStatus, filterDpStatus, filterTanggal, refreshTrigger]);
 
   const fetchBookingData = async () => {
     setLoading(true);

@@ -37,6 +37,7 @@ const logout = async (
 ) => {
     if (isLoggingOut) return;
     isLoggingOut = true;
+    clearUserMenuCache();
 
     const cookieNames = ["_A2R", "_A2F"];
     cookieNames.forEach((name) => {
@@ -56,10 +57,20 @@ const logout = async (
 export default logout;
 
 
+// Cache menu izin user di memory server (TTL 5 menit) untuk menghilangkan overhead request HTTP ke backend pada setiap pindah halaman
+const userMenuCache = new Map<string, { menu: any; timestamp: number }>();
+const MENU_CACHE_TTL = 5 * 60 * 1000;
+
+export const clearUserMenuCache = async (userCode?: string) => {
+    if (userCode) {
+        userMenuCache.delete(userCode);
+    } else {
+        userMenuCache.clear();
+    }
+};
+
 const routeMiddleware = async (searchUrl: string) => {
     const session = await auth();
-
-    // console.log('ini ses', session)
 
     if (!session?.user) {
         return '99';
@@ -69,23 +80,31 @@ const routeMiddleware = async (searchUrl: string) => {
     const dNow = new Date();
 
     if ((dNow.getTime() > dSessionExp.getTime())) {
-        return '99'
+        return '99';
     }
 
     if (session.user.user_code) {
         try {
-            const resp = await axios.post(
-                `${process.env.NEXT_PUBLIC_API_DIR_PATH}`,
-                { user_code: session?.user?.user_code },
-                {
-                    headers: {
-                        'X-ENDPOINT': "/setup/nav/user-data",
-                        'X-Level': "1",
-                    }
-                }
-            );
+            const userCode = session.user.user_code;
+            let menu: any = null;
 
-            const menu = resp.data.data;
+            const cached = userMenuCache.get(userCode);
+            if (cached && (Date.now() - cached.timestamp < MENU_CACHE_TTL)) {
+                menu = cached.menu;
+            } else {
+                const resp = await axios.post(
+                    `${process.env.NEXT_PUBLIC_API_DIR_PATH}`,
+                    { user_code: userCode },
+                    {
+                        headers: {
+                            'X-ENDPOINT': "/setup/nav/user-data",
+                            'X-Level': "1",
+                        }
+                    }
+                );
+                menu = resp.data.data;
+                userMenuCache.set(userCode, { menu, timestamp: Date.now() });
+            }
 
             let urlFix = searchUrl;
             if (searchUrl.length > 1) {
@@ -95,11 +114,11 @@ const routeMiddleware = async (searchUrl: string) => {
             const res = findToValuesRecursive(menu, urlFix);
 
             if (res.length < 1) {
-                return '98'
+                return '98';
             }
         } catch (error: any) {
             if (error?.response?.status == '401') {
-                return '99'
+                return '99';
             }
             console.log(error);
         }
@@ -108,7 +127,7 @@ const routeMiddleware = async (searchUrl: string) => {
     }
 
     return '00';
-}
+};
 
 const refreshToken = async (userCode: string, refreshToken: string, rememberMe: string) => {
     const timestamp = formatDateISO(new Date());
