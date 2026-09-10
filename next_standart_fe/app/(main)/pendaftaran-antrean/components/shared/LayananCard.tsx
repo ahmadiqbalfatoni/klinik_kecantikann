@@ -34,6 +34,13 @@ export interface ServiceItem {
   sesi_terbooking?: number;
   sesi_tersedia?: number;
   tanggal_expired?: string;
+  // Validasi ketersediaan petugas hari ini (Walk-In)
+  is_petugas_available?: boolean;
+  alasan_tidak_tersedia?: string | null;
+  petugas_jaga_count?: number;
+  petugas_pj_nama?: string | null;
+  ruangan_cek?: string;
+  nama_ruangan_cek?: string;
 }
 
 export interface RuanganGroup {
@@ -42,6 +49,16 @@ export interface RuanganGroup {
   deskripsi: string;
   items: ServiceItem[];
   is_konsultasi?: number;
+  has_petugas_jaga_today?: boolean;
+  petugas_jaga_count?: number;
+  petugas_pj?: {
+    nama?: string;
+    jabatan?: string;
+    no_sip?: string;
+    jam_mulai?: string;
+    jam_selesai?: string;
+  } | null;
+  petugas_jaga_names?: string[];
 }
 
 export const getItemConsultType = (item: ServiceItem) => {
@@ -98,7 +115,8 @@ export const LayananCard: React.FC<LayananCardProps> = ({
   const { isWajib, isService, isOpsional } = getItemConsultType(item);
 
   const isFullBooked = isKlaim && item.sesi_tersedia !== undefined && item.sesi_tersedia <= 0;
-  const effectiveDisabled = isDisabled || isFullBooked;
+  const isNoPetugas = item.is_petugas_available === false;
+  const effectiveDisabled = isDisabled || isFullBooked || isNoPetugas;
 
   const key = isKlaim
     ? `klaim_${item.kode_detail_kepemilikan_paket_layanan || item.kode_layanan}`
@@ -141,6 +159,15 @@ export const LayananCard: React.FC<LayananCardProps> = ({
                 <Tag value="Terjadwal Penuh" severity="danger" className="text-xs font-bold" />
               )}
 
+              {isNoPetugas && (
+                <Tag
+                  value={isWajib ? "Dokter Konsul Libur" : "Tidak Ada Petugas Jaga"}
+                  severity="danger"
+                  className="text-xs font-bold"
+                  icon="pi pi-times-circle"
+                />
+              )}
+
               {isKlaim && item.tanggal_expired && (
                 <Tag value={`Exp: ${item.tanggal_expired}`} severity="secondary" className="text-[10px]" />
               )}
@@ -163,6 +190,14 @@ export const LayananCard: React.FC<LayananCardProps> = ({
           {isKlaim && item.nama_paket_asal && (
             <span className="text-xs text-amber-700 block font-semibold mb-1">Paket Asal: {item.nama_paket_asal}</span>
           )}
+
+          {isNoPetugas && (
+            <div className="flex align-items-center gap-1 text-xs text-red-600 font-semibold mb-2 bg-red-50 p-2 border-round-lg border-1 border-red-200">
+              <i className="pi pi-exclamation-circle text-xs flex-shrink-0" />
+              <span className="line-height-2">{item.alasan_tidak_tersedia || 'Tidak ada jadwal petugas jaga hari ini'}</span>
+            </div>
+          )}
+
           <div className="flex align-items-center gap-3 text-xs text-500 mb-2">
             <span className="flex align-items-center gap-1">
               <i className="pi pi-clock text-xs" /> {item.durasi_menit} Menit

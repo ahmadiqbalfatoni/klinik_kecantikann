@@ -43,6 +43,13 @@ export const StepPilihLayanan: React.FC<Props> = ({
   const [submitting, setSubmitting] = useState(false);
   const [ruangans, setRuangans] = useState<RuanganGroup[]>([]);
   const [ownedPackages, setOwnedPackages] = useState<any[]>([]);
+  const [todayInfo, setTodayInfo] = useState<{
+    tanggal?: string;
+    hari?: string;
+    total_ruangan_aktif?: number;
+    ruangan_dengan_petugas_count?: number;
+    has_petugas_konsul_today?: boolean;
+  } | null>(null);
 
   // Map item yang dipilih: key = `${jenis}_${kode_layanan}`
   const [selectedMap, setSelectedMap] = useState<{ [key: string]: ServiceItem }>({});
@@ -73,6 +80,9 @@ export const StepPilihLayanan: React.FC<Props> = ({
 
       if (['00', '0000'].includes(resOptions?.data?.status)) {
         setRuangans(resOptions.data.data.ruangan_layanan || resOptions.data.data.kategori_layanan || []);
+        if (resOptions.data.data.today_info) {
+          setTodayInfo(resOptions.data.data.today_info);
+        }
       } else {
         showError(toast, resOptions?.data?.message || 'Gagal memuat pilihan layanan');
       }
@@ -90,6 +100,15 @@ export const StepPilihLayanan: React.FC<Props> = ({
   };
 
   const handleToggleItem = (item: ServiceItem) => {
+    if (item.is_petugas_available === false) {
+      showError(
+        toast,
+        item.alasan_tidak_tersedia ||
+          `Layanan "${item.nama}" tidak dapat dipilih karena ruangan tidak memiliki jadwal dokter/petugas jaga aktif hari ini.`
+      );
+      return;
+    }
+
     const key = `${item.jenis}_${item.kode_layanan}`;
     const isCurrentlySelected = !!selectedMap[key];
 
@@ -186,13 +205,31 @@ export const StepPilihLayanan: React.FC<Props> = ({
       showError(toast, 'Silakan pilih minimal satu layanan atau paket terlebih dahulu!');
       return;
     }
+
+    // Pastikan tidak ada item yang ruangannya tanpa petugas aktif hari ini
+    const unavailableItem = itemsToConfirm.find((it) => it.is_petugas_available === false);
+    if (unavailableItem) {
+      showError(
+        toast,
+        unavailableItem.alasan_tidak_tersedia ||
+          `Layanan "${unavailableItem.nama}" tidak dapat diproses karena tidak ada jadwal petugas jaga aktif hari ini.`
+      );
+      return;
+    }
+
     // Inisialisasi pilihan konsultasi default untuk item opsional
     const defaultChoices: { [key: string]: boolean } = {};
     itemsToConfirm.forEach((it) => {
       const key = `${it.jenis}_${it.kode_layanan}`;
       const { isOpsional } = getItemConsultType(it);
       if (isOpsional) {
-        defaultChoices[key] = consultChoiceMap[key] !== undefined ? consultChoiceMap[key] : true;
+        // Jika dokter konsul tidak bertugas hari ini, alihkan default ke tindakan langsung
+        const canConsult = todayInfo?.has_petugas_konsul_today !== false;
+        if (!canConsult) {
+          defaultChoices[key] = false;
+        } else {
+          defaultChoices[key] = consultChoiceMap[key] !== undefined ? consultChoiceMap[key] : true;
+        }
       }
     });
     setSubmitConsultChoices(defaultChoices);
@@ -200,6 +237,17 @@ export const StepPilihLayanan: React.FC<Props> = ({
   };
 
   const handleSubmitFromModal = async () => {
+    // Validasi ulang ketersediaan petugas
+    const unavailableItem = selectedList.find((it) => it.is_petugas_available === false);
+    if (unavailableItem) {
+      showError(
+        toast,
+        unavailableItem.alasan_tidak_tersedia ||
+          `Layanan "${unavailableItem.nama}" tidak dapat diproses karena tidak ada jadwal petugas jaga aktif hari ini.`
+      );
+      return;
+    }
+
     // Simpan pilihan ke consultChoiceMap lalu submit
     setConsultChoiceMap((prev) => ({ ...prev, ...submitConsultChoices }));
     setShowSubmitModal(false);
@@ -242,7 +290,9 @@ export const StepPilihLayanan: React.FC<Props> = ({
   const renderItemCard = (item: ServiceItem) => {
     const key = `${item.jenis}_${item.kode_layanan}`;
     const isSelected = !!selectedMap[key];
-    const isDisabled = activeRuangan !== null && activeRuangan !== item.kode_ruangan;
+    const isDisabled =
+      (activeRuangan !== null && activeRuangan !== item.kode_ruangan) ||
+      item.is_petugas_available === false;
 
     return (
       <LayananCard
@@ -369,29 +419,47 @@ export const StepPilihLayanan: React.FC<Props> = ({
                       </div>
                       <div className="flex gap-2">
                         {/* Opsi Konsultasi Dulu */}
-                        <div
-                          className="flex-1 p-2 border-round-xl border-2 cursor-pointer transition-all transition-duration-200 flex align-items-center gap-2"
-                          style={{
-                            borderColor: konsulChoice !== false ? '#6366f1' : '#e2e8f0',
-                            background: konsulChoice !== false ? 'linear-gradient(135deg, #eef2ff, #e0e7ff)' : 'var(--surface-50)',
-                          }}
-                          onClick={() => setSubmitConsultChoices((prev) => ({ ...prev, [key]: true }))}
-                        >
+                        {todayInfo?.has_petugas_konsul_today === false ? (
                           <div
-                            className="flex align-items-center justify-content-center border-round-lg text-white flex-shrink-0"
-                            style={{
-                              width: '32px', height: '32px',
-                              background: konsulChoice !== false ? 'linear-gradient(135deg, #6366f1, #4f46e5)' : '#cbd5e1',
-                            }}
+                            className="flex-1 p-2 border-round-xl border-2 flex align-items-center gap-2 opacity-60 cursor-not-allowed surface-200 border-200"
+                            title="Dokter jaga di Ruang Konsultasi tidak bertugas hari ini"
                           >
-                            <i className="pi pi-user-edit text-sm" />
+                            <div
+                              className="flex align-items-center justify-content-center border-round-lg text-white flex-shrink-0 bg-gray-400"
+                              style={{ width: '32px', height: '32px' }}
+                            >
+                              <i className="pi pi-user-minus text-sm" />
+                            </div>
+                            <div className="flex-1 min-w-0">
+                              <div className="font-bold text-xs text-500">Konsultasi Libur</div>
+                              <div className="text-[10px] text-red-500">Tidak ada dokter jaga</div>
+                            </div>
                           </div>
-                          <div className="flex-1 min-w-0">
-                            <div className="font-bold text-xs" style={{ color: konsulChoice !== false ? '#4338ca' : '#64748b' }}>Konsultasi Dokter Dulu</div>
-                            <div className="text-xs" style={{ color: konsulChoice !== false ? '#6366f1' : '#94a3b8' }}>Ke Ruang Konsultasi</div>
+                        ) : (
+                          <div
+                            className="flex-1 p-2 border-round-xl border-2 cursor-pointer transition-all transition-duration-200 flex align-items-center gap-2"
+                            style={{
+                              borderColor: konsulChoice !== false ? '#6366f1' : '#e2e8f0',
+                              background: konsulChoice !== false ? 'linear-gradient(135deg, #eef2ff, #e0e7ff)' : 'var(--surface-50)',
+                            }}
+                            onClick={() => setSubmitConsultChoices((prev) => ({ ...prev, [key]: true }))}
+                          >
+                            <div
+                              className="flex align-items-center justify-content-center border-round-lg text-white flex-shrink-0"
+                              style={{
+                                width: '32px', height: '32px',
+                                background: konsulChoice !== false ? 'linear-gradient(135deg, #6366f1, #4f46e5)' : '#cbd5e1',
+                              }}
+                            >
+                              <i className="pi pi-user-edit text-sm" />
+                            </div>
+                            <div className="flex-1 min-w-0">
+                              <div className="font-bold text-xs" style={{ color: konsulChoice !== false ? '#4338ca' : '#64748b' }}>Konsultasi Dokter Dulu</div>
+                              <div className="text-xs" style={{ color: konsulChoice !== false ? '#6366f1' : '#94a3b8' }}>Ke Ruang Konsultasi</div>
+                            </div>
+                            {konsulChoice !== false && <i className="pi pi-check-circle text-indigo-500 flex-shrink-0" />}
                           </div>
-                          {konsulChoice !== false && <i className="pi pi-check-circle text-indigo-500 flex-shrink-0" />}
-                        </div>
+                        )}
 
                         {/* Opsi Langsung Tindakan */}
                         <div
@@ -491,6 +559,52 @@ export const StepPilihLayanan: React.FC<Props> = ({
             </div>
           )}
 
+          {/* BANNER STATUS HARI INI */}
+          {todayInfo && (
+            <div className="flex flex-column sm:flex-row align-items-start sm:align-items-center justify-content-between gap-2 p-2 px-3 surface-50 border-1 surface-border border-round-lg mb-3 text-xs text-600">
+              <div className="flex align-items-center gap-2">
+                <i className="pi pi-calendar text-primary text-sm" />
+                <span>
+                  Jadwal Operasional: <strong className="text-900 uppercase">{todayInfo.hari || ''}</strong>, {todayInfo.tanggal || ''}
+                </span>
+              </div>
+              <div className="flex align-items-center gap-3">
+                <span className="flex align-items-center gap-1">
+                  <i className="pi pi-building text-blue-500" />
+                  Ruangan Buka:{' '}
+                  <strong className="text-900">{todayInfo.ruangan_dengan_petugas_count || 0}</strong> /{' '}
+                  {todayInfo.total_ruangan_aktif || ruangans.length}
+                </span>
+                <span className="flex align-items-center gap-1">
+                  <i
+                    className={`pi ${
+                      todayInfo.has_petugas_konsul_today ? 'pi-check-circle text-green-500' : 'pi-times-circle text-red-500'
+                    }`}
+                  />
+                  Dokter Konsul:{' '}
+                  <strong className={todayInfo.has_petugas_konsul_today ? 'text-green-700' : 'text-red-700'}>
+                    {todayInfo.has_petugas_konsul_today ? 'Bertugas' : 'Libur'}
+                  </strong>
+                </span>
+              </div>
+            </div>
+          )}
+
+          {/* PERINGATAN JIKA SELURUH RUANGAN TIDAK ADA PETUGAS HARI INI */}
+          {!loading && ruangans.length > 0 && !ruangans.some((r) => r.has_petugas_jaga_today) && (
+            <div className="p-4 bg-red-50 border-round-xl border-1 border-red-300 mb-4 flex align-items-start gap-3 shadow-1">
+              <div className="flex align-items-center justify-content-center bg-red-100 text-red-600 border-round-lg flex-shrink-0" style={{ width: '40px', height: '40px' }}>
+                <i className="pi pi-times-circle text-2xl" />
+              </div>
+              <div>
+                <h4 className="text-base font-bold text-red-900 m-0 mb-1">Seluruh Layanan Tidak Tersedia Hari Ini</h4>
+                <p className="text-sm text-red-700 m-0 line-height-3">
+                  Tidak ada satupun ruangan yang memiliki jadwal petugas atau dokter jaga aktif pada hari ini ({todayInfo?.hari ? todayInfo.hari.toUpperCase() : 'HARI INI'}). Pendaftaran antrean walk-in tidak dapat diproses saat ini. Silakan atur jadwal karyawan terlebih dahulu di menu Master Jadwal Karyawan.
+                </p>
+              </div>
+            </div>
+          )}
+
           {loading ? (
             <div className="flex flex-column align-items-center justify-content-center p-6 my-4">
               <ProgressSpinner style={{ width: '40px', height: '40px' }} strokeWidth="4" />
@@ -549,6 +663,8 @@ export const StepPilihLayanan: React.FC<Props> = ({
                                 wajib_konsultasi: (pkg.tipe_paket === 'MEDICAL TREATMENT' ? 'wajib' : pkg.tipe_paket === 'SERVICE TREATMENT' ? 'tidak' : 'opsional'),
                                 kode_kepemilikan_paket_layanan: pkg.kode_kepemilikan_paket_layanan,
                                 nama_paket_asal: pkg.nama_paket,
+                                is_petugas_available: det.is_petugas_available,
+                                alasan_tidak_tersedia: det.alasan_tidak_tersedia,
                               };
 
                               return renderItemCard(claimItem);
@@ -562,22 +678,46 @@ export const StepPilihLayanan: React.FC<Props> = ({
                 ruangans.forEach((ruang) => {
                   const isRuangActive = activeRuangan === ruang.kode_ruangan;
                   const isRuangDisabled = activeRuangan !== null && activeRuangan !== ruang.kode_ruangan;
+                  const isRuangNoStaff = ruang.has_petugas_jaga_today === false;
                   const ruangSelectedCount = ruang.items.filter(
                     (item) => !!selectedMap[`${item.jenis}_${item.kode_layanan}`]
                   ).length;
                   const roomTitle = ruang.nama_ruangan
                     ? `${ruang.nama_ruangan}`
                     : `Ruangan ${ruang.kode_ruangan}`;
-                  const countSuffix = ruangSelectedCount > 0 ? ` (${ruangSelectedCount})` : '';
-                  const tabHeaderString = `${roomTitle}${countSuffix}`;
+
+                  const tabHeader = (
+                    <div className="flex align-items-center gap-2">
+                      <i className={`pi ${isRuangActive ? 'pi-check-circle text-primary font-bold' : isRuangNoStaff ? 'pi-times-circle text-red-500' : 'pi-building text-600'}`} />
+                      <span className={isRuangNoStaff ? 'text-700' : 'font-medium'}>{roomTitle}</span>
+                      {ruangSelectedCount > 0 && (
+                        <Tag value={ruangSelectedCount} severity="info" className="text-xs px-2 py-0" />
+                      )}
+                      {isRuangNoStaff && (
+                        <Tag value="Tutup Hari Ini" severity="danger" className="text-[10px] px-1 py-0 font-bold" />
+                      )}
+                    </div>
+                  );
 
                   panels.push(
                     <TabPanel
                       key={ruang.kode_ruangan}
-                      header={tabHeaderString}
-                      leftIcon={`pi ${isRuangActive ? 'pi-check-circle' : 'pi-building'} mr-2`}
+                      header={tabHeader}
                     >
-                      {isRuangDisabled && (
+                      {isRuangNoStaff && (
+                        <div className="flex align-items-center gap-3 p-3 mb-3 bg-red-50 border-round-xl border-1 border-red-200">
+                          <div className="flex align-items-center justify-content-center bg-red-100 text-red-600 border-round-lg flex-shrink-0" style={{ width: '36px', height: '36px' }}>
+                            <i className="pi pi-exclamation-triangle text-lg" />
+                          </div>
+                          <div className="flex-1">
+                            <span className="text-sm font-bold text-red-900 block">Tidak Ada Petugas Jaga Hari Ini</span>
+                            <span className="text-xs text-red-700 line-height-2">
+                              Ruangan <strong>{roomTitle}</strong> tidak memiliki dokter atau petugas jaga yang terjadwal aktif pada hari ini ({todayInfo?.hari ? todayInfo.hari.toUpperCase() : 'HARI INI'}). Seluruh layanan di ruangan ini dinonaktifkan untuk antrean walk-in.
+                            </span>
+                          </div>
+                        </div>
+                      )}
+                      {isRuangDisabled && !isRuangNoStaff && (
                         <div className="flex align-items-center gap-2 p-3 mb-3 bg-orange-50 border-round-lg border-1 border-orange-200">
                           <i className="pi pi-info-circle text-orange-500" />
                           <span className="text-sm text-orange-700">

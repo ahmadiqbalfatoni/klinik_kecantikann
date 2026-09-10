@@ -88,6 +88,26 @@ const handleGetKepemilikanPaket = async (req, res) => {
       totalRecords = vaData.length;
     }
 
+    const HARI_MAP = ["minggu", "senin", "selasa", "rabu", "kamis", "jumat", "sabtu"];
+    const [year, month, day] = todayStr.split("-").map(Number);
+    const todayDay = HARI_MAP[new Date(year, month - 1, day).getDay()];
+
+    const activeSchedulesToday = await DB("mst_jadwal_karyawan as j")
+      .where("j.status", "aktif")
+      .where("j.hari", todayDay)
+      .select("j.kode_ruangan", "j.is_penanggung_jawab");
+
+    const roomSchedulesMap = new Map();
+    activeSchedulesToday.forEach((sch) => {
+      if (!roomSchedulesMap.has(sch.kode_ruangan)) {
+        roomSchedulesMap.set(sch.kode_ruangan, []);
+      }
+      roomSchedulesMap.get(sch.kode_ruangan).push(sch);
+    });
+
+    const ruangKonsul = await DB("mst_ruangan").where("is_konsultasi", 1).where("status", "aktif").first();
+    const kodeRuanganKonsul = ruangKonsul?.kode_ruangan || "RNG-007";
+
     // Attach detail session items per package ownership
     for (const item of vaData) {
       const details = await DB("trx_detail_kepemilikan_paket_layanan as d")
@@ -137,6 +157,18 @@ const handleGetKepemilikanPaket = async (req, res) => {
           finalWajibKonsultasi = 'opsional';
         }
 
+        const isWajibKonsul = finalWajibKonsultasi === 'wajib';
+        const targetRuanganCek = isWajibKonsul ? kodeRuanganKonsul : (d.kode_ruangan || item.kode_ruangan_paket || 'RNG-002');
+        const targetSchedules = roomSchedulesMap.get(targetRuanganCek) || [];
+        const isPetugasAvailable = targetSchedules.length > 0;
+        let alasanTidakTersedia = null;
+        if (!isPetugasAvailable) {
+          const namaRuanganCek = isWajibKonsul ? (ruangKonsul?.nama_ruangan || "Ruang Konsultasi") : (d.nama_ruangan || item.nama_ruangan_paket || "Ruangan Treatment");
+          alasanTidakTersedia = isWajibKonsul
+            ? `Tidak ada dokter/petugas jaga di ${namaRuanganCek} hari ini (${todayDay})`
+            : `Tidak ada petugas jaga di ${namaRuanganCek} hari ini (${todayDay})`;
+        }
+
         return {
           ...d,
           sisa_sesi: sisaSesi,
@@ -147,6 +179,8 @@ const handleGetKepemilikanPaket = async (req, res) => {
           kode_ruangan: d.kode_ruangan || item.kode_ruangan_paket || 'RNG-002',
           nama_ruangan: d.nama_ruangan || item.nama_ruangan_paket || 'Ruangan Facial & Peeling',
           durasi_menit: d.durasi_menit || 45,
+          is_petugas_available: isPetugasAvailable,
+          alasan_tidak_tersedia: alasanTidakTersedia,
         };
       });
 

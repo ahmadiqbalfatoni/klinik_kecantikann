@@ -27,7 +27,50 @@ const handleGetOptions = async (req, res) => {
       .select("kode_ruangan", "nama_ruangan", "is_konsultasi")
       .orderBy("id", "asc");
 
-    // 2. Fetch layanan aktif
+    // 2. Tentukan nama hari ini (WIB / sistem)
+    const HARI_MAP = ["minggu", "senin", "selasa", "rabu", "kamis", "jumat", "sabtu"];
+    const todayStr = formatDateSystem(new Date(), "yyyy-MM-dd");
+    const [year, month, day] = todayStr.split("-").map(Number);
+    const todayDay = HARI_MAP[new Date(year, month - 1, day).getDay()];
+
+    // 3. Ambil jadwal aktif hari ini dari mst_jadwal_karyawan
+    const activeSchedulesToday = await DB("mst_jadwal_karyawan as j")
+      .leftJoin("mst_karyawan as k", "j.no_sip", "k.no_sip")
+      .leftJoin("mst_ruangan as r", "j.kode_ruangan", "r.kode_ruangan")
+      .where("j.status", "aktif")
+      .where("j.hari", todayDay)
+      .select(
+        "j.id",
+        "j.kode_jadwal",
+        "j.kode_ruangan",
+        "r.nama_ruangan",
+        "j.no_sip",
+        "j.is_penanggung_jawab",
+        "j.jam_mulai",
+        "j.jam_selesai",
+        "k.nama as nama_petugas",
+        "k.jabatan as jabatan_petugas"
+      )
+      .orderBy("j.is_penanggung_jawab", "desc")
+      .orderBy("j.jam_mulai", "asc");
+
+    // Kelompokkan jadwal hari ini per kode_ruangan
+    const roomSchedulesMap = new Map();
+    activeSchedulesToday.forEach((sch) => {
+      if (!roomSchedulesMap.has(sch.kode_ruangan)) {
+        roomSchedulesMap.set(sch.kode_ruangan, []);
+      }
+      roomSchedulesMap.get(sch.kode_ruangan).push(sch);
+    });
+
+    // Identifikasi Ruang Konsultasi aktif
+    const ruangKonsul = vaRuangan.find((rng) => Number(rng.is_konsultasi) === 1);
+    const kodeRuanganKonsul = ruangKonsul?.kode_ruangan || "RNG-007";
+    const namaRuanganKonsul = ruangKonsul?.nama_ruangan || "Ruang Konsultasi";
+    const schedulesKonsul = roomSchedulesMap.get(kodeRuanganKonsul) || [];
+    const hasPetugasKonsulToday = schedulesKonsul.length > 0;
+
+    // 4. Fetch layanan aktif
     const vaLayanan = await DB("mst_layanan as l")
       .leftJoin("mst_kategori_layanan as k", "l.kode_kategori_layanan", "k.kode_kategori_layanan")
       .leftJoin("mst_ruangan as r", "l.kode_ruangan", "r.kode_ruangan")
@@ -49,7 +92,6 @@ const handleGetOptions = async (req, res) => {
       .orderBy("l.id", "asc");
 
     // Auto nonaktifkan paket yang sudah melewati tanggal_selesai
-    const todayStr = formatDateSystem(new Date(), "yyyy-MM-dd");
     await DB("mst_paket_layanan")
       .where("status", "aktif")
       .whereNotNull("tanggal_selesai")
@@ -59,7 +101,7 @@ const handleGetOptions = async (req, res) => {
         updated_at: formatDateSystem(),
       });
 
-    // 3. Fetch paket layanan aktif
+    // 5. Fetch paket layanan aktif
     const vaPaket = await DB("mst_paket_layanan as p")
       .leftJoin("mst_ruangan as r", "p.kode_ruangan", "r.kode_ruangan")
       .where("p.status", "aktif")
@@ -69,10 +111,27 @@ const handleGetOptions = async (req, res) => {
     // Map layanan & paket grouped by ruangan (initialized with ALL DB rooms)
     const ruanganMap = new Map();
     vaRuangan.forEach((rng) => {
+      const roomSchedules = roomSchedulesMap.get(rng.kode_ruangan) || [];
+      const hasPetugas = roomSchedules.length > 0;
+      const pjStaff = roomSchedules.find((s) => s.is_penanggung_jawab === 1) || roomSchedules[0];
+
       ruanganMap.set(rng.kode_ruangan, {
         kode_ruangan: rng.kode_ruangan,
         nama_ruangan: rng.nama_ruangan || rng.kode_ruangan,
         deskripsi: "",
+        is_konsultasi: Number(rng.is_konsultasi || 0),
+        has_petugas_jaga_today: hasPetugas,
+        petugas_jaga_count: roomSchedules.length,
+        petugas_pj: pjStaff
+          ? {
+              nama: pjStaff.nama_petugas,
+              jabatan: pjStaff.jabatan_petugas,
+              no_sip: pjStaff.no_sip,
+              jam_mulai: pjStaff.jam_mulai?.slice(0, 5),
+              jam_selesai: pjStaff.jam_selesai?.slice(0, 5),
+            }
+          : null,
+        petugas_jaga_names: roomSchedules.map((s) => s.nama_petugas).filter(Boolean),
         items: [],
       });
     });
@@ -156,6 +215,33 @@ const handleGetOptions = async (req, res) => {
       const kodeRuang = lay.kode_ruangan || "LAINNYA";
       let rngObj = ruanganMap.get(kodeRuang);
 
+      // Tentukan validasi ketersediaan petugas hari ini:
+      // Jika layanan wajib konsultasi (wajib_konsultasi = 'wajib' atau tipe = 'MEDICAL TREATMENT'),
+      // tujuan antrean pertama adalah Ruang Konsultasi, sehingga yang divalidasi adalah Ruang Konsultasi!
+      const isWajibKonsul =
+        (lay.wajib_konsultasi || "").toString().trim().toLowerCase() === "wajib" ||
+        (lay.tipe || "").toString().trim().toUpperCase() === "MEDICAL TREATMENT";
+
+      const targetRuanganCek = isWajibKonsul
+        ? (lay.kode_ruangan_konsultasi || kodeRuanganKonsul)
+        : (lay.kode_ruangan || "");
+      const namaRuanganCek = isWajibKonsul
+        ? namaRuanganKonsul
+        : (lay.nama_ruangan || lay.kode_ruangan || "Ruang Treatment");
+
+      const targetSchedules = roomSchedulesMap.get(targetRuanganCek) || [];
+      const isPetugasAvailable = targetSchedules.length > 0;
+      const targetPj = targetSchedules.find((s) => s.is_penanggung_jawab === 1) || targetSchedules[0];
+
+      let alasanTidakTersedia = null;
+      if (!isPetugasAvailable) {
+        if (isWajibKonsul) {
+          alasanTidakTersedia = `Tidak ada dokter/petugas jaga di ${namaRuanganCek} hari ini (${todayDay})`;
+        } else {
+          alasanTidakTersedia = `Tidak ada petugas jaga di ${namaRuanganCek} hari ini (${todayDay})`;
+        }
+      }
+
       const rawItem = {
         jenis: "layanan",
         kode_layanan: lay.kode_layanan,
@@ -170,6 +256,13 @@ const handleGetOptions = async (req, res) => {
         wajib_konsultasi: lay.wajib_konsultasi || "tidak",
         kode_ruangan_konsultasi: lay.kode_ruangan_konsultasi || "",
         is_konsultasi: Number(lay.is_konsultasi || 0),
+        // Validasi petugas jaga hari ini
+        is_petugas_available: isPetugasAvailable,
+        alasan_tidak_tersedia: alasanTidakTersedia,
+        ruangan_cek: targetRuanganCek,
+        nama_ruangan_cek: namaRuanganCek,
+        petugas_jaga_count: targetSchedules.length,
+        petugas_pj_nama: targetPj?.nama_petugas || null,
       };
 
       const itemData = applyPromo(rawItem);
@@ -179,6 +272,11 @@ const handleGetOptions = async (req, res) => {
           kode_ruangan: kodeRuang,
           nama_ruangan: lay.nama_ruangan || "Ruangan Lainnya",
           deskripsi: "",
+          is_konsultasi: Number(lay.is_konsultasi || 0),
+          has_petugas_jaga_today: isPetugasAvailable,
+          petugas_jaga_count: targetSchedules.length,
+          petugas_pj: null,
+          petugas_jaga_names: [],
           items: [],
         };
         ruanganMap.set(kodeRuang, rngObj);
@@ -195,6 +293,24 @@ const handleGetOptions = async (req, res) => {
         .first();
       const totalSesi = parseInt(detailSesi?.total_sesi || 0, 10) || 1;
 
+      // Pengecekan petugas untuk paket: jika tipe MEDICAL TREATMENT -> cek Ruang Konsultasi
+      const isWajibKonsul = (pkt.tipe || "").toString().trim().toUpperCase() === "MEDICAL TREATMENT";
+      const targetRuanganCek = isWajibKonsul ? kodeRuanganKonsul : (pkt.kode_ruangan || "");
+      const namaRuanganCek = isWajibKonsul ? namaRuanganKonsul : (pkt.nama_ruangan || pkt.kode_ruangan || "Ruang Treatment");
+
+      const targetSchedules = roomSchedulesMap.get(targetRuanganCek) || [];
+      const isPetugasAvailable = targetSchedules.length > 0;
+      const targetPj = targetSchedules.find((s) => s.is_penanggung_jawab === 1) || targetSchedules[0];
+
+      let alasanTidakTersedia = null;
+      if (!isPetugasAvailable) {
+        if (isWajibKonsul) {
+          alasanTidakTersedia = `Tidak ada dokter/petugas jaga di ${namaRuanganCek} hari ini (${todayDay})`;
+        } else {
+          alasanTidakTersedia = `Tidak ada petugas jaga di ${namaRuanganCek} hari ini (${todayDay})`;
+        }
+      }
+
       const rawItem = {
         jenis: "paket",
         kode_layanan: pkt.kode_paket_layanan,
@@ -209,6 +325,13 @@ const handleGetOptions = async (req, res) => {
         kode_ruangan: pkt.kode_ruangan || "",
         nama_ruangan: pkt.nama_ruangan || pkt.kode_ruangan || "Ruang Treatment",
         is_konsultasi: Number(pkt.is_konsultasi || 0),
+        // Validasi petugas jaga hari ini
+        is_petugas_available: isPetugasAvailable,
+        alasan_tidak_tersedia: alasanTidakTersedia,
+        ruangan_cek: targetRuanganCek,
+        nama_ruangan_cek: namaRuanganCek,
+        petugas_jaga_count: targetSchedules.length,
+        petugas_pj_nama: targetPj?.nama_petugas || null,
       };
 
       const itemData = applyPromo(rawItem);
@@ -220,6 +343,11 @@ const handleGetOptions = async (req, res) => {
           kode_ruangan: kodeRuang,
           nama_ruangan: pkt.nama_ruangan || "Ruangan Lainnya",
           deskripsi: "",
+          is_konsultasi: Number(pkt.is_konsultasi || 0),
+          has_petugas_jaga_today: isPetugasAvailable,
+          petugas_jaga_count: targetSchedules.length,
+          petugas_pj: null,
+          petugas_jaga_names: [],
           items: [],
         };
         ruanganMap.set(kodeRuang, rngObj);
@@ -228,14 +356,22 @@ const handleGetOptions = async (req, res) => {
       paketItems.push(itemData);
     }
 
-    // Output all ruangan data from database (all 5 rooms)
+    // Output all ruangan data from database (all rooms)
     const resultRuangan = Array.from(ruanganMap.values());
+    const ruanganDenganPetugasCount = resultRuangan.filter((r) => r.has_petugas_jaga_today).length;
 
     return res.status(200).json({
       status: status.SUKSES,
       message: "Data pilihan layanan dan paket ditemukan",
       datetime: formatDateSystem(),
       data: {
+        today_info: {
+          tanggal: todayStr,
+          hari: todayDay,
+          total_ruangan_aktif: vaRuangan.length,
+          ruangan_dengan_petugas_count: ruanganDenganPetugasCount,
+          has_petugas_konsul_today: hasPetugasKonsulToday,
+        },
         ruangan_layanan: resultRuangan,
         kategori_layanan: resultRuangan,
         paket_layanan: paketItems,

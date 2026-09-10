@@ -4,162 +4,165 @@ import React from 'react';
 
 export type DashboardRole = 'owner' | 'dokter' | 'beautician' | 'kasir' | 'warehouse';
 
-interface RoleNavColumn {
+interface RoleNavConfig {
   id: DashboardRole;
   title: string;
+  subtitle: string;
   icon: string;
-  iconBg: string;
-  iconColor: string;
-  items: string[];
+  activeColor: string;
+  bgActive: string;
+  badge: string;
 }
 
-const ROLE_COLUMNS: RoleNavColumn[] = [
+const ROLES: RoleNavConfig[] = [
   {
     id: 'owner',
-    title: 'OWNER / MANAGER',
-    icon: 'pi pi-user',
-    iconBg: '#0284c7',
-    iconColor: '#ffffff',
-    items: ['KPI Klinik', 'Pendapatan', 'Treatment', 'Inventory', 'Performa SDM'],
+    title: 'Owner & Eksekutif',
+    subtitle: 'KPI Omzet, Finansial & SDM',
+    icon: 'pi pi-crown',
+    activeColor: '#047857',
+    bgActive: '#ecfdf5',
+    badge: 'Eksekutif',
   },
   {
     id: 'dokter',
-    title: 'DOKTER',
+    title: 'Dokter Spesialis',
+    subtitle: 'Antrean Pasien & Rekam Medis',
     icon: 'pi pi-heart-fill',
-    iconBg: '#0f766e',
-    iconColor: '#ffffff',
-    items: ['Pasien Hari Ini', 'Rekam Medis', 'Treatment Plan', 'Follow Up'],
+    activeColor: '#0284c7',
+    bgActive: '#f0f9ff',
+    badge: 'Klinis Medis',
   },
   {
     id: 'beautician',
-    title: 'BEAUTICIAN',
+    title: 'Beautician & Terapis',
+    subtitle: 'Treatment Kulit & SOP',
     icon: 'pi pi-sparkles',
-    iconBg: '#9333ea',
-    iconColor: '#ffffff',
-    items: ['Treatment Hari Ini', 'Antrian', 'SOP', 'Before After'],
+    activeColor: '#9333ea',
+    bgActive: '#faf5ff',
+    badge: 'Estetika',
   },
   {
     id: 'kasir',
-    title: 'KASIR',
-    icon: 'pi pi-calculator',
-    iconBg: '#16a34a',
-    iconColor: '#ffffff',
-    items: ['Transaksi', 'Payment', 'Invoice', 'Refund'],
+    title: 'Kasir & Billing',
+    subtitle: 'Transaksi & Pelunasan',
+    icon: 'pi pi-credit-card',
+    activeColor: '#16a34a',
+    bgActive: '#f0fdf4',
+    badge: 'Keuangan',
   },
   {
     id: 'warehouse',
-    title: 'WAREHOUSE',
+    title: 'Gudang & Farmasi',
+    subtitle: 'Stok Produk & PO Logistik',
     icon: 'pi pi-box',
-    iconBg: '#ea580c',
-    iconColor: '#ffffff',
-    items: ['Stock', 'Low Stock', 'Expired', 'Receiving'],
+    activeColor: '#ea580c',
+    bgActive: '#fff7ed',
+    badge: 'Logistik',
   },
 ];
 
 interface DashboardRoleNavProps {
   activeRole: DashboardRole;
   onSelectRole: (role: DashboardRole) => void;
+  userRoleName?: string;
 }
 
-export const DashboardRoleNav: React.FC<DashboardRoleNavProps> = ({ activeRole, onSelectRole }) => {
+export const DashboardRoleNav: React.FC<DashboardRoleNavProps> = ({
+  activeRole,
+  onSelectRole,
+  userRoleName,
+}) => {
   return (
-    <div
-      className="mb-4 surface-card border-round-2xl overflow-hidden shadow-2 border-1"
-      style={{
-        borderColor: '#93c5fd',
-        background: 'linear-gradient(180deg, #f0f7ff 0%, #ffffff 100%)',
-      }}
-    >
-      {/* HEADER CARD: TITLE WITH ICON */}
-      <div className="pt-3 pb-2 px-4 text-center border-bottom-1" style={{ borderColor: '#e0f2fe' }}>
-        <div className="inline-flex align-items-center justify-content-center gap-2">
+    <div className="luxe-card p-2 md:p-2.5 mb-4 border-1 surface-border">
+      <div className="flex flex-column lg:flex-row justify-content-between align-items-start lg:align-items-center gap-2 mb-2 px-2 pt-1">
+        <div className="flex align-items-center gap-2">
           <div
-            className="flex align-items-center justify-content-center border-round-xl shadow-1"
-            style={{ width: '32px', height: '32px', borderRadius: '10px', backgroundColor: '#1d4ed8', color: '#ffffff', flexShrink: 0 }}
+            className="flex align-items-center justify-content-center border-round-lg text-white"
+            style={{
+              width: '28px',
+              height: '28px',
+              background: 'linear-gradient(135deg, #059669 0%, #0d9488 100%)',
+            }}
           >
-            <i className="pi pi-shield text-base" />
+            <i className="pi pi-sliders-h text-xs" />
           </div>
-          <h2 className="text-xl md:text-2xl font-black m-0 tracking-wide" style={{ color: '#1e3a8a' }}>
-            DASHBOARD ROLE BASED
-          </h2>
+          <div>
+            <span className="text-xs font-bold text-slate-800 tracking-tight">
+              PILIH MODUL ANALITIK DIVISI
+            </span>
+            <span className="text-[11px] text-slate-400 block">
+              Beralih perspektif operasional sesuai divisi tugas klinik
+            </span>
+          </div>
         </div>
-        <p className="text-xs text-blue-800 m-0 mt-1 font-medium">
-          Klik pada peran di bawah ini untuk beralih dan melihat modul analitik khusus tiap divisi klinik
-        </p>
+
+        {userRoleName && (
+          <div className="flex align-items-center gap-2 text-xs text-slate-500">
+            <span>Login sebagai:</span>
+            <span className="clinic-badge-pill bg-emerald-50 text-emerald-700 border-1 border-emerald-200">
+              <span className="pulse-dot" />
+              {userRoleName.toUpperCase()}
+            </span>
+          </div>
+        )}
       </div>
 
-      {/* 5 COLUMNS SESUAI DIAGRAM GAMBAR 2 */}
-      <div className="grid m-0 p-2 md:p-3">
-        {ROLE_COLUMNS.map((col, idx) => {
-          const isActive = activeRole === col.id;
+      {/* HORIZONTAL SEGMENTED BUTTON BAR */}
+      <div className="grid m-0 gap-2">
+        {ROLES.map((r) => {
+          const isActive = activeRole === r.id;
           return (
-            <div
-              key={col.id}
-              className={`col-12 sm:col-6 lg:col ${idx < ROLE_COLUMNS.length - 1 ? 'lg:border-right-1' : ''}`}
-              style={{ borderColor: '#e2e8f0' }}
-            >
-              <div
-                onClick={() => onSelectRole(col.id)}
-                className={`p-3 h-full border-round-xl cursor-pointer transition-all ${
+            <div key={r.id} className="col-12 sm:col md:col p-0">
+              <button
+                type="button"
+                onClick={() => onSelectRole(r.id)}
+                className={`w-full p-2.5 text-left border-round-xl transition-all border-1 cursor-pointer flex align-items-center gap-2.5 ${
                   isActive
-                    ? 'bg-white shadow-3 border-2 border-primary ring-2 ring-blue-200'
-                    : 'hover:bg-white hover:shadow-1 border-1 border-transparent'
+                    ? 'shadow-2'
+                    : 'hover:surface-100 border-transparent bg-transparent'
                 }`}
                 style={{
-                  transform: isActive ? 'translateY(-2px)' : undefined,
-                  transition: 'all 0.2s ease',
+                  backgroundColor: isActive ? r.bgActive : '#f8fafc',
+                  borderColor: isActive ? r.activeColor : '#e2e8f0',
+                  transform: isActive ? 'scale(1.01)' : 'scale(1)',
                 }}
               >
-                {/* ROLE HEADER */}
-                <div className="flex align-items-center gap-2 mb-2.5 pb-2 border-bottom-1 surface-border">
-                  <div
-                    className="flex align-items-center justify-content-center border-round-xl shadow-1"
-                    style={{
-                      width: '34px',
-                      height: '34px',
-                      borderRadius: '10px',
-                      backgroundColor: col.iconBg,
-                      color: col.iconColor,
-                      flexShrink: 0,
-                    }}
-                  >
-                    <i className={`${col.icon} text-sm`} />
-                  </div>
-                  <div>
+                <div
+                  className="flex align-items-center justify-content-center border-round-lg flex-shrink-0 transition-colors shadow-sm"
+                  style={{
+                    width: '36px',
+                    height: '36px',
+                    backgroundColor: isActive ? r.activeColor : '#ffffff',
+                    color: isActive ? '#ffffff' : '#64748b',
+                    border: isActive ? 'none' : '1px solid #e2e8f0',
+                  }}
+                >
+                  <i className={`${r.icon} text-base`} />
+                </div>
+
+                <div className="flex-1 min-w-0">
+                  <div className="flex align-items-center justify-content-between gap-1 mb-0.5">
                     <span
-                      className="text-xs md:text-sm font-extrabold tracking-tight block"
-                      style={{ color: isActive ? '#1d4ed8' : '#1e293b' }}
+                      className="text-xs font-bold truncate block"
+                      style={{ color: isActive ? r.activeColor : '#1e293b' }}
                     >
-                      {col.title}
+                      {r.title}
                     </span>
                     {isActive && (
-                      <span className="text-[10px] font-bold text-emerald-700 bg-emerald-50 px-1.5 py-0.2 border-round">
-                        ● Aktif
+                      <span
+                        className="text-[9px] font-black uppercase px-1.5 py-0.5 border-round-pill text-white"
+                        style={{ backgroundColor: r.activeColor }}
+                      >
+                        Aktif
                       </span>
                     )}
                   </div>
+                  <span className="text-[11px] text-slate-500 truncate block">
+                    {r.subtitle}
+                  </span>
                 </div>
-
-                {/* ROLE ITEMS BULLET LIST PERSIS GAMBAR */}
-                <ul className="list-none p-0 m-0 flex flex-column gap-1.5 text-xs">
-                  {col.items.map((item, itemIdx) => (
-                    <li
-                      key={itemIdx}
-                      className="flex align-items-center gap-2 text-gray-700 hover:text-blue-700 transition-colors"
-                    >
-                      <span
-                        style={{
-                          width: '5px',
-                          height: '5px',
-                          borderRadius: '50%',
-                          backgroundColor: isActive ? '#2563eb' : '#64748b',
-                        }}
-                      />
-                      <span className={isActive ? 'font-semibold text-gray-900' : 'font-medium'}>{item}</span>
-                    </li>
-                  ))}
-                </ul>
-              </div>
+              </button>
             </div>
           );
         })}

@@ -1660,7 +1660,7 @@ export const BuatBookingTab: React.FC<Props> = ({ toast, onSuccessCreated }) => 
                         </div>
                       ) : (
                         <div className="mt-1">
-                          Silakan ubah tanggal booking ke hari praktek dokter jaga (lihat tombol <strong>Jadwal Dokter Konsultasi</strong> di kanan atas), atau ubah pilihan alur di Langkah 2 menjadi <strong>"Langsung Tindakan"</strong> jika ingin tetap di tanggal ini.
+                          Silakan ubah tanggal booking ke hari praktek dokter jaga (lihat tombol <strong>Jadwal Dokter Konsultasi</strong> di kanan atas), atau ubah pilihan alur di Langkah 2 menjadi <strong>&quot;Langsung Tindakan&quot;</strong> jika ingin tetap di tanggal ini.
                         </div>
                       )}
                     </div>
@@ -1677,7 +1677,7 @@ export const BuatBookingTab: React.FC<Props> = ({ toast, onSuccessCreated }) => 
                       </div>
                       Petugas treatment ({selectedSlot?.nama_petugas || slotOverlap.petugasName || 'Terapis'}) bertugas pukul <strong>{selectedSlot?.jam_mulai || slotOverlap.shiftMulai}–{selectedSlot?.jam_selesai || slotOverlap.shiftSelesai} WIB</strong>, sedangkan dokter jaga Ruang Konsultasi ({consultWindow?.dokterNames}) bertugas pukul <strong>{consultWindow?.docStartStr}–{consultWindow?.docEndStr} WIB</strong>.
                       <div className="mt-1 text-amber-900 font-semibold">
-                        Karena tidak ada jam kerja yang beririsan untuk konsultasi pra-tindakan, silakan <strong>ubah tanggal booking</strong> ke hari lain atau ubah alur di Langkah 2 menjadi <strong>"Langsung Tindakan"</strong> jika diizinkan.
+                        Karena tidak ada jam kerja yang beririsan untuk konsultasi pra-tindakan, silakan <strong>ubah tanggal booking</strong> ke hari lain atau ubah alur di Langkah 2 menjadi <strong>&quot;Langsung Tindakan&quot;</strong> jika diizinkan.
                       </div>
                     </div>
                   </div>

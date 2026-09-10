@@ -53,8 +53,12 @@ router.post("/", async (req, res) => {
     // 2. Eksekusi 1 Transaksi DB Atomic
     await DB.transaction(async (trx) => {
       const now = new Date();
-      const todayYmd = now.toISOString().slice(0, 10);
+      const todayYmd = formatDateSystem(now, "yyyy-MM-dd") || now.toISOString().slice(0, 10);
       const todayStr = todayYmd.replace(/-/g, "");
+
+      const HARI_MAP = ["minggu", "senin", "selasa", "rabu", "kamis", "jumat", "sabtu"];
+      const [year, month, day] = todayYmd.split("-").map(Number);
+      const todayDay = HARI_MAP[new Date(year, month - 1, day).getDay()];
 
       // A. Generate Kode Kunjungan (KJ-YYYYMMDD-001)
       const prefixKunjungan = `KJ-${todayStr}-`;
@@ -190,6 +194,7 @@ router.post("/", async (req, res) => {
           .first();
 
         // 1. Validasi & Ambil Detail Semua Item (harga ASLI dari master, promo disimpan sebagai referensi)
+        const checkedRoomsToday = new Map();
         const processedItems = [];
         for (const item of items) {
           const jenis = (item.jenis_layanan || item.jenis || "layanan").toLowerCase();
@@ -439,6 +444,35 @@ router.post("/", async (req, res) => {
           if (needsConsult && ruangKonsul) {
             kodeRuanganFinal = ruangKonsul.kode_ruangan;
             namaRuanganFinal = ruangKonsul.nama_ruangan || "Ruang Konsultasi";
+          }
+
+          // Validasi Ketersediaan Petugas Jaga Hari Ini (Walk-In)
+          if (!kodeRuanganFinal) {
+            const err = new Error(`Layanan "${namaLayanan}" belum memiliki konfigurasi ruangan tujuan yang valid`);
+            err.statusCode = 422;
+            throw err;
+          }
+
+          if (!checkedRoomsToday.has(kodeRuanganFinal)) {
+            const activeSchedulesInRoom = await trx("mst_jadwal_karyawan")
+              .where("kode_ruangan", kodeRuanganFinal)
+              .where("hari", todayDay)
+              .where("status", "aktif")
+              .select("id", "no_sip", "is_penanggung_jawab");
+            checkedRoomsToday.set(kodeRuanganFinal, activeSchedulesInRoom);
+          }
+
+          const activeSchedulesInRoom = checkedRoomsToday.get(kodeRuanganFinal);
+          if (!activeSchedulesInRoom || activeSchedulesInRoom.length === 0) {
+            const ruangLabel = needsConsult
+              ? `Ruang Konsultasi (${kodeRuanganFinal})`
+              : `${namaRuanganFinal} (${kodeRuanganFinal})`;
+
+            const err = new Error(
+              `Layanan "${namaLayanan}" tidak dapat dipilih karena ruangan ${ruangLabel} tidak memiliki petugas/dokter jaga aktif hari ini (${todayDay.toUpperCase()})`
+            );
+            err.statusCode = 422;
+            throw err;
           }
 
           // Cari promo aktif untuk item ini (disimpan sebagai referensi kasir, tidak mengubah harga)

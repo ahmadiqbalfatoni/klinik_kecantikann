@@ -26,6 +26,7 @@ router.post("/role-data", async (req, res) => {
       .first();
 
     const totalPasien = await DB("mst_pasien").count("id as count").first();
+    const totalLayanan = await DB("mst_layanan").where("status", "aktif").count("id as count").first();
 
     // Omzet hari ini
     const omzetToday = await DB("trx_transaksi")
@@ -207,6 +208,7 @@ router.post("/role-data", async (req, res) => {
           kpi: {
             kunjungan_hari_ini: parseInt(kunjunganToday?.count || 0, 10),
             total_pasien: parseInt(totalPasien?.count || 0, 10),
+            total_layanan: parseInt(totalLayanan?.count || 0, 10),
             omzet_hari_ini: parseFloat(omzetToday?.total || 0),
             omzet_total: parseFloat(omzetTotal?.total || 0),
           },
