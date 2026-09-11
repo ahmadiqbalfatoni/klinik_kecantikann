@@ -32,11 +32,25 @@ router.post("/", async (req, res) => {
             .orWhereExists(function () {
               this.select("*")
                 .from("mst_detail_promo as dp")
-                .leftJoin("mst_produk as pr", "dp.kode_item", "pr.kode_produk")
                 .whereRaw("dp.kode_promo = p.kode_promo")
                 .where(function () {
-                  this.whereRaw("LOWER(pr.nama) LIKE ?", [`%${lower}%`])
-                    .orWhereRaw("LOWER(pr.kode_produk) LIKE ?", [`%${lower}%`]);
+                  this.whereExists(function () {
+                    this.select("*")
+                      .from("mst_produk as pr")
+                      .whereRaw("pr.kode_produk = dp.kode_item")
+                      .where(function () {
+                        this.whereRaw("LOWER(pr.nama) LIKE ?", [`%${lower}%`])
+                          .orWhereRaw("LOWER(pr.kode_produk) LIKE ?", [`%${lower}%`]);
+                      });
+                  }).orWhereExists(function () {
+                    this.select("*")
+                      .from("mst_layanan as l")
+                      .whereRaw("l.kode_layanan = dp.kode_item")
+                      .where(function () {
+                        this.whereRaw("LOWER(l.nama) LIKE ?", [`%${lower}%`])
+                          .orWhereRaw("LOWER(l.kode_layanan) LIKE ?", [`%${lower}%`]);
+                      });
+                  });
                 });
             });
         });
@@ -72,28 +86,61 @@ router.post("/", async (req, res) => {
       totalRecords = vaData.length;
     }
 
-    // Load detail products for each promo
+    // Load detail items (products, services, and packages) for each promo
     for (const item of vaData) {
-      const details = await DB("mst_detail_promo as dp")
-        .leftJoin("mst_produk as pr", "dp.kode_item", "pr.kode_produk")
+      const rawDetails = await DB("mst_detail_promo as dp")
+        .leftJoin("mst_produk as pr", function () {
+          this.on("dp.kode_item", "=", "pr.kode_produk").andOn("dp.jenis_item", "=", DB.raw("'produk'"));
+        })
         .leftJoin("mst_kategori_produk as kp", "pr.kode_kategori_produk", "kp.kode_kategori_produk")
+        .leftJoin("mst_layanan as l", function () {
+          this.on("dp.kode_item", "=", "l.kode_layanan").andOn("dp.jenis_item", "=", DB.raw("'layanan'"));
+        })
+        .leftJoin("mst_kategori_layanan as kl", "l.kode_kategori_layanan", "kl.kode_kategori_layanan")
+        .leftJoin("mst_paket_layanan as pkt", function () {
+          this.on("dp.kode_item", "=", "pkt.kode_paket_layanan").andOn("dp.jenis_item", "=", DB.raw("'paket'"));
+        })
         .where("dp.kode_promo", item.kode_promo)
-        .where("dp.jenis_item", "produk")
         .select(
           "dp.id",
           "dp.kode_detail_promo",
           "dp.kode_promo",
-          "dp.kode_item as kode_produk",
+          "dp.jenis_item",
+          "dp.kode_item",
+          "dp.status",
+          // Produk fields
           "pr.nama as nama_produk",
-          "kp.nama as nama_kategori",
-          "pr.harga_jual as harga_normal",
-          "pr.satuan",
+          "kp.nama as nama_kategori_produk",
+          "pr.harga_jual as harga_jual_produk",
+          "pr.satuan as satuan_produk",
           "pr.stok_tersedia",
-          "dp.status"
-        );
+          // Layanan fields
+          "l.nama as nama_layanan",
+          "kl.nama as nama_kategori_layanan",
+          "l.harga as harga_layanan",
+          // Paket fields
+          "pkt.nama as nama_paket",
+          "pkt.harga_paket"
+        )
+        .orderBy("dp.id", "asc");
 
-      for (const d of details) {
-        const hargaNormal = parseFloat(d.harga_normal) || 0;
+      const details = [];
+      for (const d of rawDetails) {
+        const isLayanan = d.jenis_item === "layanan";
+        const isPaket = d.jenis_item === "paket";
+        const namaItem = isLayanan 
+          ? (d.nama_layanan || d.kode_item) 
+          : isPaket 
+          ? (d.nama_paket || d.kode_item) 
+          : (d.nama_produk || d.kode_item);
+        const namaKategori = isLayanan 
+          ? (d.nama_kategori_layanan || "Layanan") 
+          : isPaket 
+          ? "Paket Layanan" 
+          : (d.nama_kategori_produk || "Produk");
+        const hargaNormal = parseFloat(isLayanan ? d.harga_layanan : isPaket ? d.harga_paket : d.harga_jual_produk) || 0;
+        const satuan = isLayanan ? "Sesi" : isPaket ? "Paket" : (d.satuan_produk || "Pcs");
+
         const nilaiDiskon = parseFloat(item.nilai_diskon) || 0;
         let hargaPromo = hargaNormal;
         let hemat = 0;
@@ -106,11 +153,31 @@ router.post("/", async (req, res) => {
           hemat = Math.min(hargaNormal, nilaiDiskon);
         }
 
-        d.harga_promo = hargaPromo;
-        d.hemat = hemat;
+        details.push({
+          id: d.id,
+          kode_detail_promo: d.kode_detail_promo,
+          kode_promo: d.kode_promo,
+          jenis_item: d.jenis_item || "produk",
+          kode_item: d.kode_item,
+          // Backwards-compatible aliases
+          kode_produk: d.kode_item,
+          nama_produk: namaItem,
+          nama_item: namaItem,
+          nama_kategori: namaKategori,
+          harga_normal: hargaNormal,
+          satuan: satuan,
+          stok_tersedia: isLayanan || isPaket ? "-" : (d.stok_tersedia ?? 0),
+          status: d.status,
+          harga_promo: hargaPromo,
+          hemat: hemat,
+        });
       }
 
       item.details = details;
+      item.total_item = details.length;
+      item.total_produk = details.filter((d) => d.jenis_item === "produk").length;
+      item.total_layanan = details.filter((d) => d.jenis_item === "layanan").length;
+      item.total_paket = details.filter((d) => d.jenis_item === "paket").length;
     }
 
     return res.status(200).json({

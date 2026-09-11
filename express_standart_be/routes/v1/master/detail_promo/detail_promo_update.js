@@ -12,28 +12,45 @@ router.post("/", async (req, res) => {
   const username = req?.auth?.username || "";
 
   try {
-    // If kode_promo with details is passed, synchronize products for that promo
+    // If kode_promo with details is passed, synchronize items (products & services) for that promo
     if (oPayload.kode_promo && (Array.isArray(oPayload.details) || Array.isArray(oPayload.kode_item))) {
       const kodePromo = oPayload.kode_promo;
-      let itemCodes = [];
+      let itemsToProcess = [];
       if (Array.isArray(oPayload.details)) {
-        itemCodes = oPayload.details.map((d) => (typeof d === "string" ? d : d.kode_produk || d.kode_item)).filter(Boolean);
+        itemsToProcess = oPayload.details.map((d) => {
+          if (typeof d === "string") {
+            return { kode_item: d.trim(), jenis_item: oPayload.jenis_item || "produk" };
+          }
+          const kode = d.kode_item || d.kode_produk || d.kode_layanan;
+          const jenis = d.jenis_item || (d.kode_layanan ? "layanan" : oPayload.jenis_item || "produk");
+          return { kode_item: kode ? String(kode).trim() : "", jenis_item: jenis };
+        }).filter((it) => it.kode_item);
       } else if (Array.isArray(oPayload.kode_item)) {
-        itemCodes = oPayload.kode_item;
+        itemsToProcess = oPayload.kode_item.map((code) => ({
+          kode_item: String(code).trim(),
+          jenis_item: oPayload.jenis_item || "produk"
+        })).filter((it) => it.kode_item);
       }
 
-      if (itemCodes.length === 0) {
-        return res.status(422).json({ status: status.BAD_REQUEST, message: "Minimal tambahkan 1 produk dalam promo", datetime: formatDateSystem() });
+      // Deduplicate within payload
+      const seenMap = new Map();
+      itemsToProcess = itemsToProcess.filter((it) => {
+        const key = `${it.jenis_item}:${it.kode_item}`;
+        if (seenMap.has(key)) return false;
+        seenMap.set(key, true);
+        return true;
+      });
+
+      if (itemsToProcess.length === 0) {
+        return res.status(422).json({ status: status.BAD_REQUEST, message: "Minimal tambahkan 1 produk atau layanan dalam promo", datetime: formatDateSystem() });
       }
 
-      const jenisItem = oPayload.jenis_item || "produk";
       const statusPromo = oPayload.status || "aktif";
 
       await DB.transaction(async (trx) => {
-        // Delete previous items for this promo & jenis_item
+        // Delete previous items for this promo
         await trx("mst_detail_promo")
           .where("kode_promo", kodePromo)
-          .where("jenis_item", jenisItem)
           .del();
 
         const last = await trx("mst_detail_promo").orderBy("id", "desc").first();
@@ -42,15 +59,15 @@ router.post("/", async (req, res) => {
           n = (parseInt(last.kode_detail_promo.replace("DPRM-", "")) || 0) + 1;
         }
 
-        for (const itemCode of itemCodes) {
+        for (const item of itemsToProcess) {
           const kode = `DPRM-${String(n).padStart(4, "0")}`;
           n++;
 
           const oData = {
             kode_detail_promo: kode,
             kode_promo: kodePromo,
-            jenis_item: jenisItem,
-            kode_item: itemCode,
+            jenis_item: item.jenis_item || "produk",
+            kode_item: item.kode_item,
             status: statusPromo,
             tz: oPayload.tz || "UTC",
             created_by: username,

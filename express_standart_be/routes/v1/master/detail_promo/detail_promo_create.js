@@ -25,40 +25,59 @@ router.post("/", async (req, res) => {
 
     if (cValidation) return res.status(422).json({ status: status.BAD_REQUEST, message: cValidation, datetime: formatDateSystem() });
 
-    let itemCodes = [];
+    let itemsToProcess = [];
     if (Array.isArray(oPayload.details) && oPayload.details.length > 0) {
-      itemCodes = oPayload.details.map((d) => (typeof d === "string" ? d : d.kode_produk || d.kode_item)).filter(Boolean);
+      itemsToProcess = oPayload.details.map((d) => {
+        if (typeof d === "string") {
+          return { kode_item: d.trim(), jenis_item: oPayload.jenis_item || "produk" };
+        }
+        const kode = d.kode_item || d.kode_produk || d.kode_layanan;
+        const jenis = d.jenis_item || (d.kode_layanan ? "layanan" : oPayload.jenis_item || "produk");
+        return { kode_item: kode ? String(kode).trim() : "", jenis_item: jenis };
+      }).filter((it) => it.kode_item);
     } else if (Array.isArray(oPayload.kode_item)) {
-      itemCodes = oPayload.kode_item;
+      itemsToProcess = oPayload.kode_item.map((code) => ({
+        kode_item: String(code).trim(),
+        jenis_item: oPayload.jenis_item || "produk"
+      })).filter((it) => it.kode_item);
     } else if (typeof oPayload.kode_item === "string" && oPayload.kode_item.trim()) {
-      itemCodes = [oPayload.kode_item.trim()];
+      itemsToProcess = [{
+        kode_item: oPayload.kode_item.trim(),
+        jenis_item: oPayload.jenis_item || "produk"
+      }];
     }
 
-    if (itemCodes.length === 0) {
-      return res.status(422).json({ status: status.BAD_REQUEST, message: "Minimal tambahkan 1 produk dalam promo", datetime: formatDateSystem() });
+    // Deduplicate within payload
+    const seenMap = new Map();
+    itemsToProcess = itemsToProcess.filter((it) => {
+      const key = `${it.jenis_item}:${it.kode_item}`;
+      if (seenMap.has(key)) return false;
+      seenMap.set(key, true);
+      return true;
+    });
+
+    if (itemsToProcess.length === 0) {
+      return res.status(422).json({ status: status.BAD_REQUEST, message: "Minimal tambahkan 1 produk atau layanan dalam promo", datetime: formatDateSystem() });
     }
 
     // Validate kode_promo exists
     const promo = await DB("mst_promo").where("kode_promo", oPayload.kode_promo).first();
     if (!promo) return res.status(422).json({ status: status.BAD_REQUEST, message: "Promo tidak ditemukan", datetime: formatDateSystem() });
 
-    const jenisItem = oPayload.jenis_item || "produk";
-
-    // Check existing records for this promo & jenis_item
+    // Check existing records for this promo
     const existingRecords = await DB("mst_detail_promo")
       .where("kode_promo", oPayload.kode_promo)
-      .where("jenis_item", jenisItem)
-      .whereIn("kode_item", itemCodes);
+      .select("jenis_item", "kode_item");
 
-    const existingSet = new Set(existingRecords.map((r) => r.kode_item));
-    const itemsToAdd = itemCodes.filter((item) => !existingSet.has(item));
+    const existingKeySet = new Set(existingRecords.map((r) => `${r.jenis_item}:${r.kode_item}`));
+    const itemsToAdd = itemsToProcess.filter((item) => !existingKeySet.has(`${item.jenis_item}:${item.kode_item}`));
 
     if (itemsToAdd.length === 0) {
       return res.status(422).json({
         status: status.BAD_REQUEST,
-        message: itemCodes.length > 1
-          ? "Seluruh produk yang dipilih sudah terdaftar pada promo ini"
-          : "Produk ini sudah terdaftar pada promo yang sama",
+        message: itemsToProcess.length > 1
+          ? "Seluruh item yang dipilih sudah terdaftar pada promo ini"
+          : "Item ini sudah terdaftar pada promo yang sama",
         datetime: formatDateSystem(),
       });
     }
@@ -73,15 +92,15 @@ router.post("/", async (req, res) => {
         n = (parseInt(last.kode_detail_promo.replace("DPRM-", "")) || 0) + 1;
       }
 
-      for (const itemCode of itemsToAdd) {
+      for (const item of itemsToAdd) {
         const kode = `DPRM-${String(n).padStart(4, "0")}`;
         n++;
 
         const oData = {
           kode_detail_promo: kode,
           kode_promo: oPayload.kode_promo,
-          jenis_item: jenisItem,
-          kode_item: itemCode,
+          jenis_item: item.jenis_item || "produk",
+          kode_item: item.kode_item,
           status: oPayload.status || "aktif",
           tz: oPayload.tz || "UTC",
           created_by: username,
@@ -97,11 +116,12 @@ router.post("/", async (req, res) => {
       }
     });
 
+    const skippedCount = itemsToProcess.length - itemsToAdd.length;
     let msg = createdCount > 1 
-      ? `${createdCount} produk promo berhasil ditambahkan` 
-      : "Detail produk promo berhasil ditambahkan";
-    if (existingSet.size > 0) {
-      msg += ` (${existingSet.size} produk dilewati karena sudah terdaftar)`;
+      ? `${createdCount} item promo berhasil ditambahkan` 
+      : "Detail item promo berhasil ditambahkan";
+    if (skippedCount > 0) {
+      msg += ` (${skippedCount} item dilewati karena sudah terdaftar)`;
     }
 
     return res.status(200).json({ status: status.SUKSES, message: msg, datetime: formatDateSystem(), data: { inserted_codes: insertedCodes } });

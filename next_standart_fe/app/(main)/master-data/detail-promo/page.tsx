@@ -23,6 +23,7 @@ const Page = () => {
     const [data, setData] = useState<any[]>([]);
     const [promoOptions, setPromoOptions] = useState<any[]>([]);
     const [produkOptions, setProdukOptions] = useState<any[]>([]);
+    const [layananOptions, setLayananOptions] = useState<any[]>([]);
     const [loading, setLoading] = useState<boolean>(false);
     const [totalRecords, setTotalRecords] = useState<number>(0);
     const [page, setPage] = useState<number>(1);
@@ -74,15 +75,31 @@ const Page = () => {
         try {
             const res = await postData('/master/produk-data', { status: 'aktif' });
             const list = (res.data.data || []).map((p: any) => ({
-                label: `${p.nama} (${p.kode_produk}) - Rp ${Number(p.harga_jual || 0).toLocaleString('id-ID')}`,
+                label: `[Produk] ${p.nama} (${p.kode_produk}) - Rp ${Number(p.harga_jual || 0).toLocaleString('id-ID')}`,
                 value: p.kode_produk,
                 nama: p.nama,
-                harga_jual: Number(p.harga_jual || 0),
+                harga: Number(p.harga_jual || 0),
                 satuan: p.satuan || 'Pcs',
                 stok_tersedia: p.stok_tersedia || 0,
-                nama_kategori: p.nama_kategori || '-'
+                nama_kategori: p.nama_kategori || 'Produk'
             }));
             setProdukOptions(list);
+        } catch (_) {}
+    };
+
+    const loadLayanan = async () => {
+        try {
+            const res = await postData('/master/layanan-data', { status: 'aktif' });
+            const list = (res.data.data || []).map((l: any) => ({
+                label: `[Layanan] ${l.nama} (${l.kode_layanan}) - Rp ${Number(l.harga || 0).toLocaleString('id-ID')}`,
+                value: l.kode_layanan,
+                nama: l.nama,
+                harga: Number(l.harga || 0),
+                satuan: 'Sesi',
+                stok_tersedia: '-',
+                nama_kategori: l.nama_kategori || 'Layanan'
+            }));
+            setLayananOptions(list);
         } catch (_) {}
     };
 
@@ -93,6 +110,7 @@ const Page = () => {
     useEffect(() => {
         loadPromos();
         loadProduk();
+        loadLayanan();
     }, []);
 
     const formatYmd = (val: any) => {
@@ -131,10 +149,16 @@ const Page = () => {
         setIsEdit(false);
         setSubmitted(false);
         const firstPromo = promoOptions.length > 0 ? promoOptions[0].value : '';
+        const initialDetails: any[] = [];
+        if (produkOptions.length > 0) {
+            initialDetails.push({ jenis_item: 'produk', kode_item: produkOptions[0].value, jumlah: 1 });
+        } else if (layananOptions.length > 0) {
+            initialDetails.push({ jenis_item: 'layanan', kode_item: layananOptions[0].value, jumlah: 1 });
+        }
         setFormData({
             kode_promo: firstPromo,
             status: 'aktif',
-            details: produkOptions.length > 0 ? [{ kode_produk: produkOptions[0].value, jumlah: 1 }] : []
+            details: initialDetails
         });
         setDialogVisible(true);
     };
@@ -146,18 +170,33 @@ const Page = () => {
             kode_promo: rowData.kode_promo,
             status: rowData.status || 'aktif',
             details: (rowData.details || []).map((d: any) => ({
-                kode_produk: d.kode_produk,
+                jenis_item: d.jenis_item || 'produk',
+                kode_item: d.kode_item || d.kode_produk,
                 jumlah: 1
             }))
         });
         setDialogVisible(true);
     };
 
-    const handleAddDetail = () => {
-        if (produkOptions.length === 0) return;
+    const handleAddProduk = () => {
+        if (produkOptions.length === 0) {
+            showError(toast, 'Belum ada data master produk yang aktif');
+            return;
+        }
         setFormData((prev: any) => ({
             ...prev,
-            details: [...prev.details, { kode_produk: produkOptions[0].value, jumlah: 1 }]
+            details: [...prev.details, { jenis_item: 'produk', kode_item: produkOptions[0].value, jumlah: 1 }]
+        }));
+    };
+
+    const handleAddLayanan = () => {
+        if (layananOptions.length === 0) {
+            showError(toast, 'Belum ada data master layanan yang aktif');
+            return;
+        }
+        setFormData((prev: any) => ({
+            ...prev,
+            details: [...prev.details, { jenis_item: 'layanan', kode_item: layananOptions[0].value, jumlah: 1 }]
         }));
     };
 
@@ -168,12 +207,43 @@ const Page = () => {
         }));
     };
 
+    const handleJenisChange = (index: number, newJenis: string) => {
+        setFormData((prev: any) => {
+            const updated = [...prev.details];
+            const defaultCode = newJenis === 'layanan'
+                ? (layananOptions[0]?.value || '')
+                : (produkOptions[0]?.value || '');
+            updated[index] = { ...updated[index], jenis_item: newJenis, kode_item: defaultCode };
+            return { ...prev, details: updated };
+        });
+    };
+
     const handleDetailChange = (index: number, val: any) => {
         setFormData((prev: any) => {
             const updated = [...prev.details];
-            updated[index] = { ...updated[index], kode_produk: val };
+            updated[index] = { ...updated[index], kode_item: val };
             return { ...prev, details: updated };
         });
+    };
+
+    const getItemInfo = (jenis: string, code: string) => {
+        if (jenis === 'layanan') {
+            const it = layananOptions.find((l) => l.value === code);
+            return {
+                nama: it?.nama || code,
+                hargaNormal: it ? it.harga : 0,
+                satuan: 'Sesi',
+                kategori: it?.nama_kategori || 'Layanan'
+            };
+        } else {
+            const it = produkOptions.find((p) => p.value === code);
+            return {
+                nama: it?.nama || code,
+                hargaNormal: it ? it.harga : 0,
+                satuan: it?.satuan || 'Pcs',
+                kategori: it?.nama_kategori || 'Produk'
+            };
+        }
     };
 
     const selectedPromoObj = promoOptions.find((p) => p.value === formData.kode_promo);
@@ -200,13 +270,28 @@ const Page = () => {
             return;
         }
         if (!formData.details || formData.details.length === 0) {
-            showError(toast, 'Minimal tambahkan 1 produk dalam promo!');
+            showError(toast, 'Minimal tambahkan 1 produk atau layanan dalam promo!');
             return;
         }
+
+        const hasInvalidItem = formData.details.some((d: any) => !d.kode_item);
+        if (hasInvalidItem) {
+            showError(toast, 'Harap pilih produk atau layanan pada seluruh baris yang ditambahkan!');
+            return;
+        }
+
         setSaving(true);
         try {
             const endpoint = isEdit ? '/master/detail-promo-update' : '/master/detail-promo-create';
-            const res = await postData(endpoint, formData);
+            const payload = {
+                kode_promo: formData.kode_promo,
+                status: formData.status,
+                details: formData.details.map((d: any) => ({
+                    kode_item: d.kode_item,
+                    jenis_item: d.jenis_item || 'produk'
+                }))
+            };
+            const res = await postData(endpoint, payload);
             showSuccess(toast, res.data.message || 'Berhasil disimpan');
             setDialogVisible(false);
             loadData();
@@ -239,43 +324,72 @@ const Page = () => {
     };
 
     const rowExpansionTemplate = (data: any) => {
+        const prodCount = (data.details || []).filter((d: any) => d.jenis_item === 'produk').length;
+        const layCount = (data.details || []).filter((d: any) => d.jenis_item === 'layanan').length;
+        const pktCount = (data.details || []).filter((d: any) => d.jenis_item === 'paket').length;
+
         return (
             <div className="p-3 surface-50 border-round border-1 surface-border my-2">
-                <div className="flex align-items-center justify-content-between mb-2">
+                <div className="flex align-items-center justify-content-between mb-2 flex-wrap gap-2">
                     <h5 className="m-0 font-bold text-sm text-900 flex align-items-center gap-2">
                         <i className="pi pi-list text-purple-600"></i>
-                        Detail Produk Promo: {data.nama} ({data.kode_promo})
+                        Detail Item Promo: {data.nama} ({data.kode_promo})
                     </h5>
-                    <span className="text-xs text-500 font-medium">Total: {data.details?.length || 0} Produk</span>
+                    <div className="flex align-items-center gap-2 text-xs">
+                        <span className="text-500 font-medium">Total: {data.details?.length || 0} Item</span>
+                        {prodCount > 0 && <Tag severity="info" value={`${prodCount} Produk`} className="text-[11px] py-0 px-2" />}
+                        {layCount > 0 && <Tag severity="success" value={`${layCount} Layanan`} className="text-[11px] py-0 px-2" />}
+                        {pktCount > 0 && <Tag severity="warning" value={`${pktCount} Paket`} className="text-[11px] py-0 px-2" />}
+                    </div>
                 </div>
                 <div className="border-1 surface-border border-round overflow-hidden surface-card">
                     <table className="w-full text-left border-collapse">
                         <thead>
                             <tr className="surface-200 text-800 text-xs">
                                 <th className="p-2 border-bottom-1 surface-border" style={{ width: '3rem' }}>No</th>
-                                <th className="p-2 border-bottom-1 surface-border">Kode Produk</th>
-                                <th className="p-2 border-bottom-1 surface-border">Nama Produk</th>
+                                <th className="p-2 border-bottom-1 surface-border" style={{ width: '100px' }}>Jenis</th>
+                                <th className="p-2 border-bottom-1 surface-border">Kode Item</th>
+                                <th className="p-2 border-bottom-1 surface-border">Nama Item</th>
+                                <th className="p-2 border-bottom-1 surface-border">Kategori</th>
                                 <th className="p-2 border-bottom-1 surface-border text-right">Harga Normal</th>
                                 <th className="p-2 border-bottom-1 surface-border text-right">Harga Promo</th>
-                                <th className="p-2 border-bottom-1 surface-border text-right" style={{ width: '120px' }}>Jumlah Pcs</th>
+                                <th className="p-2 border-bottom-1 surface-border text-right">Hemat</th>
+                                <th className="p-2 border-bottom-1 surface-border text-center" style={{ width: '100px' }}>Satuan</th>
                             </tr>
                         </thead>
                         <tbody>
-                            {(data.details || []).map((item: any, idx: number) => (
-                                <tr key={idx} className="border-bottom-1 surface-border text-sm hover:surface-100">
-                                    <td className="p-2 text-500">{idx + 1}</td>
-                                    <td className="p-2 text-primary font-medium">{item.kode_produk}</td>
-                                    <td className="p-2 font-medium">{item.nama_produk || item.kode_produk}</td>
-                                    <td className="p-2 text-right text-500 line-through">{formatRupiah(item.harga_normal)}</td>
-                                    <td className="p-2 text-right font-bold text-green-600">{formatRupiah(item.harga_promo)}</td>
-                                    <td className="p-2 text-right">
-                                        <Tag value={`${item.stok_tersedia !== undefined ? item.stok_tersedia : 1} ${item.satuan || 'Pcs'}`} severity="info" />
-                                    </td>
-                                </tr>
-                            ))}
+                            {(data.details || []).map((item: any, idx: number) => {
+                                const isLay = item.jenis_item === 'layanan';
+                                const isPkt = item.jenis_item === 'paket';
+                                return (
+                                    <tr key={idx} className="border-bottom-1 surface-border text-sm hover:surface-100">
+                                        <td className="p-2 text-500">{idx + 1}</td>
+                                        <td className="p-2">
+                                            {isLay ? (
+                                                <Tag severity="success" value="Layanan" icon="pi pi-heart" className="text-xs" />
+                                            ) : isPkt ? (
+                                                <Tag severity="warning" value="Paket" icon="pi pi-briefcase" className="text-xs" />
+                                            ) : (
+                                                <Tag severity="info" value="Produk" icon="pi pi-box" className="text-xs" />
+                                            )}
+                                        </td>
+                                        <td className="p-2 text-primary font-medium">{item.kode_item || item.kode_produk}</td>
+                                        <td className="p-2 font-medium">{item.nama_item || item.nama_produk || item.kode_item}</td>
+                                        <td className="p-2 text-500 text-xs">{item.nama_kategori || '-'}</td>
+                                        <td className="p-2 text-right text-500 line-through">{formatRupiah(item.harga_normal)}</td>
+                                        <td className="p-2 text-right font-bold text-green-600">{formatRupiah(item.harga_promo)}</td>
+                                        <td className="p-2 text-right text-xs font-semibold text-purple-600">
+                                            {item.hemat > 0 ? formatRupiah(item.hemat) : '-'}
+                                        </td>
+                                        <td className="p-2 text-center">
+                                            <Tag value={item.satuan || (isLay ? 'Sesi' : 'Pcs')} severity={isLay ? 'success' : isPkt ? 'warning' : 'info'} />
+                                        </td>
+                                    </tr>
+                                );
+                            })}
                             {(!data.details || data.details.length === 0) && (
                                 <tr>
-                                    <td colSpan={6} className="p-3 text-center text-500 text-sm">Tidak ada produk dalam promo ini.</td>
+                                    <td colSpan={9} className="p-3 text-center text-500 text-sm">Tidak ada produk atau layanan dalam promo ini.</td>
                                 </tr>
                             )}
                         </tbody>
@@ -296,10 +410,10 @@ const Page = () => {
                 <div className="mb-4">
                     <h3 className="text-2xl font-bold text-900 flex align-items-center gap-2 mb-1">
                         <i className="pi pi-tags text-purple-600 text-2xl" />
-                        Kelola Detail Promo Produk &amp; Skincare
+                        Kelola Detail Promo Produk &amp; Layanan
                     </h3>
                     <p className="text-500 text-sm m-0">
-                        Tambah, edit, atau nonaktifkan detail produk yang termasuk dalam promo klinik.
+                        Tambah, edit, atau nonaktifkan detail produk dan layanan yang termasuk dalam promo klinik.
                     </p>
                 </div>
 
@@ -368,7 +482,7 @@ const Page = () => {
                     rowExpansionTemplate={rowExpansionTemplate}
                     dataKey="kode_promo"
                     className="p-datatable-sm"
-                    emptyMessage="Data detail promo produk tidak ditemukan."
+                    emptyMessage="Data detail promo tidak ditemukan."
                     responsiveLayout="scroll"
                     rowsPerPageOptions={[10, 25, 50]}
                     paginatorTemplate="FirstPageLink PrevPageLink PageLinks NextPageLink LastPageLink CurrentPageReport RowsPerPageDropdown"
@@ -376,14 +490,14 @@ const Page = () => {
                     header={
                         <div className="flex flex-column gap-3">
                             <div className="flex flex-wrap align-items-center justify-content-between gap-2">
-                                <span className="text-xl font-bold">Data Detail Promo Produk</span>
+                                <span className="text-xl font-bold">Data Detail Promo Produk &amp; Layanan</span>
                                 <div className="flex align-items-center gap-2 ml-auto w-full md:w-auto">
                                     <IconField iconPosition="left" className="w-full md:w-20rem">
                                         <InputIcon className="pi pi-search" />
                                         <InputText
                                             value={keyword}
                                             onChange={(e) => setKeyword(e.target.value)}
-                                            placeholder="Cari Data..."
+                                            placeholder="Cari Promo, Produk, atau Layanan..."
                                             className="w-full text-sm"
                                         />
                                     </IconField>
@@ -438,17 +552,31 @@ const Page = () => {
                     <Column field="kode_promo" header="Kode" sortable headerStyle={{ fontWeight: 'bold' }}></Column>
                     <Column field="nama" header="Nama Promo" sortable headerStyle={{ fontWeight: 'bold' }}></Column>
                     <Column
-                        header="Detail Produk"
-                        body={(r) => (
-                            <Button
-                                label={`Lihat Detail (${r.details?.length || 0})`}
-                                icon="pi pi-eye"
-                                text
-                                size="small"
-                                className="p-button-sm text-primary font-semibold p-1"
-                                onClick={() => toggleRowExpansion(r)}
-                            />
-                        )}
+                        header="Detail Item Promo"
+                        body={(r) => {
+                            const total = r.details?.length || 0;
+                            const prodCount = (r.details || []).filter((d: any) => d.jenis_item === 'produk').length;
+                            const layCount = (r.details || []).filter((d: any) => d.jenis_item === 'layanan').length;
+                            return (
+                                <div className="flex flex-column gap-1">
+                                    <Button
+                                        label={`Lihat Detail (${total})`}
+                                        icon="pi pi-eye"
+                                        text
+                                        size="small"
+                                        className="p-button-sm text-primary font-semibold p-1"
+                                        onClick={() => toggleRowExpansion(r)}
+                                    />
+                                    {total > 0 && (
+                                        <div className="flex align-items-center gap-1 text-[11px] text-500 font-medium">
+                                            {prodCount > 0 && <span>{prodCount} Produk</span>}
+                                            {prodCount > 0 && layCount > 0 && <span>•</span>}
+                                            {layCount > 0 && <span>{layCount} Layanan</span>}
+                                        </div>
+                                    )}
+                                </div>
+                            );
+                        }}
                     ></Column>
                     <Column
                         field="nilai_diskon"
@@ -533,9 +661,9 @@ const Page = () => {
 
             {/* Modal Create/Edit */}
             <Dialog
-                header={isEdit ? 'Edit Detail Promo Produk' : 'Tambah Detail Promo Produk'}
+                header={isEdit ? 'Edit Detail Promo (Produk & Layanan)' : 'Tambah Detail Promo (Produk & Layanan)'}
                 visible={dialogVisible}
-                style={{ width: '650px' }}
+                style={{ width: '750px', maxWidth: '95vw' }}
                 modal
                 onHide={() => setDialogVisible(false)}
             >
@@ -581,47 +709,80 @@ const Page = () => {
                             />
                         </div>
                         <span className="text-xs text-600 block">
-                            <strong>Status: {formData.status === 'aktif' ? 'Aktif' : 'Non-aktif'}</strong>. {formData.status === 'aktif' ? 'Promo produk aktif dan dapat digunakan dalam kasir.' : 'Promo produk dinonaktifkan.'}
+                            <strong>Status: {formData.status === 'aktif' ? 'Aktif' : 'Non-aktif'}</strong>. {formData.status === 'aktif' ? 'Item promo aktif dan diskon dapat digunakan di pendaftaran & kasir.' : 'Detail promo dinonaktifkan.'}
                         </span>
                     </div>
 
                     <div className="mt-2 border-top-1 surface-border pt-3">
-                        <div className="flex align-items-center justify-content-between mb-2">
-                            <label className="font-bold text-sm text-900">Detail Produk Dalam Promo *</label>
-                            <Button label="Tambah Produk" icon="pi pi-plus" text size="small" onClick={handleAddDetail} />
+                        <div className="flex align-items-center justify-content-between mb-2 flex-wrap gap-2">
+                            <label className="font-bold text-sm text-900">Detail Item Dalam Promo *</label>
+                            <div className="flex align-items-center gap-2">
+                                <Button
+                                    type="button"
+                                    label="Tambah Produk"
+                                    icon="pi pi-box"
+                                    outlined
+                                    size="small"
+                                    severity="info"
+                                    className="p-button-sm text-xs font-medium"
+                                    onClick={handleAddProduk}
+                                />
+                                <Button
+                                    type="button"
+                                    label="Tambah Layanan"
+                                    icon="pi pi-heart"
+                                    outlined
+                                    size="small"
+                                    severity="success"
+                                    className="p-button-sm text-xs font-medium"
+                                    onClick={handleAddLayanan}
+                                />
+                            </div>
                         </div>
                         {submitted && (!formData.details || formData.details.length === 0) && (
-                            <small className="p-error text-red-500 text-xs block mb-2">Minimal tambahkan 1 produk dalam promo.</small>
+                            <small className="p-error text-red-500 text-xs block mb-2">Minimal tambahkan 1 produk atau layanan dalam promo.</small>
                         )}
 
                         {(formData.details || []).map((det: any, idx: number) => {
-                            const prod = produkOptions.find((p) => p.value === det.kode_produk);
-                            const hargaNormal = prod ? prod.harga_jual : 0;
-                            const { hargaPromo } = calculatePromoPrice(hargaNormal);
+                            const info = getItemInfo(det.jenis_item, det.kode_item);
+                            const { hargaPromo, hemat } = calculatePromoPrice(info.hargaNormal);
 
                             return (
-                                <div key={idx} className="flex align-items-center gap-2 mb-2 p-2 surface-100 border-round">
-                                    <div className="flex-grow-1">
+                                <div key={idx} className="flex align-items-center gap-2 mb-2 p-2 surface-100 border-round flex-wrap md:flex-nowrap">
+                                    <div style={{ width: '120px' }}>
                                         <Dropdown
-                                            value={det.kode_produk}
-                                            options={produkOptions}
+                                            value={det.jenis_item || 'produk'}
+                                            options={[
+                                                { label: 'Produk', value: 'produk' },
+                                                { label: 'Layanan', value: 'layanan' }
+                                            ]}
+                                            onChange={(e) => handleJenisChange(idx, e.value)}
+                                            className="w-full text-xs"
+                                        />
+                                    </div>
+                                    <div className="flex-grow-1" style={{ minWidth: '220px' }}>
+                                        <Dropdown
+                                            value={det.kode_item}
+                                            options={det.jenis_item === 'layanan' ? layananOptions : produkOptions}
                                             onChange={(e) => handleDetailChange(idx, e.value)}
-                                            placeholder="Pilih Produk..."
+                                            placeholder={det.jenis_item === 'layanan' ? 'Pilih Layanan...' : 'Pilih Produk...'}
                                             filter
                                             className="w-full text-sm"
                                         />
                                     </div>
                                     <div className="text-right px-2" style={{ minWidth: '150px' }}>
-                                        <div className="text-xs text-500 line-through">{formatRupiah(hargaNormal)}</div>
+                                        <div className="text-xs text-500 line-through">{formatRupiah(info.hargaNormal)}</div>
                                         <div className="text-sm font-bold text-green-600">{formatRupiah(hargaPromo)}</div>
+                                        <div className="text-[11px] text-purple-600 font-medium">Hemat {formatRupiah(hemat)}</div>
                                     </div>
                                     <Button
+                                        type="button"
                                         icon="pi pi-trash"
                                         rounded
                                         text
                                         severity="danger"
                                         onClick={() => handleRemoveDetail(idx)}
-                                        tooltip="Hapus Produk"
+                                        tooltip="Hapus Item"
                                     />
                                 </div>
                             );
