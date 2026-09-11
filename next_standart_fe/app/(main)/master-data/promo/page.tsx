@@ -1,6 +1,7 @@
 'use client';
 
 import { useEffect, useRef, useState } from 'react';
+import { useRouter } from 'next/navigation';
 import postData from '@/lib/axios/postData';
 import { Toast } from 'primereact/toast';
 import { DataTable } from 'primereact/datatable';
@@ -20,6 +21,7 @@ import { InputIcon } from 'primereact/inputicon';
 import { showError, showSuccess } from '@/lib/tools/generalTools';
 
 const Page = () => {
+    const router = useRouter();
     const toast = useRef<Toast>(null);
 
     const [data, setData] = useState<any[]>([]);
@@ -196,6 +198,15 @@ const Page = () => {
                         loading={loading}
                         onClick={loadData}
                     />
+                    <Divider layout="vertical" className="m-0 h-2rem" />
+                    <Button
+                        size="small"
+                        label="Detail Item Promo"
+                        icon="pi pi-tags"
+                        outlined
+                        className="border-round-md font-medium px-3 border-purple-600 text-purple-600"
+                        onClick={() => router.push('/master-data/detail-promo')}
+                    />
                 </div>
 
 
@@ -291,9 +302,17 @@ const Page = () => {
                     <Column
                         header="Aksi"
                         align="center"
-                        headerStyle={{ width: '8rem', textAlign: 'center' }}
+                        headerStyle={{ width: '10rem', textAlign: 'center' }}
                         body={(r) => (
                             <div className="flex align-items-center justify-content-center gap-2">
+                                <Button
+                                    icon="pi pi-tags"
+                                    outlined
+                                    severity="info"
+                                    className="p-button-sm border-round-md"
+                                    onClick={() => router.push(`/master-data/detail-promo?kode_promo=${r.kode_promo}`)}
+                                    tooltip="Kelola Item Promo"
+                                />
                                 <Button icon="pi pi-pencil" outlined severity="success" className="p-button-sm border-round-md" onClick={() => handleOpenEdit(r)} tooltip="Edit" />
                                 <Button icon="pi pi-trash" outlined severity="danger" className="p-button-sm border-round-md" onClick={() => handleDelete([r.kode_promo])} tooltip="Hapus" />
                             </div>
