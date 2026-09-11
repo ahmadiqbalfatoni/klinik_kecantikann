@@ -62,7 +62,12 @@ const Page = () => {
     const loadProduk = async () => {
         try {
             const res = await postData('/master/produk-data', { status: 'aktif' });
-            const list = (res.data.data || []).map((p: any) => ({ label: `${p.nama} (${p.kode_produk})`, value: p.kode_produk, nama: p.nama }));
+            const list = (res.data.data || []).map((p: any) => ({
+                label: `${p.nama} (${p.kode_produk}) - ${formatRupiah(p.harga_jual || 0)}`,
+                value: p.kode_produk,
+                nama: p.nama,
+                harga: Number(p.harga_jual) || 0
+            }));
             setProdukOptions(list);
         } catch (error) {
             console.error('Failed to load produk options');
@@ -76,6 +81,15 @@ const Page = () => {
     useEffect(() => {
         loadProduk();
     }, []);
+
+    const calculateNormalTotal = (detailsList: any[], customOptions?: any[]) => {
+        const opts = customOptions || produkOptions;
+        return (detailsList || []).reduce((acc: number, det: any) => {
+            const found = opts.find((p: any) => p.value === det.kode_produk);
+            const itemHarga = found?.harga !== undefined ? found.harga : (det.harga || 0);
+            return acc + (itemHarga * (det.jumlah || 1));
+        }, 0);
+    };
 
     const formatYmd = (val: any) => {
         if (!val) return '';
@@ -98,15 +112,17 @@ const Page = () => {
     const handleOpenCreate = () => {
         setIsEdit(false);
         setSubmitted(false);
+        const initialDetails = produkOptions.length > 0 ? [{ kode_produk: produkOptions[0].value, jumlah: 1 }] : [];
+        const initialPrice = calculateNormalTotal(initialDetails);
         setFormData({
             kode_paket_produk: '',
             nama: '',
-            harga_paket: 0,
+            harga_paket: initialPrice,
             masa_berlaku_hari: 365,
             tanggal_mulai: '',
             tanggal_selesai: '',
             status: 'aktif',
-            details: produkOptions.length > 0 ? [{ kode_produk: produkOptions[0].value, jumlah: 1 }] : []
+            details: initialDetails
         });
         setDialogVisible(true);
     };
@@ -116,6 +132,7 @@ const Page = () => {
         setSubmitted(false);
         setFormData({
             ...rowData,
+            harga_paket: Number(rowData.harga_paket) || 0,
             tanggal_mulai: formatYmd(rowData.tanggal_mulai),
             tanggal_selesai: formatYmd(rowData.tanggal_selesai),
             details: (rowData.details || []).map((d: any) => ({
@@ -138,16 +155,22 @@ const Page = () => {
 
     const handleAddDetail = () => {
         if (produkOptions.length === 0) return;
+        const newDetails = [...formData.details, { kode_produk: produkOptions[0].value, jumlah: 1 }];
+        const newPrice = calculateNormalTotal(newDetails);
         setFormData((prev: any) => ({
             ...prev,
-            details: [...prev.details, { kode_produk: produkOptions[0].value, jumlah: 1 }]
+            details: newDetails,
+            harga_paket: newPrice
         }));
     };
 
     const handleRemoveDetail = (index: number) => {
+        const newDetails = formData.details.filter((_: any, i: number) => i !== index);
+        const newPrice = calculateNormalTotal(newDetails);
         setFormData((prev: any) => ({
             ...prev,
-            details: prev.details.filter((_: any, i: number) => i !== index)
+            details: newDetails,
+            harga_paket: newPrice
         }));
     };
 
@@ -155,7 +178,12 @@ const Page = () => {
         setFormData((prev: any) => {
             const updated = [...prev.details];
             updated[index] = { ...updated[index], [field]: val };
-            return { ...prev, details: updated };
+            const newPrice = calculateNormalTotal(updated);
+            return {
+                ...prev,
+                details: updated,
+                harga_paket: newPrice
+            };
         });
     };
 
@@ -250,6 +278,8 @@ const Page = () => {
             </div>
         );
     };
+
+    const normalTotal = calculateNormalTotal(formData.details);
 
     return (
         <div className="p-4">
@@ -481,11 +511,28 @@ const Page = () => {
                         )}
                     </div>
                     <div className="grid">
-                        <div className="col-6">
+                        <div className="col-12 md:col-6">
                             <label className="block text-sm font-semibold mb-1">Harga Paket (Rp) *</label>
-                            <InputNumber value={formData.harga_paket} onValueChange={(e) => setFormData({ ...formData, harga_paket: e.value })} mode="currency" currency="IDR" locale="id-ID" className="w-full text-sm border-round-md" />
+                            <InputNumber
+                                value={formData.harga_paket}
+                                onValueChange={(e) => setFormData({ ...formData, harga_paket: e.value !== null && e.value !== undefined ? e.value : 0 })}
+                                mode="currency"
+                                currency="IDR"
+                                locale="id-ID"
+                                className="w-full text-sm border-round-md"
+                            />
+                            <div className="flex align-items-center justify-content-between text-xs mt-1">
+                                <span className="text-600">
+                                    Total Normal: <strong className="text-purple-700">{formatRupiah(normalTotal)}</strong>
+                                </span>
+                                {normalTotal > 0 && formData.harga_paket < normalTotal && (
+                                    <span className="text-green-600 font-bold">
+                                        (Hemat: {formatRupiah(normalTotal - formData.harga_paket)})
+                                    </span>
+                                )}
+                            </div>
                         </div>
-                        <div className="col-6">
+                        <div className="col-12 md:col-6">
                             <label className="block text-sm font-semibold mb-1">Masa Berlaku (Hari) *</label>
                             <InputNumber value={formData.masa_berlaku_hari} onValueChange={(e) => setFormData({ ...formData, masa_berlaku_hari: e.value })} suffix=" hari" className="w-full text-sm border-round-md" />
                         </div>
@@ -548,6 +595,7 @@ const Page = () => {
                                         options={produkOptions}
                                         onChange={(e) => handleDetailChange(idx, 'kode_produk', e.value)}
                                         placeholder="Pilih Produk..."
+                                        filter
                                         className="w-full text-sm"
                                     />
                                 </div>
