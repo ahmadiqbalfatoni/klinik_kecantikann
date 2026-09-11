@@ -30,142 +30,64 @@ router.post("/", async (req, res) => {
 
     await DB.transaction(async (trx) => {
       const now = formatDateSystem();
-      const todayYmd = formatDateSystem(new Date(), "yyyy-MM-dd");
-      const todayStr = todayYmd.replace(/-/g, "");
-      const prefixAntrian = `A-${todayStr}-`;
 
-      let record = await trx("trx_antrian_awal")
+      // Ambil kartu antrean urutan terkecil yang berstatus 'tersedia' dari pool fisik master (01-50)
+      const record = await trx("trx_antrian_awal")
         .where("status", "tersedia")
-        .where(function () {
-          this.where("created_at", ">=", todayYmd + " 00:00:00")
-            .orWhere("kode_antrian_awal", "like", `${prefixAntrian}%`);
-        })
         .orderByRaw("CAST(nomor_antrian AS UNSIGNED) ASC, nomor_antrian ASC")
         .forUpdate()
         .first();
 
-      let isNewInsert = false;
-      let finalKodeAntrian = "";
-      let finalNoAntrian = "";
-
-      if (record) {
-        // 2a. Jika ada nomor tersedia, ubah status nomor antrean menjadi 'terpakai' (diambil)
-        finalKodeAntrian = record.kode_antrian_awal;
-        finalNoAntrian = record.nomor_antrian;
-
-        const updateData = {
-          status: "terpakai",
-          diambil_at: now,
-          dipanggil_at: null,
-          updated_by: username,
-          updated_at: now,
-        };
-
-        await trx("trx_antrian_awal")
-          .where("kode_antrian_awal", record.kode_antrian_awal)
-          .update(updateData);
-
-        await ChangesLog(
-          {
-            description: `Ambil Tiket Antrean Pendaftaran - Nomor ${record.nomor_antrian}`,
-            tableName: "trx_antrian_awal",
-            referenceCode: record.kode_antrian_awal,
-            action: "UPDATE",
-            dataBefore: record,
-            dataAfter: { ...record, ...updateData },
-            user: username,
-            tz: oPayload.tz || "UTC",
-          },
-          trx
+      if (!record) {
+        const error = new Error(
+          "Seluruh nomor antrean pendaftaran (01-50) sedang terpakai. Silakan lakukan Reset Antrean atau tunggu hingga antrean selesai."
         );
-      } else {
-        // 2b. Jika TIDAK ada nomor tersedia (kuota habis / master kosong), otomatis insert nomor baru hari ini
-        isNewInsert = true;
-
-        const maxRecord = await trx("trx_antrian_awal")
-          .where(function () {
-            this.where("created_at", ">=", todayYmd + " 00:00:00")
-              .orWhere("kode_antrian_awal", "like", `${prefixAntrian}%`);
-          })
-          .orderByRaw("CAST(nomor_antrian AS UNSIGNED) DESC, id DESC")
-          .first();
-
-        let nextNum = 1;
-        let padLen = 2;
-        if (maxRecord && maxRecord.nomor_antrian) {
-          const digits = parseInt(String(maxRecord.nomor_antrian).replace(/\D/g, ""), 10);
-          if (!isNaN(digits)) {
-            nextNum = digits + 1;
-          }
-          if (String(maxRecord.nomor_antrian).startsWith("0")) {
-            padLen = String(maxRecord.nomor_antrian).length;
-          } else if (nextNum >= 100) {
-            padLen = 3;
-          } else if (String(maxRecord.nomor_antrian).length >= 2) {
-            padLen = String(maxRecord.nomor_antrian).length;
-          } else {
-            padLen = 2;
-          }
-        }
-
-        finalNoAntrian = String(nextNum).padStart(padLen, "0");
-
-        const lastRecordCode = await trx("trx_antrian_awal")
-          .where("kode_antrian_awal", "like", `${prefixAntrian}%`)
-          .orderBy("id", "desc")
-          .first();
-
-        let nextSeq = 1;
-        if (lastRecordCode && lastRecordCode.kode_antrian_awal) {
-          const parts = lastRecordCode.kode_antrian_awal.split("-");
-          const lastSeqNum = parseInt(parts[parts.length - 1], 10);
-          if (!isNaN(lastSeqNum)) nextSeq = lastSeqNum + 1;
-        }
-
-        finalKodeAntrian = `${prefixAntrian}${String(nextSeq).padStart(3, "0")}`;
-
-        const oNewData = {
-          kode_antrian_awal: finalKodeAntrian,
-          nomor_antrian: finalNoAntrian,
-          status: "terpakai",
-          diambil_at: now,
-          dipanggil_at: null,
-          tz: oPayload.tz || "UTC",
-          created_by: username,
-          created_at: now,
-          updated_by: username,
-          updated_at: now,
-        };
-
-        await trx("trx_antrian_awal").insert(oNewData);
-
-        await ChangesLog(
-          {
-            description: `Auto-Insert & Ambil Tiket Antrean Pendaftaran - Nomor ${finalNoAntrian}`,
-            tableName: "trx_antrian_awal",
-            referenceCode: finalKodeAntrian,
-            action: "CREATE",
-            dataBefore: null,
-            dataAfter: oNewData,
-            user: username,
-            tz: oPayload.tz || "UTC",
-          },
-          trx
-        );
+        error.statusCode = 422;
+        throw error;
       }
 
-      // 4. Hitung jumlah antrean yang sedang menunggu di depannya
+      const finalKodeAntrian = record.kode_antrian_awal;
+      const finalNoAntrian = record.nomor_antrian;
+
+      const updateData = {
+        status: "terpakai",
+        diambil_at: now,
+        dipanggil_at: null,
+        updated_by: username,
+        updated_at: now,
+      };
+
+      await trx("trx_antrian_awal")
+        .where("id", record.id)
+        .update(updateData);
+
+      await ChangesLog(
+        {
+          description: `Ambil Tiket Antrean Pendaftaran - Nomor ${record.nomor_antrian}`,
+          tableName: "trx_antrian_awal",
+          referenceCode: record.kode_antrian_awal,
+          action: "UPDATE",
+          dataBefore: record,
+          dataAfter: { ...record, ...updateData },
+          user: username,
+          tz: oPayload.tz || "UTC",
+        },
+        trx
+      );
+
+      // Hitung jumlah antrean yang sedang menunggu di depannya (diambil & belum dipanggil, atau sedang dipanggil)
       const waitingCount = await trx("trx_antrian_awal")
-        .where(function () {
-          this.where("status", "terpakai")
-            .whereNull("dipanggil_at")
-            .where("kode_antrian_awal", "!=", finalKodeAntrian);
+        .where((qb) => {
+          qb.where(function () {
+            this.where("status", "terpakai")
+              .whereNull("dipanggil_at")
+              .where("kode_antrian_awal", "!=", finalKodeAntrian);
+          }).orWhere("status", "dipanggil");
         })
-        .orWhere("status", "dipanggil")
         .count("* as total")
         .first();
 
-      const totalMenunggu = parseInt(waitingCount?.total || 0);
+      const totalMenunggu = parseInt(waitingCount?.total || 0, 10);
 
       resultData = {
         kode_antrian: finalKodeAntrian,

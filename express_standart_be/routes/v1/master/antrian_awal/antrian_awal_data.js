@@ -57,9 +57,13 @@ router.post("/", async (req, res) => {
     let vaData = [];
 
     const selectFields = [
+      "a.id",
       "a.kode_antrian_awal",
       "a.nomor_antrian",
       "a.status",
+      "a.no_rm",
+      "a.kode_kunjungan",
+      "a.diambil_at",
       "a.dipanggil_at",
       "a.created_at",
       "a.updated_at",
@@ -73,6 +77,15 @@ router.post("/", async (req, res) => {
       updated_at: "updated_at"
     };
     const sortCol = sortMap[sortField] || "nomor_antrian";
+    const isAsc = (sortOrder || "asc").toLowerCase() !== "desc";
+    const dirSql = isAsc ? "ASC" : "DESC";
+
+    const applyOrdering = (query) => {
+      if (sortCol === "nomor_antrian") {
+        return query.orderByRaw(`CAST(a.nomor_antrian AS UNSIGNED) ${dirSql}, a.nomor_antrian ${dirSql}`);
+      }
+      return query.orderBy(`a.${sortCol}`, isAsc ? "asc" : "desc");
+    };
 
     if (hasPagination) {
       const page = parseInt(oPayload.page) || 1;
@@ -82,25 +95,24 @@ router.post("/", async (req, res) => {
       const countResult = await baseQuery.clone().count("* as total").first();
       totalRecords = parseInt(countResult.total || 0);
 
-      vaData = await baseQuery
-        .clone()
-        .select(selectFields)
-        .orderBy(`a.${sortCol}`, sortOrder)
+      vaData = await applyOrdering(baseQuery.clone().select(selectFields))
         .limit(perPage)
         .offset(offset);
     } else {
-      vaData = await baseQuery
-        .clone()
-        .select(selectFields)
-        .orderBy(`a.${sortCol}`, sortOrder);
+      vaData = await applyOrdering(baseQuery.clone().select(selectFields));
 
       totalRecords = vaData.length;
     }
 
     const vaDataMapped = vaData.map((row) => ({
+      id: row.id,
       kode_antrian: row.kode_antrian_awal,
       no_antrian: row.nomor_antrian,
       status: row.status === "terpakai" ? (row.dipanggil_at ? "selesai" : "diambil") : row.status,
+      no_rm: row.no_rm || null,
+      kode_kunjungan: row.kode_kunjungan || null,
+      diambil_at: row.diambil_at,
+      dipanggil_at: row.dipanggil_at,
       created_at: row.created_at,
       updated_at: row.updated_at,
     }));

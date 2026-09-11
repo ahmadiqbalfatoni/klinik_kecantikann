@@ -9,7 +9,8 @@ import { Dropdown } from 'primereact/dropdown';
 import { InputText } from 'primereact/inputtext';
 import { TabCetakAntreanProps, AmbilResult } from '../interfaces';
 import postData from '@/lib/axios/postData';
-import { apiEndpointAmbil, apiEndpointPanggil, apiEndpointCreate } from '../endpoints';
+import { apiEndpointAmbil, apiEndpointPanggil, apiEndpointReset } from '../endpoints';
+import { confirmDialog, ConfirmDialog } from 'primereact/confirmdialog';
 import { showError, showSuccess, showWarning } from '@/lib/tools/generalTools';
 import { getTzUser } from '@/lib/tools/dateTools';
 
@@ -379,83 +380,15 @@ export const TabCetakAntrean: React.FC<TabCetakAntreanProps> = ({
         try {
             let ticketData: AmbilResult | null = null;
 
-            // 1. Coba panggil endpoint dedicated /master/antrian-awal-ambil (mendukung auto-insert jika nomor habis)
+            // Panggil endpoint dedicated /master/antrian-awal-ambil (mengambil nomor urutan berikutnya dari pool kartu master)
             try {
                 const res = await postData(apiEndpointAmbil, { tz: getTzUser() });
                 if (res.data?.data) {
                     ticketData = res.data.data;
                 }
             } catch (err: any) {
-                const msg = err?.response?.data?.message || err?.message || '';
-                // Fallback jika backend server lama belum reload route /master/antrian-awal-ambil
-                if (err?.response?.status === 404 || msg.toLowerCase().includes('tidak ditemukan')) {
-                    // Cari apakah ada nomor tersedia di grid
-                    const availableItems = state.gridData
-                        .filter((d) => d.status === 'tersedia')
-                        .sort((a, b) => {
-                            const numA = parseInt(a.no_antrian.replace(/\D/g, '')) || 0;
-                            const numB = parseInt(b.no_antrian.replace(/\D/g, '')) || 0;
-                            return numA !== numB ? numA - numB : a.no_antrian.localeCompare(b.no_antrian);
-                        });
-
-                    if (availableItems.length > 0) {
-                        const nextItem = availableItems[0];
-                        await postData(apiEndpointPanggil, {
-                            kode_antrian: nextItem.kode_antrian,
-                            aksi: 'diambil',
-                            tz: getTzUser(),
-                        });
-
-                        const waitingCount = state.gridData.filter(
-                            (d) =>
-                                (d.status === 'diambil' && d.kode_antrian !== nextItem.kode_antrian) ||
-                                d.status === 'dipanggil'
-                        ).length;
-
-                        ticketData = {
-                            kode_antrian: nextItem.kode_antrian,
-                            no_antrian: nextItem.no_antrian,
-                            diambil_at: new Date().toLocaleString('id-ID'),
-                            antrean_menunggu: waitingCount,
-                            nama_klinik: printerConfig.clinicName || 'KLINIK KECANTIKAN',
-                        };
-                    } else {
-                        // Jika nomor habis, buat nomor baru otomatis via /master/antrian-awal-create
-                        let nextNum = 1;
-                        let padLen = 3;
-                        if (state.gridData && state.gridData.length > 0) {
-                            const nums = state.gridData.map((d) => parseInt(d.no_antrian.replace(/\D/g, '')) || 0);
-                            const maxVal = Math.max(...nums, 0);
-                            nextNum = maxVal + 1;
-                            const sample = state.gridData[0].no_antrian;
-                            if (sample.startsWith('0')) padLen = sample.length;
-                            else if (nextNum >= 100) padLen = 3;
-                            else if (sample.length >= 2) padLen = sample.length;
-                            else padLen = 1;
-                        }
-                        const newNoStr = padLen > 1 ? String(nextNum).padStart(padLen, '0') : String(nextNum);
-
-                        const resCreate = await postData(apiEndpointCreate, {
-                            no_antrian: newNoStr,
-                            status: 'diambil',
-                            tz: getTzUser(),
-                        });
-
-                        const waitingCount = state.gridData.filter(
-                            (d) => d.status === 'diambil' || d.status === 'dipanggil'
-                        ).length;
-
-                        ticketData = {
-                            kode_antrian: resCreate.data?.data?.kode_antrian || `AUTO-${newNoStr}`,
-                            no_antrian: newNoStr,
-                            diambil_at: new Date().toLocaleString('id-ID'),
-                            antrean_menunggu: waitingCount,
-                            nama_klinik: printerConfig.clinicName || 'KLINIK KECANTIKAN',
-                        };
-                    }
-                } else {
-                    throw err;
-                }
+                const msg = err?.response?.data?.message || err?.message || 'Gagal mengambil nomor antrean';
+                throw new Error(msg);
             }
 
             if (!ticketData) {
@@ -583,8 +516,42 @@ export const TabCetakAntrean: React.FC<TabCetakAntreanProps> = ({
         showSuccess(toast, `Panggilan suara nomor ${currentDipanggil.no_antrian} diulang.`);
     };
 
+    // Handler Reset Seluruh Pool Antrean ke Status Tersedia
+    const handleReset = () => {
+        confirmDialog({
+            message: (
+                <div className="flex flex-column align-items-center text-center gap-3 py-2">
+                    <i className="pi pi-refresh text-orange-500 text-5xl" />
+                    <div>
+                        <h3 className="font-bold text-xl mb-1">Reset Seluruh Antrean (Pool 01-50)?</h3>
+                        <p className="text-color-secondary text-sm">
+                            Seluruh nomor kartu fisik (01-50) akan dikembalikan ke status 'Tersedia' dan data transaksi sebelumnya akan dibersihkan untuk pelayanan hari ini.
+                        </p>
+                    </div>
+                </div>
+            ) as any,
+            header: 'Konfirmasi Reset Pool Antrean',
+            acceptLabel: 'Ya, Reset Semua',
+            rejectLabel: 'Batal',
+            acceptClassName: 'p-button-warning',
+            rejectClassName: 'p-button-secondary p-button-outlined',
+            accept: async () => {
+                try {
+                    const res = await postData(apiEndpointReset, { tz: getTzUser() });
+                    showSuccess(toast, res.data?.message || 'Antrean berhasil direset');
+                    await getGridData();
+                } catch (error: any) {
+                    const e = error?.response?.data || error;
+                    showError(toast, e?.message || 'Terjadi Kesalahan saat reset antrean');
+                }
+            },
+        });
+    };
+
     return (
         <div className="card border-round-xl surface-border shadow-1 p-4">
+            <ConfirmDialog />
+
             {/* ── Top Bar: Header & Indikator Koneksi Printer ── */}
             <div className="flex justify-content-between align-items-center flex-wrap gap-3 mb-4 pb-3 border-bottom-1 surface-border">
                 <div>
@@ -593,11 +560,11 @@ export const TabCetakAntrean: React.FC<TabCetakAntreanProps> = ({
                         Antrean Digital (Cetak & Panggil Loket)
                     </h3>
                     <p className="text-color-secondary text-sm m-0">
-                        Cetak tiket fisik untuk pasien baru, panggil antrean ke loket, dan kelola alur pelayanan secara langsung.
+                        Cetak struk tiket fisik untuk pasien baru, panggil antrean ke loket, dan kelola alur pelayanan terintegrasi dengan kartu fisik 01-50.
                     </p>
                 </div>
 
-                {/* Aksi Kanan: Tombol Display TV & Tombol Pengaturan Printer */}
+                {/* Aksi Kanan: Tombol Display TV, Reset Semua & Pengaturan Printer */}
                 <div className="flex align-items-center gap-2 flex-wrap">
                     <Button
                         label="Display TV"
@@ -607,6 +574,17 @@ export const TabCetakAntrean: React.FC<TabCetakAntreanProps> = ({
                         size="small"
                         onClick={() => window.open('/display-antrean-pendaftaran', '_blank')}
                         title="Buka Layar Display TV Antrean di Tab Baru"
+                        className="font-semibold text-xs"
+                    />
+
+                    <Button
+                        label="Reset Semua"
+                        icon="pi pi-refresh"
+                        severity="warning"
+                        outlined
+                        size="small"
+                        onClick={handleReset}
+                        title="Reset seluruh nomor kartu fisik 01-50 ke status tersedia untuk memulai hari baru"
                         className="font-semibold text-xs"
                     />
 
@@ -714,14 +692,18 @@ export const TabCetakAntrean: React.FC<TabCetakAntreanProps> = ({
                         {/* Display info antrean siap cetak */}
                         <div className="w-full my-2">
                             <div className="p-3 border-round-xl border-1 border-slate-200 bg-white shadow-1 flex flex-column align-items-center gap-1">
-                                <Tag value="TIKET FISIK PASIEN" severity="success" className="font-bold text-xs mb-1" />
-                                <div className="text-3xl lg:text-4xl font-black text-teal-700 tracking-wider">
-                                    {tersedia > 0 ? `${tersedia} Tersedia` : 'Auto-Generate'}
+                                <Tag
+                                    value={tersedia > 0 ? "KARTU FISIK TERSEDIA" : "KARTU ANTREAN HABIS"}
+                                    severity={tersedia > 0 ? "success" : "danger"}
+                                    className="font-bold text-xs mb-1"
+                                />
+                                <div className={`text-3xl lg:text-4xl font-black tracking-wider ${tersedia > 0 ? 'text-teal-700' : 'text-red-500'}`}>
+                                    {tersedia > 0 ? `${tersedia} Tersedia` : '0 Tersedia'}
                                 </div>
                                 <span className="text-xs text-slate-500 font-medium">
                                     {tersedia > 0
-                                        ? 'Nomor urutan berikutnya siap diambil'
-                                        : 'Nomor baru akan dibuat otomatis'}
+                                        ? 'Nomor urutan berikutnya siap diambil & dicetak'
+                                        : 'Seluruh nomor kartu fisik (01-50) sedang terpakai'}
                                 </span>
                             </div>
                         </div>
@@ -729,18 +711,26 @@ export const TabCetakAntrean: React.FC<TabCetakAntreanProps> = ({
                         {/* TOMBOL UTAMA AMBIL ANTREAN */}
                         <div className="w-full mt-2">
                             <Button
-                                label={loadingAmbil ? 'Memproses Nomor...' : '🎟️ AMBIL NOMOR ANTREAN'}
+                                label={
+                                    loadingAmbil
+                                        ? 'Memproses Nomor...'
+                                        : tersedia > 0
+                                        ? '🎟️ AMBIL NOMOR ANTREAN'
+                                        : '⚠️ SEMUA KARTU SEDANG TERPAKAI'
+                                }
                                 icon={loadingAmbil ? 'pi pi-spin pi-spinner' : 'pi pi-print'}
-                                disabled={loadingAmbil}
+                                disabled={loadingAmbil || tersedia === 0}
                                 onClick={handleAmbilAntrean}
                                 className="font-black text-base lg:text-lg py-3 px-4 border-round-xl border-none shadow-3 w-full transition-all"
                                 style={{
-                                    background: 'linear-gradient(135deg, #0d9488 0%, #059669 100%)',
+                                    background: tersedia > 0
+                                        ? 'linear-gradient(135deg, #0d9488 0%, #059669 100%)'
+                                        : '#94a3b8',
                                     color: '#ffffff',
-                                    cursor: 'pointer',
+                                    cursor: tersedia > 0 ? 'pointer' : 'not-allowed',
                                 }}
                                 onMouseEnter={(e) => {
-                                    if (!loadingAmbil) {
+                                    if (!loadingAmbil && tersedia > 0) {
                                         (e.currentTarget as HTMLButtonElement).style.transform = 'scale(1.02)';
                                         (e.currentTarget as HTMLButtonElement).style.boxShadow =
                                             '0 8px 20px rgba(13, 148, 136, 0.4)';

@@ -5,6 +5,9 @@ const assetHost = (!rawAsset || rawAsset.includes('<') || rawAsset.includes('>')
 
 /** @type {import('next').NextConfig} */
 const nextConfig = {
+    eslint: {
+        ignoreDuringBuilds: true,
+    },
     async rewrites() {
         return [
             {

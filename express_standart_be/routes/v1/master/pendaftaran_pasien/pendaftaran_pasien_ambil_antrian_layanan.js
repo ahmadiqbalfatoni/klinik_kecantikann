@@ -94,66 +94,48 @@ router.post("/", async (req, res) => {
 
       await trx("trx_kunjungan").insert(oKunjunganData);
 
-      // C. Alokasi 1 trx_antrian_awal status 'tersedia' terkecil hari ini (Auto-generate jika belum ada)
-      let antrianAwalTersedia = await trx("trx_antrian_awal")
-        .where("status", "tersedia")
-        .where(function () {
-          this.where("created_at", ">=", todayYmd + " 00:00:00")
-            .orWhere("kode_antrian_awal", "like", `A-${todayStr}-%`);
-        })
-        .orderBy("id", "asc")
-        .first();
+      // C. Hubungkan dengan 1 kartu fisik dari master pool trx_antrian_awal (TIDAK BOLEH INSERT BARU)
+      let antrianAwalTersedia = null;
 
-      if (!antrianAwalTersedia) {
-        const prefixAntrianAwal = `A-${todayStr}-`;
-        const lastRecord = await trx("trx_antrian_awal")
-          .where(function () {
-            this.where("created_at", ">=", todayYmd + " 00:00:00")
-              .orWhere("kode_antrian_awal", "like", `${prefixAntrianAwal}%`);
-          })
-          .orderBy("id", "desc")
+      // Prioritas 1: Jika request membawa kode_antrian_awal spesifik
+      if (oPayload.kode_antrian_awal) {
+        antrianAwalTersedia = await trx("trx_antrian_awal")
+          .where("kode_antrian_awal", oPayload.kode_antrian_awal)
           .first();
+      }
 
-        let nextNum = 1;
-        if (lastRecord) {
-          if (lastRecord.kode_antrian_awal && lastRecord.kode_antrian_awal.startsWith(prefixAntrianAwal)) {
-            const parts = lastRecord.kode_antrian_awal.split("-");
-            const parsed = parseInt(parts[parts.length - 1], 10);
-            if (!isNaN(parsed)) nextNum = parsed + 1;
-          } else if (lastRecord.nomor_antrian) {
-            const parsed = parseInt(lastRecord.nomor_antrian, 10);
-            if (!isNaN(parsed)) nextNum = parsed + 1;
-          }
-        }
+      // Prioritas 2: Antrean awal yang saat ini sedang dipanggil ke loket pendaftaran (status = 'dipanggil')
+      if (!antrianAwalTersedia) {
+        antrianAwalTersedia = await trx("trx_antrian_awal")
+          .where("status", "dipanggil")
+          .orderByRaw("CAST(nomor_antrian AS UNSIGNED) ASC, nomor_antrian ASC")
+          .first();
+      }
 
-        const cNoAntrianAwal = String(nextNum).padStart(2, "0");
-        const cKodeAntrianAwal = `${prefixAntrianAwal}${String(nextNum).padStart(3, "0")}`;
+      // Prioritas 3: Antrean awal yang sudah diambil tapi belum dikaitkan dengan kunjungan pasien
+      if (!antrianAwalTersedia) {
+        antrianAwalTersedia = await trx("trx_antrian_awal")
+          .where("status", "terpakai")
+          .whereNull("kode_kunjungan")
+          .orderByRaw("CAST(nomor_antrian AS UNSIGNED) ASC, nomor_antrian ASC")
+          .first();
+      }
 
-        const [newAntrianAwalId] = await trx("trx_antrian_awal").insert({
-          kode_antrian_awal: cKodeAntrianAwal,
-          nomor_antrian: cNoAntrianAwal,
-          status: "terpakai",
-          diambil_at: formatDateSystem(),
-          no_rm: pasien.no_rm,
-          kode_kunjungan: cKodeKunjungan,
-          tz: oPayload.tz || "Asia/Jakarta",
-          created_by: username,
-          created_at: formatDateSystem(),
-          updated_by: username,
-          updated_at: formatDateSystem(),
-        });
+      // Prioritas 4: Kartu fisik urutan terkecil yang masih tersedia dari pool master
+      if (!antrianAwalTersedia) {
+        antrianAwalTersedia = await trx("trx_antrian_awal")
+          .where("status", "tersedia")
+          .orderByRaw("CAST(nomor_antrian AS UNSIGNED) ASC, nomor_antrian ASC")
+          .first();
+      }
 
-        antrianAwalTersedia = {
-          id: newAntrianAwalId,
-          kode_antrian_awal: cKodeAntrianAwal,
-          nomor_antrian: cNoAntrianAwal,
-        };
-      } else {
+      if (antrianAwalTersedia) {
         await trx("trx_antrian_awal")
           .where("id", antrianAwalTersedia.id)
           .update({
             status: "terpakai",
-            diambil_at: formatDateSystem(),
+            diambil_at: antrianAwalTersedia.diambil_at || formatDateSystem(),
+            dipanggil_at: antrianAwalTersedia.dipanggil_at || formatDateSystem(),
             no_rm: pasien.no_rm,
             kode_kunjungan: cKodeKunjungan,
             updated_by: username,
@@ -653,8 +635,8 @@ router.post("/", async (req, res) => {
         kode_kunjungan: cKodeKunjungan,
         no_rm: pasien.no_rm,
         nama_pasien: pasien.nama,
-        nomor_antrian_awal: antrianAwalTersedia.nomor_antrian,
-        kode_antrian_awal: antrianAwalTersedia.kode_antrian_awal,
+        nomor_antrian_awal: antrianAwalTersedia ? antrianAwalTersedia.nomor_antrian : null,
+        kode_antrian_awal: antrianAwalTersedia ? antrianAwalTersedia.kode_antrian_awal : null,
         tanggal_kunjungan: todayYmd,
         jam_datang: jamDatang,
         antrian_layanan: vaCreatedAntrianLayanan,

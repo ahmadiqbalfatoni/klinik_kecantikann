@@ -32,31 +32,42 @@ router.post("/", async (req, res) => {
     let jumlahReset = 0;
 
     await DB.transaction(async (trx) => {
-      const recordsTerpakai = await trx("trx_antrian_awal")
-        .whereIn("status", ["terpakai", "dipanggil"])
-        .select("kode_antrian_awal", "nomor_antrian", "status");
+      // Ambil seluruh data kartu pool master yang aktif untuk dicatat di audit log sebelum di-reset
+      const recordsToReset = await trx("trx_antrian_awal")
+        .where("status", "!=", "nonaktif")
+        .where(function () {
+          this.where("status", "!=", "tersedia")
+            .orWhereNotNull("diambil_at")
+            .orWhereNotNull("dipanggil_at")
+            .orWhereNotNull("no_rm")
+            .orWhereNotNull("kode_kunjungan");
+        })
+        .select("id", "kode_antrian_awal", "nomor_antrian", "status");
 
-      jumlahReset = recordsTerpakai.length;
+      jumlahReset = recordsToReset.length;
+
+      // Reset SEMUA kartu pool master (kecuali kartu yang dinonaktifkan secara manual)
+      await trx("trx_antrian_awal")
+        .where("status", "!=", "nonaktif")
+        .update({
+          status: "tersedia",
+          diambil_at: null,
+          dipanggil_at: null,
+          no_rm: null,
+          kode_kunjungan: null,
+          updated_by: username,
+          updated_at: formatDateSystem(),
+        });
 
       if (jumlahReset > 0) {
-        await trx("trx_antrian_awal")
-          .whereIn("status", ["terpakai", "dipanggil"])
-          .update({
-            status: "tersedia",
-            diambil_at: null,
-            dipanggil_at: null,
-            updated_by: username,
-            updated_at: formatDateSystem(),
-          });
-
         await ChangesLog(
           {
-            description: `Reset ${jumlahReset} Nomor Antrian Awal`,
+            description: `Reset Harian Pool Kartu Fisik (${jumlahReset} kartu di-reset ke status tersedia)`,
             tableName: "trx_antrian_awal",
             referenceCode: "RESET",
             action: "UPDATE",
-            dataBefore: recordsTerpakai,
-            dataAfter: { status: "tersedia", jumlah: jumlahReset },
+            dataBefore: recordsToReset,
+            dataAfter: { status: "tersedia", jumlah_direset: jumlahReset },
             user: username,
             tz: oPayload.tz || "UTC",
           },
@@ -69,8 +80,8 @@ router.post("/", async (req, res) => {
       status: status.SUKSES,
       message:
         jumlahReset > 0
-          ? `${jumlahReset} nomor antrian berhasil direset`
-          : "Tidak ada antrian yang perlu direset",
+          ? `${jumlahReset} kartu antrean berhasil direset ke status tersedia`
+          : "Seluruh kartu antrean sudah berstatus tersedia",
       datetime: formatDateSystem(),
       data: { jumlah_reset: jumlahReset },
     });
