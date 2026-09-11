@@ -499,118 +499,223 @@ router.post("/antrian-layanan-simpan-rekomendasi", async (req, res) => {
         }
       }
 
-      // ─── D. PROSES REKOMENDASI PRODUK → MASUK KE DRAF TRANSAKSI PENJUALAN ───
-      if (produkItems.length > 0 && kodeKunjungan && kunjungan) {
+      // ─── D. PROSES DRAF TRANSAKSI (LAYANAN SELESAI + REKOMENDASI PRODUK) ───
+      // Wajib dijalankan setiap kali status_tindakan === 'selesai' (terlepas dari lanjut_ke_tindakan atau ada-tidaknya produk)
+      // ATAU jika terdapat produkItems yang direkomendasikan
+      const isStatusSelesai = status_tindakan === "selesai";
+      const shouldSyncTrx = (isStatusSelesai || produkItems.length > 0) && kodeKunjungan && kunjungan;
+
+      if (shouldSyncTrx) {
         const prefixTrx = `TRX-${todayStr}-`;
 
-        // Cek apakah transaksi draft sudah ada untuk kunjungan ini
-        let existingTrx = await trx("trx_transaksi")
+        // 1. Cek apakah transaksi sudah berstatus lunas (jika sudah lunas, jangan ubah)
+        const lunasTrx = await trx("trx_transaksi")
           .where("kode_kunjungan", kodeKunjungan)
-          .where("status", "draft")
+          .where("status", "lunas")
           .first();
 
-        let kodeTransaksi = "";
-        if (existingTrx) {
-          kodeTransaksi = existingTrx.kode_transaksi;
-        } else {
-          // Generate kode_transaksi baru
-          const lastTrx = await trx("trx_transaksi")
-            .where("kode_transaksi", "like", `${prefixTrx}%`)
+        if (!lunasTrx) {
+          // 2. Cari atau buat draf transaksi
+          let existingTrx = await trx("trx_transaksi")
+            .where("kode_kunjungan", kodeKunjungan)
+            .where("status", "draft")
+            .first();
+
+          let kodeTransaksi = "";
+          if (existingTrx) {
+            kodeTransaksi = existingTrx.kode_transaksi;
+          } else {
+            const lastTrx = await trx("trx_transaksi")
+              .where("kode_transaksi", "like", `${prefixTrx}%`)
+              .orderBy("id", "desc")
+              .first();
+
+            let nextTrxSeq = 1;
+            if (lastTrx && lastTrx.kode_transaksi) {
+              const parts = lastTrx.kode_transaksi.split("-");
+              const num = parseInt(parts[parts.length - 1], 10);
+              if (!isNaN(num)) nextTrxSeq = num + 1;
+            }
+            kodeTransaksi = `${prefixTrx}${String(nextTrxSeq).padStart(3, "0")}`;
+
+            const newTrx = {
+              kode_transaksi: kodeTransaksi,
+              kode_kunjungan: kodeKunjungan,
+              no_rm: kunjungan.no_rm,
+              kode_rekam_medis: null,
+              tanggal_transaksi: todayYmd,
+              total_harga: 0,
+              total_diskon: 0,
+              total_bayar: 0,
+              metode_bayar: "tunai",
+              status: "draft",
+              tz: kunjungan.tz || oPayload.tz || "Asia/Jakarta",
+              created_by: username,
+              created_at: formatDateSystem(),
+              updated_by: username,
+              updated_at: formatDateSystem(),
+            };
+
+            await trx("trx_transaksi").insert(newTrx);
+            existingTrx = newTrx;
+          }
+
+          // Sequence untuk detail transaksi
+          const prefixDetail = `DT-${todayStr}-`;
+          const lastDetail = await trx("trx_detail_transaksi")
+            .where("kode_detail_transaksi", "like", `${prefixDetail}%`)
             .orderBy("id", "desc")
             .first();
 
-          let nextTrxSeq = 1;
-          if (lastTrx && lastTrx.kode_transaksi) {
-            const parts = lastTrx.kode_transaksi.split("-");
+          let nextDetailSeq = 1;
+          if (lastDetail && lastDetail.kode_detail_transaksi) {
+            const parts = lastDetail.kode_detail_transaksi.split("-");
             const num = parseInt(parts[parts.length - 1], 10);
-            if (!isNaN(num)) nextTrxSeq = num + 1;
+            if (!isNaN(num)) nextDetailSeq = num + 1;
           }
-          kodeTransaksi = `${prefixTrx}${String(nextTrxSeq).padStart(3, "0")}`;
 
-          const newTrx = {
-            kode_transaksi: kodeTransaksi,
-            kode_kunjungan: kodeKunjungan,
-            no_rm: kunjungan.no_rm,
-            tanggal_transaksi: todayYmd,
-            total_harga: 0,
-            total_diskon: 0,
-            total_bayar: 0,
-            metode_bayar: "tunai",
-            status: "draft",
-            tz: kunjungan.tz || "Asia/Jakarta",
-            created_by: username,
-            created_at: formatDateSystem(),
-            updated_by: username,
-            updated_at: formatDateSystem(),
-          };
+          // Detail yang sudah ada di transaksi ini
+          const existingDetails = await trx("trx_detail_transaksi")
+            .where("kode_transaksi", kodeTransaksi);
 
-          await trx("trx_transaksi").insert(newTrx);
-          existingTrx = newTrx;
-        }
-
-        // Generate detail transaksi
-        const prefixDetail = `DT-${todayStr}-`;
-        const lastDetail = await trx("trx_detail_transaksi")
-          .where("kode_detail_transaksi", "like", `${prefixDetail}%`)
-          .orderBy("id", "desc")
-          .first();
-
-        let nextDetailSeq = 1;
-        if (lastDetail && lastDetail.kode_detail_transaksi) {
-          const parts = lastDetail.kode_detail_transaksi.split("-");
-          const num = parseInt(parts[parts.length - 1], 10);
-          if (!isNaN(num)) nextDetailSeq = num + 1;
-        }
-
-        let tambahanTotal = 0;
-        for (const prd of produkItems) {
-          const cKodeDetail = `${prefixDetail}${String(nextDetailSeq).padStart(3, "0")}`;
-          nextDetailSeq++;
-
-          const qty = Math.max(1, parseInt(prd.qty || 1, 10));
-          const hargaSatuan = parseFloat(prd.harga || 0);
-          const subtotal = qty * hargaSatuan;
-          tambahanTotal += subtotal;
-
-          const oDetail = {
-            kode_detail_transaksi: cKodeDetail,
-            kode_transaksi: kodeTransaksi,
-            kode_layanan: null,
-            kode_produk: prd.kode || prd.kode_produk,
-            qty: qty,
-            harga_satuan: hargaSatuan,
-            subtotal: subtotal,
-            tz: kunjungan.tz || "Asia/Jakarta",
-            created_by: username,
-            created_at: formatDateSystem(),
-            updated_by: username,
-            updated_at: formatDateSystem(),
-          };
-
-          await trx("trx_detail_transaksi").insert(oDetail);
-        }
-
-        // Recalculate total_harga & total_bayar for trx_transaksi
-        const allDetails = await trx("trx_detail_transaksi")
-          .where("kode_transaksi", kodeTransaksi)
-          .sum("subtotal as total");
-
-        const grandTotal = parseFloat(allDetails[0]?.total || 0);
-
-        await trx("trx_transaksi")
-          .where("kode_transaksi", kodeTransaksi)
-          .update({
-            total_harga: grandTotal,
-            total_bayar: grandTotal,
-            updated_by: username,
-            updated_at: formatDateSystem(),
+          const existingLayananCounts = {};
+          existingDetails.forEach((d) => {
+            if (d.kode_layanan) {
+              existingLayananCounts[d.kode_layanan] = (existingLayananCounts[d.kode_layanan] || 0) + 1;
+            }
           });
 
-        createdTransaksi = {
-          kode_transaksi: kodeTransaksi,
-          total_bayar: grandTotal,
-          jumlah_produk: produkItems.length,
-        };
+          // 3. Masukkan SEMUA antrean layanan yang statusnya 'selesai' (termasuk konsultasi ini)
+          const completedServices = await trx("trx_detail_antrian_layanan as dal")
+            .join("trx_antrian_layanan as al", "dal.kode_antrian_layanan", "al.kode_antrian_layanan")
+            .where("al.kode_kunjungan", kodeKunjungan)
+            .where("al.status", "selesai")
+            .select(
+              "dal.id",
+              "dal.kode_detail_antrian_layanan",
+              "dal.kode_antrian_layanan",
+              "dal.kode_layanan",
+              "dal.nama_layanan",
+              "dal.harga",
+              "dal.jenis_layanan"
+            )
+            .orderBy("dal.id", "asc");
+
+          for (const item of completedServices) {
+            if (item.kode_layanan) {
+              const currentCount = existingLayananCounts[item.kode_layanan] || 0;
+              if (currentCount > 0) {
+                existingLayananCounts[item.kode_layanan]--;
+              } else {
+                const cKodeDetail = `${prefixDetail}${String(nextDetailSeq).padStart(3, "0")}`;
+                nextDetailSeq++;
+                const isKlaim = (item.jenis_layanan || "").toLowerCase() === "klaim_paket";
+                const hargaSatuan = isKlaim ? 0 : parseFloat(item.harga || 0);
+
+                await trx("trx_detail_transaksi").insert({
+                  kode_detail_transaksi: cKodeDetail,
+                  kode_transaksi: kodeTransaksi,
+                  kode_layanan: item.kode_layanan,
+                  kode_produk: null,
+                  qty: 1,
+                  harga_satuan: hargaSatuan,
+                  subtotal: hargaSatuan,
+                  is_from_pendaftaran: 1,
+                  tz: kunjungan.tz || oPayload.tz || "Asia/Jakarta",
+                  created_by: username,
+                  created_at: formatDateSystem(),
+                  updated_by: username,
+                  updated_at: formatDateSystem(),
+                });
+              }
+            }
+          }
+
+          // 4. Masukkan atau perbarui produk rekomendasi dokter (jika ada)
+          for (const prd of produkItems) {
+            const kdProduk = prd.kode || prd.kode_produk;
+            if (kdProduk) {
+              const qty = Math.max(1, parseInt(prd.qty || 1, 10));
+              const hargaSatuan = parseFloat(prd.harga || 0);
+              const subtotal = qty * hargaSatuan;
+
+              const existPrd = existingDetails.find((d) => d.kode_produk === kdProduk);
+              if (existPrd) {
+                await trx("trx_detail_transaksi")
+                  .where("id", existPrd.id)
+                  .update({
+                    qty: qty,
+                    harga_satuan: hargaSatuan,
+                    subtotal: subtotal,
+                    updated_by: username,
+                    updated_at: formatDateSystem(),
+                  });
+              } else {
+                const cKodeDetail = `${prefixDetail}${String(nextDetailSeq).padStart(3, "0")}`;
+                nextDetailSeq++;
+
+                await trx("trx_detail_transaksi").insert({
+                  kode_detail_transaksi: cKodeDetail,
+                  kode_transaksi: kodeTransaksi,
+                  kode_layanan: null,
+                  kode_produk: kdProduk,
+                  qty: qty,
+                  harga_satuan: hargaSatuan,
+                  subtotal: subtotal,
+                  is_from_pendaftaran: 0,
+                  tz: kunjungan.tz || oPayload.tz || "Asia/Jakarta",
+                  created_by: username,
+                  created_at: formatDateSystem(),
+                  updated_by: username,
+                  updated_at: formatDateSystem(),
+                });
+              }
+            }
+          }
+
+          // 5. Hitung ulang total_harga & total_bayar
+          const allDetails = await trx("trx_detail_transaksi")
+            .where("kode_transaksi", kodeTransaksi)
+            .sum("subtotal as total");
+
+          const grandTotal = parseFloat(allDetails[0]?.total || 0);
+
+          await trx("trx_transaksi")
+            .where("kode_transaksi", kodeTransaksi)
+            .update({
+              total_harga: grandTotal,
+              total_bayar: grandTotal,
+              updated_by: username,
+              updated_at: formatDateSystem(),
+            });
+
+          createdTransaksi = {
+            kode_transaksi: kodeTransaksi,
+            total_bayar: grandTotal,
+            jumlah_produk: produkItems.length,
+          };
+        }
+      }
+
+      // ─── E. UPDATE STATUS KUNJUNGAN JIKA TANPA RUJUKAN & SEMUA ANTREAN SELESAI ───
+      // Saat lanjut_ke_tindakan === 0 dan status_tindakan === 'selesai',
+      // periksa apakah SEMUA antrean pada kode_kunjungan ini sudah selesai/batal.
+      // Jika ya, update status kunjungan menjadi 'selesai'.
+      if (isLanjut === 0 && isStatusSelesai && kodeKunjungan) {
+        const allAntrian = await trx("trx_antrian_layanan")
+          .where("kode_kunjungan", kodeKunjungan)
+          .select("status");
+
+        const allSelesai = allAntrian.length > 0 && allAntrian.every((a) => a.status === "selesai" || a.status === "batal");
+        if (allSelesai) {
+          await trx("trx_kunjungan")
+            .where("kode_kunjungan", kodeKunjungan)
+            .update({
+              status: "selesai",
+              updated_by: username,
+              updated_at: formatDateSystem(),
+            });
+        }
       }
 
       // ─── E. SIMPAN & SYNC REKAM MEDIS ───
@@ -647,11 +752,11 @@ router.post("/antrian-layanan-simpan-rekomendasi", async (req, res) => {
 
     let msg = "Hasil penanganan & catatan ruangan berhasil disimpan";
     if (createdAntrianLayanan.length > 0 && createdTransaksi) {
-      msg = `Berhasil disimpan! Menerbitkan ${createdAntrianLayanan.length} antrean layanan & 1 draf transaksi produk.`;
+      msg = `Berhasil disimpan! Menerbitkan ${createdAntrianLayanan.length} antrean layanan & 1 draf transaksi.`;
     } else if (createdAntrianLayanan.length > 0) {
       msg = `Berhasil disimpan & menerbitkan ${createdAntrianLayanan.length} antrean layanan baru!`;
     } else if (createdTransaksi) {
-      msg = `Berhasil disimpan & rekomendasi produk masuk ke draf transaksi!`;
+      msg = `Berhasil disimpan & draf transaksi kasir berhasil diperbarui!`;
     }
 
     return res.status(200).json({

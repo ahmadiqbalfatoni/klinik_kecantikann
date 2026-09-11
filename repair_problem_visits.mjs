@@ -92,6 +92,8 @@ export async function executeRepair() {
       'KJ-20260907-007',
       'KJ-20260907-008',
       'KJ-20260907-009',
+      'KJ-20260911-001',
+      'KJ-20260911-002',
     ];
 
     for (const kodeKunjungan of visitsWithoutTrx) {
