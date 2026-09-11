@@ -62,6 +62,7 @@ const DEFAULT_ROLES: RoleItem[] = [
             '/master-data/layanan',
             '/master-data/produk',
             '/master-data/promo',
+            '/master-data/detail-promo',
         ],
         is_custom: false,
     },

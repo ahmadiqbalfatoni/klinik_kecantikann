@@ -187,6 +187,25 @@ const AppMenu = () => {
                                 subItems.push(inventoriItem);
                             }
                         }
+
+                        const hasDetailPromo = subItems.some(
+                            (it) => (it.label || '').toLowerCase().includes('detail promo') || it.to === '/master-data/detail-promo'
+                        );
+                        if (!hasDetailPromo) {
+                            const detailPromoItem: AppMenuItem = {
+                                label: 'Detail Promo',
+                                to: '/master-data/detail-promo',
+                                icon: 'pi pi-fw pi-tags',
+                            };
+                            const promoIdx = subItems.findIndex(
+                                (it) => (it.label || '').toLowerCase().includes('promo') || it.to === '/master-data/promo'
+                            );
+                            if (promoIdx !== -1) {
+                                subItems.splice(promoIdx + 1, 0, detailPromoItem);
+                            } else {
+                                subItems.push(detailPromoItem);
+                            }
+                        }
                     }
                     newItem.items = subItems;
                 }
