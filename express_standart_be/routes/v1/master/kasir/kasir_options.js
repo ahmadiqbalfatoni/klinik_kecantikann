@@ -17,12 +17,16 @@ router.post("/", async (req, res) => {
   const todayStr = new Date().toISOString().slice(0, 10);
 
   try {
-    // 1. Pasien dengan kunjungan aktif hari ini
-    const vaKunjungan = await DB("trx_kunjungan as k")
+    // 1. Pasien dengan kunjungan 'selesai' dan BELUM ada transaksi lunas
+    let kunjunganQuery = DB("trx_kunjungan as k")
       .join("mst_pasien as p", "k.no_rm", "p.no_rm")
       .leftJoin("trx_booking as b", "k.kode_booking", "b.kode_booking")
-      .where("k.tanggal_kunjungan", todayStr)
-      .where("k.status", "berlangsung")
+      .leftJoin("trx_transaksi as t_lunas", function () {
+        this.on("k.kode_kunjungan", "=", "t_lunas.kode_kunjungan")
+          .andOn("t_lunas.status", "=", DB.raw("?", ["lunas"]));
+      })
+      .where("k.status", "selesai")
+      .whereNull("t_lunas.id")
       .select(
         "k.kode_kunjungan",
         "k.kode_booking",
@@ -37,81 +41,66 @@ router.post("/", async (req, res) => {
       )
       .orderBy("k.jam_datang", "asc");
 
-    // Ambil layanan/paket dari pendaftaran (trx_detail_antrian_layanan)
+    if (body?.tanggal_kunjungan) {
+      kunjunganQuery = kunjunganQuery.where("k.tanggal_kunjungan", body.tanggal_kunjungan);
+    }
+
+    const vaKunjungan = await kunjunganQuery;
+
+    // Ambil SEMUA antrean layanan yang statusnya 'selesai' (asal maupun rujukan)
     const kodeKunjunganList = vaKunjungan.map((k) => k.kode_kunjungan).filter(Boolean);
     let vaLayananPendaftaran = [];
     if (kodeKunjunganList.length > 0) {
-      // Ambil hanya dari antrian ASAL (kode_antrian_asal IS NULL) dan GROUP BY kode_layanan
-      // Gunakan MIN(harga) agar klaim_paket (harga=0) selalu diprioritaskan
       vaLayananPendaftaran = await DB("trx_detail_antrian_layanan as dal")
         .join("trx_antrian_layanan as al", "dal.kode_antrian_layanan", "al.kode_antrian_layanan")
         .whereIn("al.kode_kunjungan", kodeKunjunganList)
-        .whereNull("al.kode_antrian_asal")
-        .groupBy("al.kode_kunjungan", "dal.kode_layanan")
+        .where("al.status", "selesai")
         .select(
           "al.kode_kunjungan",
-          DB.raw("MIN(dal.jenis_layanan) as jenis_layanan"),
+          "dal.id",
+          "dal.kode_detail_antrian_layanan",
+          "dal.kode_antrian_layanan",
           "dal.kode_layanan",
-          DB.raw("MAX(dal.nama_layanan) as nama_layanan"),
-          DB.raw("MIN(dal.harga) as harga"),  // MIN agar klaim_paket (Rp 0) diutamakan
-          DB.raw("MAX(dal.kode_promo) as kode_promo"),
-          DB.raw("MAX(dal.nama_promo) as nama_promo"),
-          DB.raw("MAX(dal.jenis_diskon) as jenis_diskon"),
-          DB.raw("MAX(dal.nilai_diskon) as nilai_diskon")
-        );
-
-      // Fallback jika semua antrian sudah punya asal (forwarded)
-      if (vaLayananPendaftaran.length === 0) {
-        vaLayananPendaftaran = await DB("trx_detail_antrian_layanan as dal")
-          .join("trx_antrian_layanan as al", "dal.kode_antrian_layanan", "al.kode_antrian_layanan")
-          .whereIn("al.kode_kunjungan", kodeKunjunganList)
-          .groupBy("al.kode_kunjungan", "dal.kode_layanan")
-          .select(
-            "al.kode_kunjungan",
-            DB.raw("MIN(dal.jenis_layanan) as jenis_layanan"),
-            "dal.kode_layanan",
-            DB.raw("MAX(dal.nama_layanan) as nama_layanan"),
-            DB.raw("MIN(dal.harga) as harga"),
-            DB.raw("MAX(dal.kode_promo) as kode_promo"),
-            DB.raw("MAX(dal.nama_promo) as nama_promo"),
-            DB.raw("MAX(dal.jenis_diskon) as jenis_diskon"),
-            DB.raw("MAX(dal.nilai_diskon) as nilai_diskon")
-          );
-      }
+          "dal.nama_layanan",
+          "dal.harga",
+          "dal.jenis_layanan",
+          "dal.kode_promo",
+          "dal.nama_promo",
+          "dal.jenis_diskon",
+          "dal.nilai_diskon"
+        )
+        .orderBy("dal.id", "asc");
     }
 
     const kunjunganMapped = vaKunjungan.map((k) => {
       const roomItems = vaLayananPendaftaran.filter((l) => l.kode_kunjungan === k.kode_kunjungan);
-      const uniqueItemsMap = {};
-      roomItems.forEach((l) => {
-        const isKlaim = (l.jenis_layanan || '').toLowerCase() === 'klaim_paket';
-        if (l.kode_layanan) {
-          // Untuk klaim_paket, selalu override dengan harga=0 (prioritas tertinggi)
-          if (!uniqueItemsMap[l.kode_layanan] || isKlaim) {
-            uniqueItemsMap[l.kode_layanan] = {
-              jenis: isKlaim ? 'klaim_paket' : 'layanan',
-              kode: l.kode_layanan,
-              nama: l.nama_layanan,
-              satuan: "tindakan",
-              qty: 1,
-              harga_satuan: isKlaim ? 0 : parseFloat(l.harga || 0),
-              subtotal: isKlaim ? 0 : parseFloat(l.harga || 0),
-              is_from_pendaftaran: true,
-              is_klaim_paket: isKlaim,
-              kode_promo: l.kode_promo || null,
-              nama_promo: l.nama_promo || null,
-              jenis_diskon: l.jenis_diskon || null,
-              nilai_diskon: l.nilai_diskon ? parseFloat(l.nilai_diskon) : null,
-            };
-          }
-        }
+      const mappedItems = roomItems.map((l) => {
+        const isKlaim = (l.jenis_layanan || "").toLowerCase() === "klaim_paket";
+        const itemHarga = isKlaim ? 0 : parseFloat(l.harga || 0);
+        return {
+          id: l.id,
+          kode_detail_antrian_layanan: l.kode_detail_antrian_layanan,
+          jenis: isKlaim ? "klaim_paket" : "layanan",
+          kode: l.kode_layanan,
+          nama: l.nama_layanan,
+          satuan: "tindakan",
+          qty: 1,
+          harga_satuan: itemHarga,
+          subtotal: itemHarga,
+          is_from_pendaftaran: true,
+          is_klaim_paket: isKlaim,
+          kode_promo: l.kode_promo || null,
+          nama_promo: l.nama_promo || null,
+          jenis_diskon: l.jenis_diskon || null,
+          nilai_diskon: l.nilai_diskon ? parseFloat(l.nilai_diskon) : null,
+        };
       });
       return {
         ...k,
         dp_nominal: parseFloat(k.dp_nominal || 0),
         dp_status: k.dp_status || null,
         metode_pembayaran_dp: k.metode_pembayaran_dp || null,
-        layanan_pendaftaran: Object.values(uniqueItemsMap),
+        layanan_pendaftaran: mappedItems,
       };
     });
 

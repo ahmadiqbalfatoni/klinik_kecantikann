@@ -58,42 +58,36 @@ router.post("/", async (req, res) => {
 
     // ─── AUTO-SELECT IDEMPOTENT LAYANAN/PAKET DARI ANTRIAN (JIKA DRAFT & KODE_KUNJUNGAN ADA) ───
     if (trx.kode_kunjungan && trx.status === "draft") {
-      let antrianItems = await DB("trx_detail_antrian_layanan as dal")
+      const antrianItems = await DB("trx_detail_antrian_layanan as dal")
         .join("trx_antrian_layanan as al", "dal.kode_antrian_layanan", "al.kode_antrian_layanan")
         .where("al.kode_kunjungan", trx.kode_kunjungan)
-        .whereNull("al.kode_antrian_asal")
-        .groupBy("dal.kode_layanan")
+        .where("al.status", "selesai")
         .select(
+          "dal.id",
+          "dal.kode_detail_antrian_layanan",
+          "dal.kode_antrian_layanan",
           "dal.kode_layanan",
-          DB.raw("MAX(dal.nama_layanan) as nama_layanan"),
-          DB.raw("MIN(dal.harga) as harga"),  // MIN agar klaim_paket (Rp 0) diutamakan
-          DB.raw("MAX(dal.kode_promo) as kode_promo"),
-          DB.raw("MAX(dal.nama_promo) as nama_promo"),
-          DB.raw("MAX(dal.jenis_diskon) as jenis_diskon"),
-          DB.raw("MAX(dal.nilai_diskon) as nilai_diskon")
-        );
-
-      if (antrianItems.length === 0) {
-        antrianItems = await DB("trx_detail_antrian_layanan as dal")
-          .where("dal.kode_kunjungan", trx.kode_kunjungan)
-          .groupBy("dal.kode_layanan")
-          .select(
-            "dal.kode_layanan",
-            DB.raw("MAX(dal.nama_layanan) as nama_layanan"),
-            DB.raw("MIN(dal.harga) as harga"),  // MIN agar klaim_paket (Rp 0) diutamakan
-            DB.raw("MAX(dal.kode_promo) as kode_promo"),
-            DB.raw("MAX(dal.nama_promo) as nama_promo"),
-            DB.raw("MAX(dal.jenis_diskon) as jenis_diskon"),
-            DB.raw("MAX(dal.nilai_diskon) as nilai_diskon")
-          );
-      }
+          "dal.nama_layanan",
+          "dal.harga",
+          "dal.jenis_layanan",
+          "dal.kode_promo",
+          "dal.nama_promo",
+          "dal.jenis_diskon",
+          "dal.nilai_diskon"
+        )
+        .orderBy("dal.id", "asc");
 
       if (antrianItems.length > 0) {
         const existingDetails = await DB("trx_detail_transaksi")
           .where("kode_transaksi", kode_transaksi)
           .select("kode_layanan");
 
-        const existingSet = new Set(existingDetails.map((d) => d.kode_layanan).filter(Boolean));
+        const existingCounts = {};
+        existingDetails.forEach((d) => {
+          if (d.kode_layanan) {
+            existingCounts[d.kode_layanan] = (existingCounts[d.kode_layanan] || 0) + 1;
+          }
+        });
 
         const today = new Date().toISOString().slice(0, 10).replace(/-/g, "");
         const prefixDetail = `DT-${today}-`;
@@ -111,31 +105,35 @@ router.post("/", async (req, res) => {
 
         let insertedAny = false;
         for (const item of antrianItems) {
-          if (item.kode_layanan && !existingSet.has(item.kode_layanan)) {
-            existingSet.add(item.kode_layanan);
-            const cKodeDetail = `${prefixDetail}${String(dtSeq).padStart(3, "0")}`;
-            dtSeq++;
+          if (item.kode_layanan) {
+            const currentCount = existingCounts[item.kode_layanan] || 0;
+            if (currentCount > 0) {
+              existingCounts[item.kode_layanan]--;
+            } else {
+              const cKodeDetail = `${prefixDetail}${String(dtSeq).padStart(3, "0")}`;
+              dtSeq++;
 
-            // Snapshot harga dari antrian (dal.harga), bukan re-fetch dari master
-            const hargaSatuan = parseFloat(item.harga || 0);
+              const isKlaim = (item.jenis_layanan || "").toLowerCase() === "klaim_paket";
+              const hargaSatuan = isKlaim ? 0 : parseFloat(item.harga || 0);
 
-            await DB("trx_detail_transaksi").insert({
-              kode_detail_transaksi: cKodeDetail,
-              kode_transaksi: kode_transaksi,
-              kode_layanan: item.kode_layanan,
-              kode_produk: null,
-              qty: 1,
-              harga_satuan: hargaSatuan,
-              subtotal: hargaSatuan,
-              is_from_pendaftaran: 1,
-              tz: trx.tz || "Asia/Jakarta",
-              created_by: username,
-              created_at: DB.fn.now(),
-              updated_by: username,
-              updated_at: DB.fn.now(),
-            });
+              await DB("trx_detail_transaksi").insert({
+                kode_detail_transaksi: cKodeDetail,
+                kode_transaksi: kode_transaksi,
+                kode_layanan: item.kode_layanan,
+                kode_produk: null,
+                qty: 1,
+                harga_satuan: hargaSatuan,
+                subtotal: hargaSatuan,
+                is_from_pendaftaran: 1,
+                tz: trx.tz || "Asia/Jakarta",
+                created_by: username || "system",
+                created_at: formatDateSystem(),
+                updated_by: username || "system",
+                updated_at: formatDateSystem(),
+              });
 
-            insertedAny = true;
+              insertedAny = true;
+            }
           }
         }
 

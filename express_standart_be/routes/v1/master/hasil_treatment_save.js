@@ -108,34 +108,41 @@ const handleHasilTreatmentSave = async (req, res) => {
 
       let resolvedKodeRM = kode_rekam_medis || (id_rekam_medis ? String(id_rekam_medis) : null);
 
-      // ─── 3. AMBIL LAYANAN DARI PENDAFTARAN (trx_detail_antrian_layanan) ──────
-      // Ambil hanya dari antrian asal (kode_antrian_asal IS NULL) dan deduplicate per kode_layanan
-      let layananPendaftaran = await trx("trx_detail_antrian_layanan as dal")
-        .join("trx_antrian_layanan as al", "dal.kode_antrian_layanan", "al.kode_antrian_layanan")
-        .where("al.kode_kunjungan", kode_kunjungan)
-        .whereNull("al.kode_antrian_asal")
-        .groupBy("dal.kode_layanan")
-        .select(
-          "dal.kode_layanan",
-          trx.raw("MAX(dal.nama_layanan) as nama_layanan"),
-          trx.raw("MIN(dal.harga) as harga"),  // MIN agar klaim_paket (Rp 0) diutamakan
-          trx.raw("MAX(dal.jenis_layanan) as jenis_layanan")
-        );
-
-      // Fallback jika tidak ada antrian asal (misal semua sudah punya asal)
-      if (layananPendaftaran.length === 0) {
-        layananPendaftaran = await trx("trx_detail_antrian_layanan as dal")
-          .where("dal.kode_kunjungan", kode_kunjungan)
-          .groupBy("dal.kode_layanan")
-          .select(
-            "dal.kode_layanan",
-            trx.raw("MAX(dal.nama_layanan) as nama_layanan"),
-            trx.raw("MIN(dal.harga) as harga"),  // MIN agar klaim_paket (Rp 0) diutamakan
-            trx.raw("MAX(dal.jenis_layanan) as jenis_layanan")
-          );
+      // ─── 3. UPDATE STATUS ANTRIAN SAAT INI JADI SELESAI ─────────────────────
+      if (resolvedKodeAntrian) {
+        await trx("trx_antrian_layanan")
+          .where("kode_antrian_layanan", resolvedKodeAntrian)
+          .update({
+            status: "selesai",
+            selesai_at: formatDateSystem(),
+            updated_by: username,
+            updated_at: formatDateSystem(),
+          });
       }
 
-      // ─── 4. GABUNGKAN LAYANAN PENDAFTARAN + PRODUK DOKTER ────────────────────
+      // ─── 4. AMBIL SEMUA LAYANAN SELESAI (PENDAFTARAN MAUPUN RUJUKAN) ─────────
+      // Mengambil SEMUA antrean layanan (trx_antrian_layanan) untuk kunjungan ini yang statusnya 'selesai'
+      // tanpa membuang antrean rujukan (tidak ada whereNull kode_antrian_asal) dan harga asli masing-masing
+      const layananPendaftaran = await trx("trx_detail_antrian_layanan as dal")
+        .join("trx_antrian_layanan as al", "dal.kode_antrian_layanan", "al.kode_antrian_layanan")
+        .where("al.kode_kunjungan", kode_kunjungan)
+        .where("al.status", "selesai")
+        .select(
+          "dal.id",
+          "dal.kode_detail_antrian_layanan",
+          "dal.kode_antrian_layanan",
+          "dal.kode_layanan",
+          "dal.nama_layanan",
+          "dal.harga",
+          "dal.jenis_layanan",
+          "dal.kode_promo",
+          "dal.nama_promo",
+          "dal.jenis_diskon",
+          "dal.nilai_diskon"
+        )
+        .orderBy("dal.id", "asc");
+
+      // ─── 5. GABUNGKAN LAYANAN SELESAI + PRODUK DOKTER ────────────────────────
       const hasItems = layananPendaftaran.length > 0 || produkItems.length > 0;
 
       if (hasItems) {
@@ -219,7 +226,8 @@ const handleHasilTreatmentSave = async (req, res) => {
         for (const layanan of layananPendaftaran) {
           const cKodeDetail = `${prefixDetail}${String(nextDetailSeq).padStart(3, "0")}`;
           nextDetailSeq++;
-          const hargaSatuan = parseFloat(layanan.harga || 0);
+          const isKlaim = (layanan.jenis_layanan || "").toLowerCase() === "klaim_paket";
+          const hargaSatuan = isKlaim ? 0 : parseFloat(layanan.harga || 0);
 
           await trx("trx_detail_transaksi").insert({
             kode_detail_transaksi: cKodeDetail,
@@ -320,17 +328,7 @@ const handleHasilTreatmentSave = async (req, res) => {
           });
       }
 
-      // ─── UPDATE STATUS ANTRIAN MENJADI SELESAI ────────────────────────────────
-      if (resolvedKodeAntrian) {
-        await trx("trx_antrian_layanan")
-          .where("kode_antrian_layanan", resolvedKodeAntrian)
-          .update({
-            status: "selesai",
-            selesai_at: formatDateSystem(),
-            updated_by: username,
-            updated_at: formatDateSystem(),
-          });
-      }
+
 
       // ─── CEK APAKAH SEMUA ANTRIAN DI KUNJUNGAN INI SUDAH SELESAI ─────────────
       const allAntrianKunjungan = await trx("trx_antrian_layanan")

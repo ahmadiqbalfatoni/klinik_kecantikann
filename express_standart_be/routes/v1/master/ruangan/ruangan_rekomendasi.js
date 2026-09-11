@@ -685,7 +685,7 @@ router.post("/antrian-layanan-simpan-rekomendasi", async (req, res) => {
  * ─── 3. FETCH PRE-SELECTED ITEMS DARI PENDAFTARAN (UNLOCKED / LOCKED) ───
  */
 router.post("/antrian-layanan-pendaftaran-items", async (req, res) => {
-  const { kode_kunjungan, kode_antrian_layanan } = req.body || {};
+  const { kode_kunjungan, kode_antrian_layanan, for_referral } = req.body || {};
   const username = req?.auth?.username || "system";
 
   try {
@@ -719,8 +719,18 @@ router.post("/antrian-layanan-pendaftaran-items", async (req, res) => {
       "r_pkt.is_konsultasi as pkt_is_konsul"
     );
 
-    const formatted = rawItems
-      .filter((i) => !Boolean(i.lay_is_konsul) && !Boolean(i.pkt_is_konsul))
+    // Filter is_konsultasi HANYA dipakai jika untuk keperluan rujukan ruangan (for_referral === true)
+    // agar dokter hanya merujuk layanan tindakan lebih lanjut ke ruang tindakan.
+    // Jika tidak sedang merujuk (for_referral falsy / untuk ringkasan layanan kunjungan),
+    // seluruh layanan (termasuk konsultasi) disertakan secara utuh.
+    // CATATAN: Endpoint ini adalah untuk UI form penanganan/rujukan dan TIDAK PERNAH digunakan
+    // untuk menghitung atau membatasi tagihan kasir (kasir langsung membaca trx_detail_antrian_layanan).
+    const isForReferral = Boolean(for_referral === true || for_referral === "true" || for_referral === 1);
+    const filteredItems = isForReferral
+      ? rawItems.filter((i) => !Boolean(i.lay_is_konsul) && !Boolean(i.pkt_is_konsul))
+      : rawItems;
+
+    const formatted = filteredItems
       .map((i) => {
         const jenisStr = (i.jenis_layanan || "").toLowerCase();
         const isPaket = jenisStr.includes("paket");

@@ -125,6 +125,7 @@ export const DialogIsiFormPenanganan: React.FC<DialogIsiFormPenangananProps> = (
         try {
             const res = await postData('/master/antrian-layanan-pendaftaran-items', {
                 kode_kunjungan: antrianData.kode_kunjungan,
+                for_referral: true,
             });
             if (['00', '0000'].includes(res.data.status) && res.data.data?.length > 0) {
                 setRekomendasiItems(res.data.data);

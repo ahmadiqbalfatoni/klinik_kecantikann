@@ -818,6 +818,7 @@ export const ActiveTreatmentPanel: React.FC<ActiveTreatmentPanelProps> = ({
         try {
             const res = await postData('/master/antrian-layanan-pendaftaran-items', {
                 kode_kunjungan: kodeKunjungan,
+                for_referral: true,
             });
             if (['00', '0000'].includes(res.data.status) && res.data.data?.length > 0) {
                 setRekomendasiItems(res.data.data);
