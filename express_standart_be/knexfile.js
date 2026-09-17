@@ -56,23 +56,40 @@ const getConnectionConfig = ({ dbms, host, port, username, password, database })
 };
 
 
-const dbUrl = process.env.DATABASE_URL || process.env.MYSQL_URL || process.env.MYSQL_PRIVATE_URL;
+let resolvedConnection;
+if (dbUrl) {
+  try {
+    const parsed = new URL(dbUrl);
+    resolvedConnection = {
+      host: parsed.hostname || "localhost",
+      port: Number(parsed.port) || 3306,
+      user: decodeURIComponent(parsed.username || ""),
+      password: decodeURIComponent(parsed.password || ""),
+      database: parsed.pathname ? parsed.pathname.replace(/^\//, "") : "",
+      multipleStatements: true,
+      dateStrings: false,
+      timezone: MYSQL_TZ,
+    };
+  } catch {
+    resolvedConnection = dbUrl.includes("?")
+      ? `${dbUrl}&multipleStatements=true`
+      : `${dbUrl}?multipleStatements=true`;
+  }
+} else {
+  resolvedConnection = getConnectionConfig({
+    dbms: process.env.DB_DBMS || "mysql2",
+    host: process.env.DB_HOST || process.env.MYSQLHOST || process.env.MYSQL_HOST,
+    port: process.env.DB_PORT || process.env.MYSQLPORT || process.env.MYSQL_PORT,
+    username: process.env.DB_USERNAME || process.env.DB_USER || process.env.MYSQLUSER || process.env.MYSQL_USER,
+    password: process.env.DB_PASSWORD || process.env.MYSQLPASSWORD || process.env.MYSQL_PASSWORD,
+    database: process.env.DB_DATABASE || process.env.DB_NAME || process.env.MYSQLDATABASE || process.env.MYSQL_DATABASE,
+  });
+}
 
 const knexConfig = {
   default: {
     client: process.env.DB_DBMS || "mysql2",
-    connection: dbUrl
-      ? (dbUrl.includes("?")
-          ? `${dbUrl}&multipleStatements=true`
-          : `${dbUrl}?multipleStatements=true`)
-      : getConnectionConfig({
-      dbms: process.env.DB_DBMS || "mysql2",
-      host: process.env.DB_HOST || process.env.MYSQLHOST || process.env.MYSQL_HOST,
-      port: process.env.DB_PORT || process.env.MYSQLPORT || process.env.MYSQL_PORT,
-      username: process.env.DB_USERNAME || process.env.DB_USER || process.env.MYSQLUSER || process.env.MYSQL_USER,
-      password: process.env.DB_PASSWORD || process.env.MYSQLPASSWORD || process.env.MYSQL_PASSWORD,
-      database: process.env.DB_DATABASE || process.env.DB_NAME || process.env.MYSQLDATABASE || process.env.MYSQL_DATABASE,
-    }),
+    connection: resolvedConnection,
     pool: {
       min: 2,
       max: process.env.DB_DBMS === "pg" ? 10 : 20,

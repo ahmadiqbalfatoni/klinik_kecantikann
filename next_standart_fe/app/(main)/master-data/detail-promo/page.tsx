@@ -136,11 +136,12 @@ const Page = () => {
     };
 
     const toggleRowExpansion = (rowData: any) => {
+        const rowKey = rowData.id ?? rowData.kode_promo;
         let _expandedRows = { ...expandedRows };
-        if (_expandedRows[rowData.kode_promo]) {
-            delete _expandedRows[rowData.kode_promo];
+        if (_expandedRows[rowKey]) {
+            delete _expandedRows[rowKey];
         } else {
-            _expandedRows[rowData.kode_promo] = true;
+            _expandedRows[rowKey] = true;
         }
         setExpandedRows(_expandedRows);
     };
@@ -400,7 +401,7 @@ const Page = () => {
     };
 
     return (
-        <div className="p-4">
+        <div className="w-full">
             <Toast ref={toast} />
             <ConfirmDialog />
 
@@ -480,7 +481,7 @@ const Page = () => {
                     expandedRows={expandedRows}
                     onRowToggle={(e) => setExpandedRows(e.data)}
                     rowExpansionTemplate={rowExpansionTemplate}
-                    dataKey="kode_promo"
+                    dataKey="id"
                     className="p-datatable-sm"
                     emptyMessage="Data detail promo tidak ditemukan."
                     responsiveLayout="scroll"

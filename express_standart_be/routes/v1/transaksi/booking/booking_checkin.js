@@ -134,7 +134,9 @@ router.post("/", async (req, res) => {
       const cKodeKunjungan = `${prefixKunjungan}${String(nextKjSeq).padStart(3, "0")}`;
 
       // B. INSERT ke trx_kunjungan
+      const branchCodeBooking = booking.kode_cabang || "CBG-001";
       const oKunjunganData = {
+        kode_cabang: branchCodeBooking,
         kode_kunjungan: cKodeKunjungan,
         no_rm: booking.no_rm,
         kode_booking: booking.kode_booking,
@@ -199,6 +201,7 @@ router.post("/", async (req, res) => {
 
       // D. INSERT ke trx_antrian_layanan (Status langsung 'menunggu' di ruangan tujuan / ruang konsul)
       const oAntrianLayananData = {
+        kode_cabang: branchCodeBooking,
         kode_antrian_layanan: cKodeAntrianLayanan,
         kode_kunjungan: cKodeKunjungan,
         nomor_antrian: cNomorAntrianRuangan,
@@ -292,7 +295,8 @@ router.post("/", async (req, res) => {
 
             let tglExpired = "2099-12-31";
             const masaBerlakuHari = parseInt(pkt?.masa_berlaku_hari || 0, 10);
-            if (!Boolean(pkt?.is_selamanya) && masaBerlakuHari > 0) {
+            const isMasaBerlakuSelamanya = Boolean(pkt?.is_masa_berlaku_selamanya) || masaBerlakuHari === 0;
+            if (!isMasaBerlakuSelamanya && masaBerlakuHari > 0) {
               const dExp = new Date();
               dExp.setDate(dExp.getDate() + masaBerlakuHari);
               tglExpired = `${dExp.getFullYear()}-${String(dExp.getMonth() + 1).padStart(2, "0")}-${String(dExp.getDate()).padStart(2, "0")}`;
@@ -306,6 +310,7 @@ router.post("/", async (req, res) => {
             const statusKpl = totalRemaining <= 0 ? "habis" : "aktif";
 
             await trx("trx_kepemilikan_paket_layanan").insert({
+              kode_cabang: branchCodeBooking,
               kode_kepemilikan_paket_layanan: cKodeKpl,
               no_rm: booking.no_rm,
               kode_paket_layanan: item.kode_layanan,

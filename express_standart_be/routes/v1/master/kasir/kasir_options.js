@@ -8,12 +8,15 @@ import DB from "../../../../core/config/knex.js";
 import { formatDateSystem } from "../../components/tools/date_tools.js";
 import { Logging } from "../../components/tools/servertool.js";
 import { status } from "../../components/tools/general.js";
+import { getCompletedItemsForKasir } from "./kasir_sync_service.js";
+import { getBranchScope } from "../../components/tools/branch_scope.js";
 
 const router = express.Router();
 
 router.post("/", async (req, res) => {
   const { body } = req;
   const username = req?.auth?.username || "";
+  const branchCode = getBranchScope(req, body?.kode_cabang);
   const todayStr = new Date().toISOString().slice(0, 10);
 
   try {
@@ -41,53 +44,40 @@ router.post("/", async (req, res) => {
       )
       .orderBy("k.jam_datang", "asc");
 
+    if (branchCode) {
+      kunjunganQuery = kunjunganQuery.where("k.kode_cabang", branchCode);
+    }
+
     if (body?.tanggal_kunjungan) {
       kunjunganQuery = kunjunganQuery.where("k.tanggal_kunjungan", body.tanggal_kunjungan);
     }
 
     const vaKunjungan = await kunjunganQuery;
 
-    // Ambil SEMUA antrean layanan yang statusnya 'selesai' (asal maupun rujukan)
+    // Ambil SEMUA antrean layanan yang statusnya 'selesai' dengan deduplikasi rujukan terpusat
     const kodeKunjunganList = vaKunjungan.map((k) => k.kode_kunjungan).filter(Boolean);
     let vaLayananPendaftaran = [];
     if (kodeKunjunganList.length > 0) {
-      vaLayananPendaftaran = await DB("trx_detail_antrian_layanan as dal")
-        .join("trx_antrian_layanan as al", "dal.kode_antrian_layanan", "al.kode_antrian_layanan")
-        .whereIn("al.kode_kunjungan", kodeKunjunganList)
-        .where("al.status", "selesai")
-        .select(
-          "al.kode_kunjungan",
-          "dal.id",
-          "dal.kode_detail_antrian_layanan",
-          "dal.kode_antrian_layanan",
-          "dal.kode_layanan",
-          "dal.nama_layanan",
-          "dal.harga",
-          "dal.jenis_layanan",
-          "dal.kode_promo",
-          "dal.nama_promo",
-          "dal.jenis_diskon",
-          "dal.nilai_diskon"
-        )
-        .orderBy("dal.id", "asc");
+      vaLayananPendaftaran = await getCompletedItemsForKasir(DB, kodeKunjunganList);
     }
 
     const kunjunganMapped = vaKunjungan.map((k) => {
       const roomItems = vaLayananPendaftaran.filter((l) => l.kode_kunjungan === k.kode_kunjungan);
       const mappedItems = roomItems.map((l) => {
+        const isProduct = ["produk", "paket_produk"].includes((l.jenis_layanan || "").toLowerCase());
         const isKlaim = (l.jenis_layanan || "").toLowerCase() === "klaim_paket";
         const itemHarga = isKlaim ? 0 : parseFloat(l.harga || 0);
         return {
           id: l.id,
           kode_detail_antrian_layanan: l.kode_detail_antrian_layanan,
-          jenis: isKlaim ? "klaim_paket" : "layanan",
+          jenis: isProduct ? "produk" : (isKlaim ? "klaim_paket" : "layanan"),
           kode: l.kode_layanan,
           nama: l.nama_layanan,
-          satuan: "tindakan",
+          satuan: isProduct ? "pcs" : "tindakan",
           qty: 1,
           harga_satuan: itemHarga,
           subtotal: itemHarga,
-          is_from_pendaftaran: true,
+          is_from_pendaftaran: isProduct ? false : true,
           is_klaim_paket: isKlaim,
           kode_promo: l.kode_promo || null,
           nama_promo: l.nama_promo || null,
@@ -105,10 +95,14 @@ router.post("/", async (req, res) => {
     });
 
     // 2a. Layanan Single Aktif
-    const vaLayananSingle = await DB("mst_layanan as l")
+    const qLayananSingle = DB("mst_layanan as l")
       .leftJoin("mst_kategori_layanan as k", "l.kode_kategori_layanan", "k.kode_kategori_layanan")
       .leftJoin("mst_ruangan as r", "l.kode_ruangan", "r.kode_ruangan")
-      .where("l.status", "aktif")
+      .where("l.status", "aktif");
+
+    if (branchCode) qLayananSingle.where("l.kode_cabang", branchCode);
+
+    const vaLayananSingle = await qLayananSingle
       .select(
         "l.kode_layanan",
         "l.nama",
@@ -121,9 +115,13 @@ router.post("/", async (req, res) => {
       .orderBy("l.nama", "asc");
 
     // 2b. Paket Layanan Aktif
-    const vaPaketLayanan = await DB("mst_paket_layanan as pl")
+    const qPaketLayanan = DB("mst_paket_layanan as pl")
       .leftJoin("mst_ruangan as r", "pl.kode_ruangan", "r.kode_ruangan")
-      .where("pl.status", "aktif")
+      .where("pl.status", "aktif");
+
+    if (branchCode) qPaketLayanan.where("pl.kode_cabang", branchCode);
+
+    const vaPaketLayanan = await qPaketLayanan
       .select(
         "pl.kode_paket_layanan",
         "pl.nama",
@@ -154,10 +152,14 @@ router.post("/", async (req, res) => {
     ].sort((a, b) => a.nama.localeCompare(b.nama));
 
     // 3. Produk aktif
-    const vaProduk = await DB("mst_produk as p")
+    const qProduk = DB("mst_produk as p")
       .leftJoin("mst_kategori_produk as k", "p.kode_kategori_produk", "k.kode_kategori_produk")
       .where("p.status", "aktif")
-      .whereRaw("p.kode_produk NOT LIKE 'CUSTOM-%' AND p.kode_produk NOT LIKE 'CST-%'")
+      .whereRaw("p.kode_produk NOT LIKE 'CUSTOM-%' AND p.kode_produk NOT LIKE 'CST-%'");
+
+    if (branchCode) qProduk.where("p.kode_cabang", branchCode);
+
+    const vaProduk = await qProduk
       .select(
         "p.kode_produk",
         "p.nama",
@@ -177,11 +179,15 @@ router.post("/", async (req, res) => {
     }));
 
     // 4. Detail promo aktif hari ini (per baris mst_detail_promo)
-    const vaDetailPromo = await DB("mst_detail_promo as dp")
+    const qDetailPromo = DB("mst_detail_promo as dp")
       .join("mst_promo as p", "dp.kode_promo", "p.kode_promo")
       .where("dp.status", "aktif")
       .where("p.status", "aktif")
-      .whereRaw("CURDATE() BETWEEN DATE(p.tanggal_mulai) AND DATE(p.tanggal_selesai)")
+      .whereRaw("CURDATE() BETWEEN DATE(p.tanggal_mulai) AND DATE(p.tanggal_selesai)");
+
+    if (branchCode) qDetailPromo.where("p.kode_cabang", branchCode);
+
+    const vaDetailPromo = await qDetailPromo
       .select(
         "dp.kode_detail_promo",
         "dp.kode_promo",

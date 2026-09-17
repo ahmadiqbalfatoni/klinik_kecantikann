@@ -67,6 +67,7 @@ router.post("/", async (req, res) => {
           .required()
           .label("Telp"),
         role: Joi.string().required().label("Role"),
+        kode_cabang: Joi.string().allow('', null).label("Cabang"),
         password: Joi.string()
           .min(6)
           .required()
@@ -139,7 +140,16 @@ router.post("/", async (req, res) => {
 
     // Memulai Transaksi Database
     await DB.transaction(async (trx) => {
-      cUserCode = await getLastKodeRegister("USR", 7, true, trx);
+      const lastUser = await trx("user_credential")
+        .where("user_code", "like", "USR%")
+        .orderBy("user_code", "desc")
+        .first();
+      let nextNum = 1;
+      if (lastUser && lastUser.user_code) {
+        const numPart = parseInt(lastUser.user_code.replace("USR", ""), 10);
+        if (!isNaN(numPart)) nextNum = numPart + 1;
+      }
+      cUserCode = `USR${String(nextNum).padStart(6, "0")}`;
 
       const oData = {
         fullname: oPayload.fullname,
@@ -147,6 +157,7 @@ router.post("/", async (req, res) => {
         telp: oPayload.telp,
         role: oPayload.role,
         status: oPayload.status,
+        kode_cabang: oPayload.kode_cabang || null,
         tz: oPayload.tz || "UTC",
         user_code: cUserCode,
         created_at: formatDateSystem(),
@@ -171,8 +182,10 @@ router.post("/", async (req, res) => {
       // Insert data user credential
       await trx("user_credential").insert(oData);
 
-      // Sinkronisasi counter register database
-      await setLastKodeRegister("USR", trx);
+      // Sinkronisasi counter register database jika tabel nomor_faktur ada
+      try {
+        await setLastKodeRegister("USR", trx);
+      } catch (_) {}
 
       // Masking password pada audit log
       const oLogData = { ...oData };

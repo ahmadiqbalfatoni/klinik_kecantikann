@@ -13,18 +13,22 @@ import DB from "../../../../core/config/knex.js";
 import { formatDateSystem } from "../../components/tools/date_tools.js";
 import { Logging } from "../../components/tools/servertool.js";
 import { status } from "../../components/tools/general.js";
+import { getBranchScope } from "../../components/tools/branch_scope.js";
 
 const router = express.Router();
 
 router.post("/", async (req, res) => {
   const oPayload = { ...req.query, ...req.body };
   const username = req?.auth?.username || "";
+  const branchCode = getBranchScope(req, oPayload.kode_cabang);
   const filterTanggal = oPayload.tanggal || new Date().toISOString().slice(0, 10);
 
   try {
-    const updatedCount = await DB("trx_antrian_layanan")
-      .whereRaw("DATE(created_at) = ?", [filterTanggal])
-      .update({
+    let q = DB("trx_antrian_layanan").whereRaw("DATE(created_at) = ?", [filterTanggal]);
+    if (branchCode) {
+      q = q.andWhere("kode_cabang", branchCode);
+    }
+    const updatedCount = await q.update({
         status: "menunggu",
         dipanggil_at: null,
         selesai_at: null,

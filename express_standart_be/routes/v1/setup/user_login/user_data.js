@@ -63,6 +63,7 @@ router.post("/", async (req, res) => {
 
     // Inisiasi Query Builder
     let oQuery = DB("user_credential as u")
+      .leftJoin("mst_cabang as c", "u.kode_cabang", "c.kode_cabang")
       .select(
         "u.user_code",
         "u.username",
@@ -71,8 +72,15 @@ router.post("/", async (req, res) => {
         "u.status",
         "u.telp",
         "u.tz",
+        "u.kode_cabang",
+        "c.nama_cabang",
         "u.created_at"
       );
+
+    // Filter Cabang (Optional)
+    if (oPayload.kode_cabang) {
+      oQuery.where("u.kode_cabang", oPayload.kode_cabang);
+    }
 
     // Filter Status (Optional)
     if (oPayload.status !== undefined && oPayload.status !== null && oPayload.status !== "") {
@@ -97,7 +105,8 @@ router.post("/", async (req, res) => {
         this.where("u.user_code", "like", searchKeyword)
           .orWhere("u.username", "like", searchKeyword)
           .orWhere("u.fullname", "like", searchKeyword)
-          .orWhere("u.telp", "like", searchKeyword);
+          .orWhere("u.telp", "like", searchKeyword)
+          .orWhere("c.nama_cabang", "like", searchKeyword);
       });
     }
 

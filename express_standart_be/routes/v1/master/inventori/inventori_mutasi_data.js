@@ -3,12 +3,14 @@ import DB from "../../../../core/config/knex.js";
 import { formatDateSystem } from "../../components/tools/date_tools.js";
 import { Logging } from "../../components/tools/servertool.js";
 import { status } from "../../components/tools/general.js";
+import { getBranchScope } from "../../components/tools/branch_scope.js";
 
 const router = express.Router();
 
 router.post("/", async (req, res) => {
   const oPayload = req.body;
   const username = req?.auth?.username || "";
+  const branchCode = getBranchScope(req, oPayload.kode_cabang);
   const keyword = oPayload.keyword || "";
   const filterProduk = oPayload.kode_produk || null;
   const filterJenis = oPayload.jenis_movement || null; // 'masuk' | 'keluar' | 'penyesuaian'
@@ -20,6 +22,11 @@ router.post("/", async (req, res) => {
     const baseQuery = DB("trx_stok_movement as m")
       .leftJoin("mst_produk as p", "m.kode_produk", "p.kode_produk")
       .modify((qb) => {
+        if (branchCode) {
+          qb.where(function () {
+            this.where("m.kode_cabang", branchCode).orWhere("p.kode_cabang", branchCode);
+          });
+        }
         if (filterProduk) {
           qb.where("m.kode_produk", filterProduk);
         }

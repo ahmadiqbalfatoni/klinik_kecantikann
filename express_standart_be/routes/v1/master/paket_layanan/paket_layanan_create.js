@@ -19,6 +19,7 @@ router.post("/", async (req, res) => {
         tipe: Joi.string().valid("MEDICAL TREATMENT", "BEAUTY TREATMENT", "SERVICE TREATMENT").optional().allow("", null).label("Tipe Paket"),
         harga_paket: Joi.number().min(0).required().label("Harga Paket"),
         masa_berlaku_hari: Joi.number().integer().min(0).optional().allow(null).label("Masa Berlaku (Hari)"),
+        is_masa_berlaku_selamanya: Joi.boolean().optional().allow(null).label("Masa Berlaku Selamanya"),
         is_selamanya: Joi.boolean().optional().allow(null).label("Aktif Selamanya"),
         tanggal_mulai: Joi.string().optional().allow("", null).label("Tanggal Mulai"),
         tanggal_selesai: Joi.string().optional().allow("", null).label("Tanggal Selesai"),
@@ -39,14 +40,10 @@ router.post("/", async (req, res) => {
 
     let kode = "";
     const isSelamanya = Boolean(oPayload.is_selamanya);
+    const isMasaBerlakuSelamanya = Boolean(oPayload.is_masa_berlaku_selamanya) || parseInt(oPayload.masa_berlaku_hari, 10) === 0;
     const todayStr = formatDateSystem(new Date(), "yyyy-MM-dd");
     const tglMulai = oPayload.tanggal_mulai || todayStr;
-    let tglSelesai = isSelamanya ? null : oPayload.tanggal_selesai;
-    if (!isSelamanya && !tglSelesai && oPayload.masa_berlaku_hari) {
-      const d = new Date(tglMulai);
-      d.setDate(d.getDate() + parseInt(oPayload.masa_berlaku_hari, 10));
-      tglSelesai = formatDateSystem(d, "yyyy-MM-dd");
-    }
+    const tglSelesai = isSelamanya ? null : (oPayload.tanggal_selesai || null);
 
     let finalStatus = oPayload.status;
     if (!isSelamanya && tglSelesai && tglSelesai < todayStr) {
@@ -59,13 +56,16 @@ router.post("/", async (req, res) => {
       if (last?.kode_paket_layanan) { n = (parseInt(last.kode_paket_layanan.replace("PKT-", "")) || 0) + 1; }
       kode = `PKT-${String(n).padStart(3, "0")}`;
 
+      const branchCode = oPayload.kode_cabang || req?.auth?.kode_cabang || "CBG-001";
       const oData = {
+        kode_cabang: branchCode,
         kode_paket_layanan: kode,
         kode_ruangan: oPayload.kode_ruangan || null,
         nama: oPayload.nama,
         tipe: selectedTipe,
         harga_paket: oPayload.harga_paket,
-        masa_berlaku_hari: isSelamanya ? 0 : (oPayload.masa_berlaku_hari || 365),
+        masa_berlaku_hari: isMasaBerlakuSelamanya ? 0 : (parseInt(oPayload.masa_berlaku_hari, 10) || 365),
+        is_masa_berlaku_selamanya: isMasaBerlakuSelamanya ? 1 : 0,
         is_selamanya: isSelamanya ? 1 : 0,
         tanggal_mulai: tglMulai,
         tanggal_selesai: tglSelesai,

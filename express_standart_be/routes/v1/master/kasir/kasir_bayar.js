@@ -8,12 +8,14 @@ import DB from "../../../../core/config/knex.js";
 import { formatDateSystem } from "../../components/tools/date_tools.js";
 import { Logging } from "../../components/tools/servertool.js";
 import { status } from "../../components/tools/general.js";
+import { getBranchScope } from "../../components/tools/branch_scope.js";
 
 const router = express.Router();
 
 router.post("/", async (req, res) => {
   const { body } = req;
   const username = req?.auth?.username || "";
+  const branchCode = getBranchScope(req, body?.kode_cabang);
 
   const { kode_transaksi, metode_bayar, nominal_bayar } = body;
 
@@ -27,7 +29,11 @@ router.post("/", async (req, res) => {
   }
 
   try {
-    const existing = await DB("trx_transaksi").where("kode_transaksi", kode_transaksi).first();
+    let qExisting = DB("trx_transaksi").where("kode_transaksi", kode_transaksi);
+    if (branchCode) {
+      qExisting = qExisting.andWhere("kode_cabang", branchCode);
+    }
+    const existing = await qExisting.first();
     if (!existing) {
       return res.status(404).json({ status: status.BAD_REQUEST, message: "Transaksi tidak ditemukan", datetime: formatDateSystem() });
     }

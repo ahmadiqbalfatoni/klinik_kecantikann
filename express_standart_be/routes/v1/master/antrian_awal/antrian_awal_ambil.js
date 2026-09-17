@@ -17,6 +17,7 @@ import {
   ChangesLog,
 } from "../../components/tools/servertool.js";
 import { formatDateSystem } from "../../components/tools/date_tools.js";
+import { getBranchScope } from "../../components/tools/branch_scope.js";
 
 const router = express.Router();
 
@@ -24,6 +25,7 @@ router.post("/", async (req, res) => {
   const { body } = req;
   const oPayload = body || {};
   const username = req?.auth?.username || "";
+  const branchCode = getBranchScope(req, oPayload.kode_cabang) || req?.auth?.kode_cabang || "CBG-001";
 
   try {
     let resultData = null;
@@ -32,8 +34,12 @@ router.post("/", async (req, res) => {
       const now = formatDateSystem();
 
       // Ambil kartu antrean urutan terkecil yang berstatus 'tersedia' dari pool fisik master (01-50)
-      const record = await trx("trx_antrian_awal")
-        .where("status", "tersedia")
+      let qRecord = trx("trx_antrian_awal")
+        .where("status", "tersedia");
+      if (branchCode) {
+        qRecord = qRecord.andWhere("kode_cabang", branchCode);
+      }
+      const record = await qRecord
         .orderByRaw("CAST(nomor_antrian AS UNSIGNED) ASC, nomor_antrian ASC")
         .forUpdate()
         .first();

@@ -21,6 +21,10 @@ const Page = () => {
     const toast = useRef<Toast>(null);
     const { data: session } = useSession();
 
+    const now = new Date();
+    const defaultStart = new Date(now.getFullYear(), now.getMonth(), 1);
+    const defaultEnd = now;
+
     // State manajemen utama disesuaikan untuk Laporan Operasional Service
     const [state, setState] = useState<State>({
         load: false,
@@ -28,8 +32,8 @@ const Page = () => {
         searchVal: '',
         filters: { global: { value: null, matchMode: FilterMatchMode.CONTAINS } },
         session: null,
-        tanggalAwal: new Date(),
-        tanggalAkhir: new Date(),
+        tanggalAwal: defaultStart,
+        tanggalAkhir: defaultEnd,
 
         // Filter Dropdown & MultiSelect Khusus Service
         selectedStatus: null,
@@ -63,6 +67,25 @@ const Page = () => {
         selectedData: null,
         showDetail: false,
     });
+
+    // Ambil opsi filter dari backend saat halaman dimuat
+    useEffect(() => {
+        const fetchFilterOptions = async () => {
+            try {
+                const res = await postData('/contoh/laporan/laporan-data/options', {});
+                if (res?.data?.data) {
+                    setState((p) => ({
+                        ...p,
+                        optionsStatus: res.data.data.status,
+                        optionsJenisTiket: res.data.data.jenis_tiket,
+                        optionsPembayaran: res.data.data.status_pembayaran,
+                        optionsTeknisi: res.data.data.teknisi,
+                    }));
+                }
+            } catch (_) {}
+        };
+        fetchFilterOptions();
+    }, []);
 
     // State untuk penanganan print & export rekap
     const [dataRekap, setDataRekap] = useState<DataRekap>({

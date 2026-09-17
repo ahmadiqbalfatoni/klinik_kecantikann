@@ -13,6 +13,7 @@ import DB from "../../../../core/config/knex.js";
 import { formatDateSystem } from "../../components/tools/date_tools.js";
 import { Logging, ChangesLog } from "../../components/tools/servertool.js";
 import { status } from "../../components/tools/general.js";
+import { getBranchScope } from "../../components/tools/branch_scope.js";
 
 const router = express.Router();
 
@@ -20,6 +21,7 @@ const handleUpdate = async (req, res) => {
   const { body } = req;
   const oPayload = body || {};
   const username = req?.auth?.username || "system";
+  const branchCode = getBranchScope(req, oPayload.kode_cabang);
 
   try {
     const no_rm = (oPayload.no_rm || "").trim();
@@ -35,6 +37,7 @@ const handleUpdate = async (req, res) => {
 
     // Cari data pasien awal
     const query = DB("mst_pasien");
+    if (branchCode) query.where("kode_cabang", branchCode);
     if (no_rm) query.where("no_rm", no_rm);
     else query.where("id", id);
 

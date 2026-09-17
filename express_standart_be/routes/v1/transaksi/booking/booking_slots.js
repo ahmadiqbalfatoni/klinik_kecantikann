@@ -13,6 +13,7 @@ import DB from "../../../../core/config/knex.js";
 import { formatDateSystem } from "../../components/tools/date_tools.js";
 import { Logging } from "../../components/tools/servertool.js";
 import { status } from "../../components/tools/general.js";
+import { getBranchScope } from "../../components/tools/branch_scope.js";
 
 const router = express.Router();
 
@@ -26,6 +27,7 @@ router.post("/", async (req, res) => {
   const { body } = req;
   const oPayload = body || {};
   const username = req?.auth?.username || "system";
+  const branchCode = getBranchScope(req, oPayload.kode_cabang);
 
   try {
     const tanggalBooking = (oPayload.tanggal_booking || "").trim();
@@ -107,6 +109,12 @@ router.post("/", async (req, res) => {
       .leftJoin("mst_ruangan as r", "j.kode_ruangan", "r.kode_ruangan")
       .where("j.status", "aktif")
       .where("j.hari", dayName);
+
+    if (branchCode) {
+      queryJadwal.where(function () {
+        this.where("j.kode_cabang", branchCode).orWhere("k.kode_cabang", branchCode);
+      });
+    }
 
     if (targetKodeRuangan) {
       queryJadwal.where("j.kode_ruangan", targetKodeRuangan);
@@ -261,20 +269,27 @@ router.post("/", async (req, res) => {
     }
 
     // 5. Query jadwal dokter jaga di Ruang Konsultasi (is_konsultasi = 1) pada hari yang sama
-    const dokterKonsulList = await DB("mst_jadwal_karyawan as j")
+    const qDokterKonsul = DB("mst_jadwal_karyawan as j")
       .join("mst_ruangan as r", "j.kode_ruangan", "r.kode_ruangan")
       .join("mst_karyawan as k", "j.no_sip", "k.no_sip")
       .where("r.is_konsultasi", 1)
       .where("j.hari", dayName)
-      .where("j.status", "aktif")
-      .select(
-        "j.kode_jadwal",
-        "j.jam_mulai",
-        "j.jam_selesai",
-        "k.nama as nama_dokter",
-        "k.jabatan as jabatan_petugas",
-        "r.nama_ruangan"
-      );
+      .where("j.status", "aktif");
+
+    if (branchCode) {
+      qDokterKonsul.where(function () {
+        this.where("j.kode_cabang", branchCode).orWhere("k.kode_cabang", branchCode);
+      });
+    }
+
+    const dokterKonsulList = await qDokterKonsul.select(
+      "j.kode_jadwal",
+      "j.jam_mulai",
+      "j.jam_selesai",
+      "k.nama as nama_dokter",
+      "k.jabatan as jabatan_petugas",
+      "r.nama_ruangan"
+    );
 
     // 6. Kalkulasi default DP
     const dpNominal = Math.round((baseHarga * DEFAULT_DP_PERCENTAGE) / 100);

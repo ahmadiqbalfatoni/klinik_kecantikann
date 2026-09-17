@@ -13,6 +13,7 @@ import Joi from "joi";
 import DB from "../../../../core/config/knex.js";
 import { Logging, ChangesLog, validatePayload } from "../../components/tools/servertool.js";
 import { formatDateSystem } from "../../components/tools/date_tools.js";
+import { getBranchScope } from "../../components/tools/branch_scope.js";
 
 const router = express.Router();
 
@@ -20,6 +21,7 @@ router.post("/", async (req, res) => {
   const { body } = req;
   const oPayload = body;
   const username = req?.auth?.username || "";
+  const branchCode = getBranchScope(req, oPayload?.kode_cabang);
 
   try {
     if (!oPayload || Object.keys(oPayload).length < 1) {
@@ -60,6 +62,7 @@ router.post("/", async (req, res) => {
       kodeKategori = `KATLAY-${String(nextSeq).padStart(3, "0")}`;
 
       const oData = {
+        kode_cabang: branchCode,
         kode_kategori_layanan: kodeKategori,
         nama: oPayload.nama,
         deskripsi: oPayload.deskripsi || null,

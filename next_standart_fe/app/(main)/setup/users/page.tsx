@@ -14,6 +14,7 @@ import { Divider } from 'primereact/divider';
 import { IconField } from 'primereact/iconfield';
 import { InputIcon } from 'primereact/inputicon';
 import { ConfirmDialog, confirmDialog } from 'primereact/confirmdialog';
+import { useSession } from 'next-auth/react';
 import postData from '@/lib/axios/postData';
 import { showError, showSuccess } from '@/lib/tools/generalTools';
 
@@ -24,6 +25,8 @@ interface UserRecord {
   fullname: string;
   telp: string;
   role: string;
+  kode_cabang?: string | null;
+  nama_cabang?: string | null;
   status: string | number;
   created_at?: string;
 }
@@ -53,12 +56,16 @@ const getRoleSeverity = (role: string): 'success' | 'info' | 'warning' | 'danger
 };
 
 export default function ManajemenUserPage() {
+  const { data: session } = useSession();
+  const isSuperAdmin = (session?.user?.role || '').toLowerCase() === 'superadmin';
   const toast = useRef<Toast>(null);
 
   const [users, setUsers] = useState<any[]>([]);
   const [loading, setLoading] = useState<boolean>(true);
   const [keyword, setKeyword] = useState<string>('');
   const [selectedRole, setSelectedRole] = useState<string | null>(null);
+  const [selectedCabang, setSelectedCabang] = useState<string | null>(null);
+  const [branchOptions, setBranchOptions] = useState<any[]>([]);
   const [selectedRows, setSelectedRows] = useState<any[]>([]);
 
   // Modal Create / Edit
@@ -70,10 +77,27 @@ export default function ManajemenUserPage() {
     username: '',
     telp: '',
     role: 'owner',
+    kode_cabang: null,
     password: '',
     status: '1',
   });
   const [formLoading, setFormLoading] = useState<boolean>(false);
+
+  const fetchBranches = async () => {
+    try {
+      const res = await postData('/master/cabang-data', {});
+      if (['00', '0000'].includes(res?.data?.status)) {
+        const list = res.data.data || [];
+        setBranchOptions([
+          { label: 'Semua Cabang / Pusat', value: null },
+          ...list.map((b: any) => ({
+            label: `${b.kode_cabang} - ${b.nama_cabang}`,
+            value: b.kode_cabang,
+          })),
+        ]);
+      }
+    } catch (_) {}
+  };
 
   const fetchUsers = async () => {
     setLoading(true);
@@ -81,6 +105,7 @@ export default function ManajemenUserPage() {
       const payload: any = {};
       if (keyword) payload.search = keyword;
       if (selectedRole) payload.role = selectedRole;
+      if (selectedCabang) payload.kode_cabang = selectedCabang;
 
       const res = await postData('/setup/user-login/user-data', payload);
       if (['00', '0000'].includes(res?.data?.status)) {
@@ -96,8 +121,12 @@ export default function ManajemenUserPage() {
   };
 
   useEffect(() => {
+    fetchBranches();
+  }, []);
+
+  useEffect(() => {
     fetchUsers();
-  }, [selectedRole]);
+  }, [selectedRole, selectedCabang]);
 
   const handleOpenCreate = () => {
     setIsEdit(false);
@@ -107,6 +136,7 @@ export default function ManajemenUserPage() {
       username: '',
       telp: '',
       role: 'owner',
+      kode_cabang: isSuperAdmin ? null : (session?.user?.kode_cabang || null),
       password: '',
       status: '1',
     });
@@ -121,6 +151,7 @@ export default function ManajemenUserPage() {
       username: u.username || '',
       telp: u.telp || '',
       role: u.role || 'owner',
+      kode_cabang: u.kode_cabang || null,
       password: '',
       status: String(u.status) === '1' || u.status === 1 ? '1' : '0',
     });
@@ -146,6 +177,7 @@ export default function ManajemenUserPage() {
           username: formData.username,
           telp: formData.telp,
           role: formData.role,
+          kode_cabang: formData.kode_cabang || null,
           status: formData.status,
         };
         if (formData.password) payload.password = formData.password;
@@ -164,6 +196,7 @@ export default function ManajemenUserPage() {
           username: formData.username,
           telp: formData.telp,
           role: formData.role,
+          kode_cabang: formData.kode_cabang || null,
           password: formData.password,
           status: formData.status,
         };
@@ -215,7 +248,7 @@ export default function ManajemenUserPage() {
   };
 
   return (
-    <div className="p-4">
+    <div className="w-full">
       <Toast ref={toast} />
       <ConfirmDialog />
 
@@ -332,6 +365,15 @@ export default function ManajemenUserPage() {
               <div className="flex flex-wrap align-items-center justify-content-between gap-2">
                 <span className="text-xl font-bold">Data Pengguna &amp; Akun Login</span>
                 <div className="flex flex-wrap align-items-center gap-2 ml-auto w-full md:w-auto">
+                  {branchOptions.length > 1 && (
+                    <Dropdown
+                      value={selectedCabang}
+                      options={branchOptions}
+                      onChange={(e) => setSelectedCabang(e.value)}
+                      placeholder="Filter Cabang"
+                      className="p-inputtext-sm w-full sm:w-14rem"
+                    />
+                  )}
                   <Dropdown
                     value={selectedRole}
                     options={[{ label: 'Semua Role', value: null }, ...ROLE_OPTIONS]}
@@ -358,6 +400,7 @@ export default function ManajemenUserPage() {
                     onClick={() => {
                       setKeyword('');
                       setSelectedRole(null);
+                      setSelectedCabang(null);
                       fetchUsers();
                     }}
                   />
@@ -416,6 +459,24 @@ export default function ManajemenUserPage() {
                 className="text-xs font-bold px-2 py-0.5"
               />
             )}
+          />
+          <Column
+            field="nama_cabang"
+            header="Cabang"
+            sortable
+            headerStyle={{ minWidth: '11rem' }}
+            body={(r: UserRecord) => {
+              const label = r.nama_cabang || (r.kode_cabang ? r.kode_cabang : 'Pusat / Semua');
+              const isPusat = !r.kode_cabang;
+              return (
+                <Tag
+                  value={label}
+                  severity={isPusat ? 'info' : 'secondary'}
+                  className="text-xs"
+                  icon={isPusat ? 'pi pi-shield' : 'pi pi-building'}
+                />
+              );
+            }}
           />
           <Column
             field="status"
@@ -529,7 +590,23 @@ export default function ManajemenUserPage() {
               className="w-full text-sm"
             />
             <span className="text-[11px] text-gray-500 mt-1 block">
-              Menentukan tampilan dashboard spesifik (Owner, Dokter, Beautician, Kasir, Warehouse, Superadmin).
+              Menentukan hak akses tampilan dashboard operasional staf.
+            </span>
+          </div>
+
+          <div>
+            <label className="text-xs font-bold text-gray-700 block mb-1">Penempatan Cabang</label>
+            <Dropdown
+              value={formData.kode_cabang}
+              options={branchOptions.filter((b) => b.value !== null)}
+              onChange={(e) => setFormData({ ...formData, kode_cabang: e.value })}
+              placeholder="Pilih Cabang (Kosongkan jika Superadmin / Pusat)"
+              className="w-full text-sm"
+              showClear
+              disabled={!isSuperAdmin && Boolean(session?.user?.kode_cabang)}
+            />
+            <span className="text-[11px] text-gray-500 mt-1 block">
+              Akun Manager/Staf cabang hanya dapat melihat dan mengelola data di cabangnya sendiri.
             </span>
           </div>
 

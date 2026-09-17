@@ -3,6 +3,7 @@ import DB from "../../../../core/config/knex.js";
 import { formatDateSystem } from "../../components/tools/date_tools.js";
 import { Logging } from "../../components/tools/servertool.js";
 import { status } from "../../components/tools/general.js";
+import { getBranchScope } from "../../components/tools/branch_scope.js";
 
 const router = express.Router();
 
@@ -31,6 +32,13 @@ router.post("/", async (req, res) => {
       });
     }
 
+    const hasIsMasaBerlakuSelamanya = await DB.schema.hasColumn("mst_paket_layanan", "is_masa_berlaku_selamanya");
+    if (!hasIsMasaBerlakuSelamanya) {
+      await DB.schema.table("mst_paket_layanan", (table) => {
+        table.boolean("is_masa_berlaku_selamanya").defaultTo(false);
+      });
+    }
+
     const hasPaketTipe = await DB.schema.hasColumn("mst_paket_layanan", "tipe");
     if (!hasPaketTipe) {
       await DB.schema.table("mst_paket_layanan", (table) => {
@@ -40,7 +48,7 @@ router.post("/", async (req, res) => {
 
     const todayStr = formatDateSystem(new Date(), "yyyy-MM-dd");
 
-    // Auto-sync status semua paket berdasarkan status layanannya & tanggal expired
+    // Auto-sync status: jika layanan di dalamnya ada yang nonaktif atau paket sudah expired, otomatis nonaktifkan paket
     const allPakets = await DB("mst_paket_layanan").select("kode_paket_layanan", "status", "tanggal_selesai", "is_selamanya");
     for (const pkt of allPakets) {
       const inactiveCount = await DB("mst_detail_paket_layanan as d")
@@ -52,18 +60,20 @@ router.post("/", async (req, res) => {
 
       const hasInactive = parseInt(inactiveCount?.cnt || 0) > 0;
       const isExpired = !Boolean(pkt.is_selamanya) && pkt.tanggal_selesai && pkt.tanggal_selesai < todayStr;
-      const targetStatus = (hasInactive || isExpired) ? "nonaktif" : "aktif";
 
-      if (pkt.status !== targetStatus) {
+      // Hanya auto-nonaktifkan jika paket berstatus aktif tapi layanannya nonaktif atau tanggalnya sudah lewat
+      if ((hasInactive || isExpired) && pkt.status === "aktif") {
         await DB("mst_paket_layanan")
           .where("kode_paket_layanan", pkt.kode_paket_layanan)
-          .update({ status: targetStatus, updated_at: formatDateSystem() });
+          .update({ status: "nonaktif", updated_at: formatDateSystem() });
       }
     }
 
+    const branchCode = getBranchScope(req, oPayload.kode_cabang);
     const baseQuery = DB("mst_paket_layanan as p")
       .leftJoin("mst_ruangan as r", "p.kode_ruangan", "r.kode_ruangan")
       .modify((qb) => {
+        if (branchCode) qb.where("p.kode_cabang", branchCode);
         if (keyword) {
           const lower = keyword.toLowerCase();
           qb.where(function () {
@@ -81,10 +91,11 @@ router.post("/", async (req, res) => {
       "p.tipe",
       "p.harga_paket",
       "p.masa_berlaku_hari",
+      "p.is_masa_berlaku_selamanya",
       "p.is_selamanya",
       DB.raw("COALESCE(DATE_FORMAT(p.tanggal_mulai, '%Y-%m-%d'), DATE_FORMAT(p.created_at, '%Y-%m-%d')) as tanggal_mulai"),
-      DB.raw("COALESCE(DATE_FORMAT(p.tanggal_selesai, '%Y-%m-%d'), DATE_FORMAT(DATE_ADD(COALESCE(p.tanggal_mulai, p.created_at), INTERVAL p.masa_berlaku_hari DAY), '%Y-%m-%d')) as tanggal_selesai"),
-      DB.raw("GREATEST(0, DATEDIFF(COALESCE(p.tanggal_selesai, DATE_ADD(COALESCE(p.tanggal_mulai, p.created_at), INTERVAL p.masa_berlaku_hari DAY)), CURDATE())) as sisa_hari"),
+      DB.raw("DATE_FORMAT(p.tanggal_selesai, '%Y-%m-%d') as tanggal_selesai"),
+      DB.raw("CASE WHEN p.is_selamanya = 1 THEN 99999 WHEN p.tanggal_selesai IS NOT NULL THEN GREATEST(0, DATEDIFF(p.tanggal_selesai, CURDATE())) ELSE 99999 END as sisa_hari"),
       "p.kode_ruangan",
       "r.nama_ruangan as nama_ruangan",
       "p.status",

@@ -215,6 +215,16 @@ export const validatePayload = async (
         Object.entries(oPayload).map(([k, v]) => [k.toLowerCase(), v]),
       );
 
+      const resolvedBranch = branchCode || oPayload.kode_cabang || oPayload.kodeCabang || null;
+      let hasCabangCol = false;
+      if (resolvedBranch) {
+        try {
+          hasCabangCol = await DB.schema.hasColumn(table, "kode_cabang");
+        } catch {
+          hasCabangCol = false;
+        }
+      }
+
       for (const field of uniqueField) {
         const value = normalizedPayload[field.toLowerCase()];
         if (value !== undefined) {
@@ -223,6 +233,10 @@ export const validatePayload = async (
             query = DB(table).where(field, value);
           } else {
             query = DB(table).whereILike(field, value);
+          }
+
+          if (hasCabangCol && resolvedBranch) {
+            query = query.andWhere("kode_cabang", resolvedBranch);
           }
 
           if (excludedField) {
@@ -344,7 +358,9 @@ export const generateUserTokens = async (user, rememberMe = false) => {
   const accessToken = await new SignJWT({
     user_code: user.user_code,
     username: user.username,
-    role: user.role
+    role: user.role,
+    kode_cabang: user.kode_cabang || null,
+    nama_cabang: user.nama_cabang || null,
   })
     .setProtectedHeader({ alg: "HS256" })
     .setIssuedAt()

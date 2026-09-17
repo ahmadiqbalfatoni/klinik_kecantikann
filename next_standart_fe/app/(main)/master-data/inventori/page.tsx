@@ -408,7 +408,7 @@ const Page = () => {
     };
 
     return (
-        <div className="p-4">
+        <div className="w-full">
             <Toast ref={toast} />
             <ConfirmDialog />
 
@@ -427,126 +427,122 @@ const Page = () => {
                     </p>
                 </div>
 
-                {/* ACTION BUTTONS (Outline Style sesuai screenshot Supplier) */}
-                <div className="flex flex-row flex-wrap align-items-center gap-2 mb-4">
-                    <Button
-                        size="small"
-                        label="Beli Produk Baru"
-                        icon="pi pi-plus"
-                        outlined
-                        severity="success"
-                        className="border-round-md font-medium px-3"
-                        onClick={handleOpenBeliBaru}
-                    />
-                    <Divider layout="vertical" className="m-0 h-2rem" />
-                    <Button
-                        size="small"
-                        label="Restock Produk"
-                        icon="pi pi-cart-plus"
-                        outlined
-                        severity="info"
-                        className="border-round-md font-medium px-3"
-                        onClick={() => handleOpenRestock()}
-                    />
-                    <Divider layout="vertical" className="m-0 h-2rem" />
-                    <Button
-                        size="small"
-                        label="Cetak"
-                        icon="pi pi-print"
-                        outlined
-                        className="border-round-md font-medium px-3 border-purple-600 text-purple-600"
-                        onClick={() => window.print()}
-                    />
-                    <Divider layout="vertical" className="m-0 h-2rem" />
-                    <Button
-                        size="small"
-                        label="Refresh"
-                        icon="pi pi-refresh"
-                        outlined
-                        severity="success"
-                        className="border-round-md font-medium px-3"
-                        loading={loadingProduk || loadingPo || loadingMutasi}
-                        onClick={() => {
-                            if (activeIndex === 0) loadInventoriData();
-                            else if (activeIndex === 1) loadPoData();
-                            else if (activeIndex === 2) loadMutasiData();
-                        }}
-                    />
-                </div>
-
-                {/* =========================================================
-                    5 KPI CARDS STRIP
-                    ========================================================= */}
-                <div className="grid m-0 mb-4">
-                    {/* 1. Total SKU */}
-                    <div className="col-12 sm:col-6 lg:col-2 p-1">
-                        <div className="surface-card border-1 border-200 border-round-xl p-3 h-full flex flex-column justify-content-between shadow-sm">
-                            <div className="flex justify-content-between align-items-center mb-1">
-                                <span className="text-xs font-bold text-500 uppercase">Total SKU</span>
-                                <i className="pi pi-tags text-primary text-sm font-bold" />
-                            </div>
-                            <div className="text-2xl font-bold text-900 my-1">{summary.total_sku || 0}</div>
-                            <span className="text-xs text-500">Katalog produk aktif</span>
-                        </div>
-                    </div>
-
-                    {/* 2. Total Stok Unit */}
-                    <div className="col-12 sm:col-6 lg:col-2 p-1">
-                        <div className="surface-card border-1 border-200 border-round-xl p-3 h-full flex flex-column justify-content-between shadow-sm">
-                            <div className="flex justify-content-between align-items-center mb-1">
-                                <span className="text-xs font-bold text-500 uppercase">Stok Fisik</span>
-                                <i className="pi pi-box text-blue-600 text-sm font-bold" />
-                            </div>
-                            <div className="text-2xl font-bold text-blue-700 my-1">{summary.total_stok_unit || 0}</div>
-                            <span className="text-xs text-500">Total unit di klinik</span>
-                        </div>
-                    </div>
-
-                    {/* 3. Stok Menipis */}
-                    <div className="col-12 sm:col-6 lg:col-2 p-1">
-                        <div className="surface-card border-1 border-200 border-round-xl p-3 h-full flex flex-column justify-content-between shadow-sm">
-                            <div className="flex justify-content-between align-items-center mb-1">
-                                <span className="text-xs font-bold text-orange-600 uppercase">Stok Menipis</span>
-                                <i className="pi pi-exclamation-triangle text-orange-600 text-sm font-bold" />
-                            </div>
-                            <div className="text-2xl font-bold text-orange-600 my-1">{summary.stok_menipis || 0}</div>
-                            <span className="text-xs text-500">Mendekati buffer min</span>
-                        </div>
-                    </div>
-
-                    {/* 4. Stok Habis */}
-                    <div className="col-12 sm:col-6 lg:col-2 p-1">
-                        <div className="surface-card border-1 border-200 border-round-xl p-3 h-full flex flex-column justify-content-between shadow-sm">
-                            <div className="flex justify-content-between align-items-center mb-1">
-                                <span className="text-xs font-bold text-red-600 uppercase">Stok Habis</span>
-                                <i className="pi pi-times-circle text-red-600 text-sm font-bold" />
-                            </div>
-                            <div className="text-2xl font-bold text-red-600 my-1">{summary.stok_habis || 0}</div>
-                            <span className="text-xs text-500">Stok 0 unit</span>
-                        </div>
-                    </div>
-
-                    {/* 5. Total Valuasi Aset */}
-                    <div className="col-12 sm:col-12 lg:col-4 p-1">
-                        <div className="surface-card border-1 border-200 border-round-xl p-3 h-full flex flex-column justify-content-between shadow-sm bg-green-50">
-                            <div className="flex justify-content-between align-items-center mb-1">
-                                <span className="text-xs font-bold text-green-800 uppercase">Total Valuasi Aset Stok</span>
-                                <i className="pi pi-money-bill text-green-700 text-sm font-bold" />
-                            </div>
-                            <div className="text-2xl font-black text-green-900 my-1">{formatRupiah(summary.total_aset || 0)}</div>
-                            <span className="text-xs text-green-700">Akumulasi harga beli persediaan</span>
-                        </div>
-                    </div>
-                </div>
-
                 {/* =========================================================
                     TAB VIEW: INVENTORI, RIWAYAT PO, LOG MUTASI
                     ========================================================= */}
                 <TabView activeIndex={activeIndex} onTabChange={(e) => setActiveIndex(e.index)}>
                     {/* ── TAB 1: STOK PRODUK ── */}
                     <TabPanel header="Stok & Inventori Produk" leftIcon="pi pi-box mr-2">
+                        {/* ACTION BUTTONS (Outline Style) */}
+                        <div className="flex flex-row flex-wrap align-items-center gap-2 pt-2 mb-4">
+                            <Button
+                                size="small"
+                                label="Beli Produk Baru"
+                                icon="pi pi-plus"
+                                outlined
+                                severity="success"
+                                className="border-round-md font-medium px-3"
+                                onClick={handleOpenBeliBaru}
+                            />
+                            <Divider layout="vertical" className="m-0 h-2rem" />
+                            <Button
+                                size="small"
+                                label="Restock Produk"
+                                icon="pi pi-cart-plus"
+                                outlined
+                                severity="info"
+                                className="border-round-md font-medium px-3"
+                                onClick={() => handleOpenRestock()}
+                            />
+                            <Divider layout="vertical" className="m-0 h-2rem" />
+                            <Button
+                                size="small"
+                                label="Cetak"
+                                icon="pi pi-print"
+                                outlined
+                                className="border-round-md font-medium px-3 border-purple-600 text-purple-600"
+                                onClick={() => window.print()}
+                            />
+                            <Divider layout="vertical" className="m-0 h-2rem" />
+                            <Button
+                                size="small"
+                                label="Refresh"
+                                icon="pi pi-refresh"
+                                outlined
+                                severity="success"
+                                className="border-round-md font-medium px-3"
+                                loading={loadingProduk}
+                                onClick={loadInventoriData}
+                            />
+                        </div>
+
+                        {/* =========================================================
+                            5 KPI CARDS STRIP
+                            ========================================================= */}
+                        <div className="grid m-0 mb-4">
+                            {/* 1. Total SKU */}
+                            <div className="col-12 sm:col-6 lg:col-2 p-1">
+                                <div className="surface-card border-1 border-200 border-round-xl p-3 h-full flex flex-column justify-content-between shadow-sm">
+                                    <div className="flex justify-content-between align-items-center mb-1">
+                                        <span className="text-xs font-bold text-500 uppercase">Total SKU</span>
+                                        <i className="pi pi-tags text-primary text-sm font-bold" />
+                                    </div>
+                                    <div className="text-2xl font-bold text-900 my-1">{summary.total_sku || 0}</div>
+                                    <span className="text-xs text-500">Katalog produk aktif</span>
+                                </div>
+                            </div>
+
+                            {/* 2. Total Stok Unit */}
+                            <div className="col-12 sm:col-6 lg:col-2 p-1">
+                                <div className="surface-card border-1 border-200 border-round-xl p-3 h-full flex flex-column justify-content-between shadow-sm">
+                                    <div className="flex justify-content-between align-items-center mb-1">
+                                        <span className="text-xs font-bold text-500 uppercase">Stok Fisik</span>
+                                        <i className="pi pi-box text-blue-600 text-sm font-bold" />
+                                    </div>
+                                    <div className="text-2xl font-bold text-blue-700 my-1">{summary.total_stok_unit || 0}</div>
+                                    <span className="text-xs text-500">Total unit di klinik</span>
+                                </div>
+                            </div>
+
+                            {/* 3. Stok Menipis */}
+                            <div className="col-12 sm:col-6 lg:col-2 p-1">
+                                <div className="surface-card border-1 border-200 border-round-xl p-3 h-full flex flex-column justify-content-between shadow-sm">
+                                    <div className="flex justify-content-between align-items-center mb-1">
+                                        <span className="text-xs font-bold text-orange-600 uppercase">Stok Menipis</span>
+                                        <i className="pi pi-exclamation-triangle text-orange-600 text-sm font-bold" />
+                                    </div>
+                                    <div className="text-2xl font-bold text-orange-600 my-1">{summary.stok_menipis || 0}</div>
+                                    <span className="text-xs text-500">Mendekati buffer min</span>
+                                </div>
+                            </div>
+
+                            {/* 4. Stok Habis */}
+                            <div className="col-12 sm:col-6 lg:col-2 p-1">
+                                <div className="surface-card border-1 border-200 border-round-xl p-3 h-full flex flex-column justify-content-between shadow-sm">
+                                    <div className="flex justify-content-between align-items-center mb-1">
+                                        <span className="text-xs font-bold text-red-600 uppercase">Stok Habis</span>
+                                        <i className="pi pi-times-circle text-red-600 text-sm font-bold" />
+                                    </div>
+                                    <div className="text-2xl font-bold text-red-600 my-1">{summary.stok_habis || 0}</div>
+                                    <span className="text-xs text-500">Stok 0 unit</span>
+                                </div>
+                            </div>
+
+                            {/* 5. Total Valuasi Aset */}
+                            <div className="col-12 sm:col-12 lg:col-4 p-1">
+                                <div className="surface-card border-1 border-200 border-round-xl p-3 h-full flex flex-column justify-content-between shadow-sm bg-green-50">
+                                    <div className="flex justify-content-between align-items-center mb-1">
+                                        <span className="text-xs font-bold text-green-800 uppercase">Total Valuasi Aset Stok</span>
+                                        <i className="pi pi-money-bill text-green-700 text-sm font-bold" />
+                                    </div>
+                                    <div className="text-2xl font-black text-green-900 my-1">{formatRupiah(summary.total_aset || 0)}</div>
+                                    <span className="text-xs text-green-700">Akumulasi harga beli persediaan</span>
+                                </div>
+                            </div>
+                        </div>
+
                         {/* TOOLBAR FILTER & SEARCH */}
-                        <div className="flex flex-column gap-3 mb-3 pt-2">
+                        <div className="flex flex-column gap-3 mb-3">
                             <div className="flex flex-wrap align-items-center justify-content-between gap-2">
                                 <span className="text-lg font-bold text-900">Data Stok Produk Klinik</span>
                                 <div className="flex flex-wrap align-items-center gap-2 ml-auto w-full md:w-auto">

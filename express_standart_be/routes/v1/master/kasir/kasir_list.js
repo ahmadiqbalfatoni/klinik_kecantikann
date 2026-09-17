@@ -8,12 +8,14 @@ import DB from "../../../../core/config/knex.js";
 import { formatDateSystem } from "../../components/tools/date_tools.js";
 import { Logging } from "../../components/tools/servertool.js";
 import { status } from "../../components/tools/general.js";
+import { getBranchScope } from "../../components/tools/branch_scope.js";
 
 const router = express.Router();
 
 router.post("/", async (req, res) => {
   const { body } = req;
   const username = req?.auth?.username || "";
+  const branchCode = getBranchScope(req, body?.kode_cabang);
   const keyword = body.keyword || "";
   const filterStatus = body.status || null;
   const tanggal = body.tanggal || new Date().toISOString().slice(0, 10);
@@ -27,6 +29,7 @@ router.post("/", async (req, res) => {
       .leftJoin("mst_promo as pr", "t.kode_promo", "pr.kode_promo")
       .whereRaw("DATE(t.tanggal_transaksi) = ?", [tanggal])
       .modify((qb) => {
+        if (branchCode) qb.where("t.kode_cabang", branchCode);
         if (filterStatus) qb.where("t.status", filterStatus);
         if (keyword) {
           const lower = keyword.toLowerCase();

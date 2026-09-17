@@ -4,10 +4,12 @@ import Joi from "joi";
 import DB from "../../../../core/config/knex.js";
 import { Logging, ChangesLog, validatePayload } from "../../components/tools/servertool.js";
 import { formatDateSystem } from "../../components/tools/date_tools.js";
+import { getBranchScope } from "../../components/tools/branch_scope.js";
 const router = express.Router();
 router.post("/", async (req, res) => {
   const oPayload = req.body;
   const username = req?.auth?.username || "";
+  const branchCode = getBranchScope(req, oPayload.kode_cabang);
   try {
     const cValidation = await validatePayload(
       { no_sip: Joi.string().max(20).required().label("No SIP"), nama: Joi.string().max(100).required().label("Nama Karyawan"), jabatan: Joi.string().valid("dokter", "perawat", "admin", "kasir", "apoteker", "terapis").required().label("Jabatan"), no_hp: Joi.string().max(20).allow("", null).label("No HP"), email: Joi.string().email().max(100).allow("", null).label("Email"), kode_user: Joi.string().allow("", null).label("Kode User"), status: Joi.string().valid("aktif", "nonaktif").required().label("Status") },
@@ -15,7 +17,9 @@ router.post("/", async (req, res) => {
     );
     if (cValidation) return res.status(422).json({ status: status.BAD_REQUEST, message: cValidation, datetime: formatDateSystem() });
     await DB.transaction(async (trx) => {
-      const prev = await trx("mst_karyawan").where("no_sip", oPayload.no_sip).forUpdate().first();
+      const qPrev = trx("mst_karyawan").where("no_sip", oPayload.no_sip);
+      if (branchCode) qPrev.where("kode_cabang", branchCode);
+      const prev = await qPrev.forUpdate().first();
       if (!prev) { const e = new Error("Data tidak ditemukan"); e.statusCode = 404; throw e; }
       const oData = { nama: oPayload.nama, jabatan: oPayload.jabatan, no_hp: oPayload.no_hp || null, email: oPayload.email || null, kode_user: oPayload.kode_user || null, status: oPayload.status, updated_by: username, updated_at: formatDateSystem() };
       await trx("mst_karyawan").where("no_sip", oPayload.no_sip).update(oData);

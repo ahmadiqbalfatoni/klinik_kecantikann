@@ -13,17 +13,25 @@ import DB from "../../../core/config/knex.js";
 import { formatDateSystem } from "../components/tools/date_tools.js";
 import { Logging } from "../components/tools/servertool.js";
 import { status } from "../components/tools/general.js";
+import { getBranchScope } from "../components/tools/branch_scope.js";
 
 const router = express.Router();
 
 router.post("/", async (req, res) => {
   const { body } = req;
   const username = req?.auth?.username || "";
+  const branchCode = getBranchScope(req, body?.kode_cabang);
 
   try {
-    const vaData = await DB("mst_dokter")
-      .select("id", "nama_dokter", "spesialisasi", "kode_poli")
-      .orderBy("nama_dokter", "asc");
+    let query = DB("mst_karyawan")
+      .where("jabatan", "dokter")
+      .where("status", "aktif");
+
+    if (branchCode) query = query.where("kode_cabang", branchCode);
+
+    const vaData = await query
+      .select("id", "kode_karyawan", "no_sip", "nama as nama_dokter", "jabatan as spesialisasi")
+      .orderBy("nama", "asc");
 
     return res.status(200).json({
       status: status.SUKSES,

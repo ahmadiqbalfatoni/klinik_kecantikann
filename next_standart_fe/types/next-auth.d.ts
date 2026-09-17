@@ -12,6 +12,8 @@ declare module 'next-auth' {
         remember_me?: boolean;
         access_token?: string;
         refresh_token?: string;
+        kode_cabang?: string | null;
+        nama_cabang?: string | null;
     }
 
     interface Session {
@@ -21,6 +23,8 @@ declare module 'next-auth' {
             user_code?: string;
             name?: string;
             username?: string;
+            kode_cabang?: string | null;
+            nama_cabang?: string | null;
         };
         remember_me?: boolean; 
         access_token?: string;
@@ -41,6 +45,8 @@ declare module 'next-auth/jwt' {
         access_token_expires?: number;
         error?: string;
         remember_me?: boolean; 
+        kode_cabang?: string | null;
+        nama_cabang?: string | null;
     }
 }
 

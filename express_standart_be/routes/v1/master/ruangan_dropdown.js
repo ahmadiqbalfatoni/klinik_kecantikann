@@ -13,16 +13,21 @@ import DB from "../../../core/config/knex.js";
 import { formatDateSystem } from "../components/tools/date_tools.js";
 import { Logging } from "../components/tools/servertool.js";
 import { status } from "../components/tools/general.js";
+import { getBranchScope } from "../components/tools/branch_scope.js";
 
 const router = express.Router();
 
 const handleRuanganDropdown = async (req, res) => {
-  const { body } = req;
+  const oPayload = { ...req.query, ...req.body };
   const username = req?.auth?.username || "";
+  const branchCode = getBranchScope(req, oPayload.kode_cabang);
 
   try {
-    const vaData = await DB("mst_ruangan as r")
-      .where("r.status", "aktif")
+    const qRuangan = DB("mst_ruangan as r").where("r.status", "aktif");
+    if (branchCode) {
+      qRuangan.where("r.kode_cabang", branchCode);
+    }
+    const vaData = await qRuangan
       .select(
         "r.kode_ruangan",
         "r.nama_ruangan",
@@ -71,7 +76,7 @@ const handleRuanganDropdown = async (req, res) => {
     Logging(error, {
       file: "/master/ruangan_dropdown.js",
       func: "dropdown",
-      request: body,
+      request: oPayload,
       response: oResult,
       user: username,
     });

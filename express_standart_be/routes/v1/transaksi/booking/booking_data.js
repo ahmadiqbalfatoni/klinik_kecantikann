@@ -13,6 +13,7 @@ import DB from "../../../../core/config/knex.js";
 import { formatDateSystem } from "../../components/tools/date_tools.js";
 import { Logging } from "../../components/tools/servertool.js";
 import { status } from "../../components/tools/general.js";
+import { getBranchScope } from "../../components/tools/branch_scope.js";
 
 const router = express.Router();
 
@@ -20,6 +21,7 @@ router.post("/", async (req, res) => {
   const { body } = req;
   const oPayload = body || {};
   const username = req?.auth?.username || "system";
+  const branchCode = getBranchScope(req, oPayload.kode_cabang);
 
   const hasPagination = oPayload.page !== undefined || oPayload.perPage !== undefined;
   const page = parseInt(oPayload.page, 10) || 1;
@@ -42,6 +44,9 @@ router.post("/", async (req, res) => {
       .leftJoin("mst_karyawan as k", "j.no_sip", "k.no_sip")
       .leftJoin("mst_ruangan as r", "j.kode_ruangan", "r.kode_ruangan")
       .modify((qb) => {
+        if (branchCode) {
+          qb.where("b.kode_cabang", branchCode);
+        }
         if (keyword) {
           const lower = keyword.toLowerCase();
           qb.where(function () {

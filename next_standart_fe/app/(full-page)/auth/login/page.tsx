@@ -3,17 +3,20 @@
 import { useFormik } from 'formik';
 import { useRouter } from 'next/navigation';
 import { useRef, useState } from 'react';
+import Image from 'next/image';
 import { showError, showSuccess, showWarning } from '../../../../lib/tools/generalTools';
 import { signIn } from 'next-auth/react';
 import { Toast } from 'primereact/toast';
 import axios from 'axios';
 import { LoginFormik, LoginState } from './component/interfaces';
+import teamHeroImg from '@/public/layout/images/clinic-team-illustration.jpg';
 
 export default function LoginPage() {
   const router = useRouter();
   const toast = useRef<Toast>(null);
 
   const [showPassword, setShowPassword] = useState(false);
+  const [loginSuccess, setLoginSuccess] = useState(false);
   const [state, setState] = useState<LoginState>({
     load: false,
     googleLoad: false,
@@ -44,7 +47,7 @@ export default function LoginPage() {
     setState((p) => ({ ...p, load: true }));
     try {
       const { data: vaLogin } = await axios.post('/api/auth/login', {
-        username: data.username,
+        username: data.username.trim(),
         password: data.password,
         remember_me: data.remember_me ? '1' : '0',
       });
@@ -55,10 +58,24 @@ export default function LoginPage() {
       });
 
       if (nAuth?.error) {
-        showError(toast, 'Username atau kata sandi tidak sesuai.');
+        console.error('NextAuth signIn error:', nAuth);
+        showError(
+          toast,
+          `Sesi login gagal dibuat (${nAuth.error}). Silakan refresh browser atau bersihkan cookie browser Anda.`
+        );
       } else {
-        showSuccess(toast, 'Login Berhasil! Mengalihkan ke Dashboard...');
-        setTimeout(() => router.push('/dashboard'), 400);
+        setLoginSuccess(true);
+        if (toast.current) {
+          toast.current.show({
+            severity: 'success',
+            summary: 'Login Berhasil',
+            detail: 'Selamat datang kembali! Mengalihkan ke Dashboard...',
+            life: 2500,
+          });
+        }
+        setTimeout(() => {
+          window.location.href = '/dashboard';
+        }, 600);
       }
     } catch (error: any) {
       const e = error?.response?.data || error;
@@ -78,7 +95,7 @@ export default function LoginPage() {
 
   return (
     <>
-      <Toast ref={toast} position="top-right" />
+      <Toast ref={toast} position="top-right" className="kk-custom-toast" />
 
       {/* Google Fonts & Material Symbols */}
       <link rel="preconnect" href="https://fonts.googleapis.com" />
@@ -93,33 +110,24 @@ export default function LoginPage() {
       />
 
       <style>{`
-        /* Reset & Fixed Natural Canvas (No Scroll) */
-        *, *::before, *::after {
+        /* Scoped to Login Page Wrapper Only */
+        .kk-page-wrapper,
+        .kk-page-wrapper *,
+        .kk-page-wrapper *::before,
+        .kk-page-wrapper *::after {
           box-sizing: border-box;
-          margin: 0;
-          padding: 0;
-        }
-
-        html, body {
-          width: 100%;
-          height: 100vh;
-          max-height: 100vh;
-          overflow: hidden;
-          background-color: #ecfdf5;
         }
 
         .kk-page-wrapper {
           font-family: 'Plus Jakarta Sans', -apple-system, BlinkMacSystemFont, 'Segoe UI', Roboto, sans-serif;
-          background: radial-gradient(120% 120% at 50% 10%, #f0fdf4 0%, #d1fae5 100%);
-          color: #0d1f18;
-          width: 100vw;
-          height: 100vh;
-          max-height: 100vh;
-          overflow: hidden;
+          background: radial-gradient(130% 120% at 50% 0%, #ffffff 0%, #f0fdf4 50%, #e1f7ec 100%);
+          color: #064e3b;
+          min-height: 100vh;
+          width: 100%;
           display: flex;
           align-items: center;
           justify-content: center;
-          padding: 20px 24px;
+          padding: 24px 20px;
           position: relative;
         }
 
@@ -127,7 +135,7 @@ export default function LoginPage() {
           font-family: 'Playfair Display', Georgia, serif;
         }
 
-        .material-symbols-outlined {
+        .kk-page-wrapper .material-symbols-outlined {
           font-family: 'Material Symbols Outlined', sans-serif;
           font-weight: normal;
           font-style: normal;
@@ -142,96 +150,73 @@ export default function LoginPage() {
           -webkit-font-smoothing: antialiased;
         }
 
-        .material-symbols-filled {
-          font-variation-settings: 'FILL' 1;
-        }
-
-        /* ── MAIN CONTAINER & GRID ── */
-        .kk-container {
+        /* ── MAIN CONTAINER & CARD FRAME ── */
+        .kk-main-card {
           width: 100%;
-          max-width: 1120px;
-          margin: 0 auto;
-        }
-
-        .kk-grid {
+          max-width: 1080px;
+          background: #ffffff;
+          border-radius: 32px;
+          border: 1px solid rgba(16, 185, 129, 0.2);
+          box-shadow: 0 24px 60px -12px rgba(6, 78, 59, 0.12), 0 8px 24px -4px rgba(0, 0, 0, 0.04);
+          overflow: hidden;
           display: grid;
-          grid-template-columns: 1.34fr 1fr;
-          gap: 24px;
+          grid-template-columns: 1.18fr 1fr;
           align-items: stretch;
-          max-height: 94vh;
+          position: relative;
         }
 
         @media (max-width: 960px) {
-          html, body, .kk-page-wrapper {
-            height: auto;
-            max-height: none;
-            overflow-y: auto;
-          }
-          .kk-grid {
+          .kk-main-card {
             grid-template-columns: 1fr;
-            max-height: none;
+            max-width: 520px;
+            margin: 20px auto;
           }
         }
 
-        /* ── LEFT SHOWCASE PANEL (Aesthetic Medical & Dermatology Showcase) ── */
-        .kk-left-card {
-          background: 
-            linear-gradient(165deg, rgba(6, 78, 59, 0.92) 0%, rgba(6, 95, 70, 0.82) 45%, rgba(4, 120, 87, 0.94) 100%),
-            url('/layout/images/login-hero.jpg') center/cover no-repeat;
-          border-radius: 26px;
-          border: 1px solid rgba(52, 211, 153, 0.3);
-          box-shadow: 0 20px 50px rgba(6, 78, 59, 0.28);
-          position: relative;
-          overflow: hidden;
-          padding: 28px 30px;
+        /* ── LEFT PANEL: Light Soft Mint Ambient & Elevated Illustration ── */
+        .kk-left-panel {
+          background: linear-gradient(160deg, #f0fdf9 0%, #e6faf2 50%, #d8f5e7 100%);
+          border-right: 1px solid rgba(16, 185, 129, 0.15);
+          padding: 48px 40px;
           display: flex;
           flex-direction: column;
-          justify-content: space-between;
+          justify-content: center;
+          align-items: center;
+          text-align: center;
+          position: relative;
+          overflow: hidden;
         }
 
-        .kk-glow-top {
-          position: absolute;
-          right: -50px;
-          top: -50px;
-          width: 240px;
-          height: 240px;
-          border-radius: 50%;
-          background: radial-gradient(circle, rgba(52, 211, 153, 0.28) 0%, transparent 70%);
-          filter: blur(40px);
-          pointer-events: none;
+        @media (max-width: 960px) {
+          .kk-left-panel {
+            border-right: none;
+            border-bottom: 1px solid rgba(16, 185, 129, 0.15);
+            padding: 36px 24px;
+          }
         }
 
-        .kk-glow-bottom {
-          position: absolute;
-          left: -50px;
-          bottom: -30px;
-          width: 220px;
-          height: 220px;
-          border-radius: 50%;
-          background: radial-gradient(circle, rgba(16, 185, 129, 0.24) 0%, transparent 70%);
-          filter: blur(40px);
-          pointer-events: none;
-        }
-
+        /* Top Brand Tag & Headline (Symmetric & Balanced Spacing) */
         .kk-tag-pill {
           display: inline-flex;
           align-items: center;
-          gap: 7px;
-          padding: 5px 12px;
-          background: rgba(255, 255, 255, 0.12);
+          justify-content: center;
+          gap: 8px;
+          padding: 8px 16px;
+          background: rgba(255, 255, 255, 0.92);
           backdrop-filter: blur(10px);
           -webkit-backdrop-filter: blur(10px);
-          border: 1px solid rgba(255, 255, 255, 0.2);
+          border: 1px solid rgba(16, 185, 129, 0.3);
           border-radius: 999px;
-          margin-bottom: 10px;
+          box-shadow: 0 2px 8px rgba(16, 185, 129, 0.08);
+          margin-bottom: 16px;
         }
 
         .kk-pulsing-dot {
-          width: 6px;
-          height: 6px;
+          width: 8px;
+          height: 8px;
           border-radius: 50%;
-          background: #34d399;
-          box-shadow: 0 0 8px #34d399;
+          background: #10b981;
+          box-shadow: 0 0 10px #10b981;
           animation: pulseAnim 2s infinite ease-in-out;
         }
 
@@ -241,252 +226,130 @@ export default function LoginPage() {
         }
 
         .kk-tag-text {
-          font-size: 10px;
+          font-size: 11px;
           font-weight: 700;
           letter-spacing: 1.2px;
-          color: #a7f3d0;
+          color: #059669;
           text-transform: uppercase;
+          line-height: 1;
         }
 
         .kk-headline {
           font-family: 'Playfair Display', Georgia, serif;
-          font-size: clamp(22px, 2.2vw, 28px);
+          font-size: clamp(22px, 2.1vw, 27px);
           font-weight: 700;
-          color: #ffffff;
-          line-height: 1.22;
-          margin: 0 0 8px 0;
+          color: #064e3b;
+          line-height: 1.28;
+          margin: 0;
           letter-spacing: -0.3px;
         }
 
         .kk-headline-highlight {
-          color: #6ee7b7;
+          color: #059669;
           font-style: italic;
           font-weight: 600;
         }
 
-        .kk-lead-desc {
-          font-size: 11.5px;
-          color: rgba(209, 250, 229, 0.9);
-          line-height: 1.5;
-          margin: 0 0 14px 0;
-        }
-
-        /* Feature List (3 Sleek Frosted Glass Cards) */
-        .kk-feature-list {
-          display: flex;
-          flex-direction: column;
-          gap: 8px;
-          margin: 0 0 12px 0;
-          position: relative;
-          z-index: 10;
-        }
-
-        .kk-feature-card {
-          display: flex;
-          align-items: center;
-          gap: 12px;
-          background: rgba(255, 255, 255, 0.1);
-          backdrop-filter: blur(14px);
-          -webkit-backdrop-filter: blur(14px);
-          border: 1px solid rgba(255, 255, 255, 0.16);
-          border-radius: 13px;
-          padding: 9px 13px;
-          box-shadow: 0 4px 16px rgba(0, 0, 0, 0.08);
-          transition: all 0.25s ease;
-        }
-
-        .kk-feature-card:hover {
-          background: rgba(255, 255, 255, 0.15);
-          border-color: rgba(110, 231, 183, 0.35);
-          transform: translateY(-2px);
-        }
-
-        .kk-feature-icon-box {
-          width: 34px;
-          height: 34px;
-          border-radius: 10px;
-          background: linear-gradient(135deg, rgba(16, 185, 129, 0.35) 0%, rgba(5, 150, 105, 0.2) 100%);
-          border: 1px solid rgba(52, 211, 153, 0.4);
+        /* Elevated Floating Illustration Card */
+        .kk-team-img-wrap {
+          width: 100%;
+          max-width: 440px;
           display: flex;
           align-items: center;
           justify-content: center;
-          color: #a7f3d0;
-          flex-shrink: 0;
-        }
-
-        .kk-feature-title {
-          font-size: 12px;
-          font-weight: 700;
-          color: #ffffff;
-          margin: 0 0 2px 0;
-          display: flex;
-          align-items: center;
-          gap: 6px;
-        }
-
-        .kk-feature-pill {
-          font-size: 8.5px;
-          font-weight: 700;
-          padding: 1.5px 5px;
-          border-radius: 999px;
-          background: rgba(16, 185, 129, 0.25);
-          color: #6ee7b7;
-          border: 1px solid rgba(52, 211, 153, 0.3);
-        }
-
-        .kk-feature-sub {
-          font-size: 10.5px;
-          color: rgba(229, 231, 235, 0.85);
-          margin: 0;
-          line-height: 1.35;
-        }
-
-        /* Bottom Trust & Rating Strip */
-        .kk-trust-strip {
-          background: rgba(0, 0, 0, 0.26);
-          backdrop-filter: blur(14px);
-          -webkit-backdrop-filter: blur(14px);
-          border: 1px solid rgba(255, 255, 255, 0.12);
-          border-radius: 13px;
-          padding: 10px 14px;
-          display: flex;
-          flex-direction: column;
-          gap: 7px;
-          position: relative;
-          z-index: 10;
-        }
-
-        .kk-trust-main {
-          display: flex;
-          align-items: center;
-          justify-content: space-between;
-          flex-wrap: wrap;
-          gap: 8px;
-        }
-
-        .kk-rating-badge {
-          display: flex;
-          align-items: center;
-          gap: 7px;
-        }
-
-        .kk-stars-row {
-          display: flex;
-          color: #fbbf24;
-          font-size: 13px;
-          gap: 1px;
-        }
-
-        .kk-rating-num {
-          font-size: 12.5px;
-          font-weight: 800;
-          color: #ffffff;
-        }
-
-        .kk-rating-label {
-          font-size: 10.5px;
-          color: rgba(209, 250, 229, 0.85);
-        }
-
-        .kk-trust-pills {
-          display: flex;
-          align-items: center;
-          gap: 6px;
-          flex-wrap: wrap;
-        }
-
-        .kk-trust-badge {
-          display: inline-flex;
-          align-items: center;
-          gap: 4px;
-          padding: 2.5px 7px;
-          border-radius: 6px;
-          background: rgba(255, 255, 255, 0.08);
-          border: 1px solid rgba(255, 255, 255, 0.14);
-          font-size: 9.5px;
-          font-weight: 600;
-          color: #e6fffa;
-        }
-
-        .kk-trust-quote {
-          font-size: 10px;
-          font-style: italic;
-          color: rgba(209, 250, 229, 0.8);
-          border-top: 1px solid rgba(255, 255, 255, 0.08);
-          padding-top: 5px;
-          margin: 0;
-          display: flex;
-          align-items: center;
-          gap: 4px;
-        }
-
-        /* ── RIGHT AUTHENTICATION PANEL (Clean Natural Form) ── */
-        .kk-right-card {
+          margin: 24px auto 0 auto;
+          border-radius: 24px;
+          overflow: hidden;
+          box-shadow: 0 20px 40px -12px rgba(6, 78, 59, 0.16), 0 8px 16px -4px rgba(0, 0, 0, 0.04);
+          border: 1px solid rgba(16, 185, 129, 0.25);
           background: #ffffff;
-          border-radius: 26px;
-          padding: 34px 34px;
-          box-shadow: 0 16px 40px rgba(6, 78, 59, 0.08);
-          border: 1px solid rgba(167, 243, 208, 0.6);
+          transition: transform 200ms cubic-bezier(0.4, 0, 0.2, 1), box-shadow 200ms cubic-bezier(0.4, 0, 0.2, 1);
+        }
+
+        .kk-team-img-wrap:hover {
+          transform: translateY(-4px);
+          box-shadow: 0 28px 48px -12px rgba(6, 78, 59, 0.22), 0 12px 20px -4px rgba(0, 0, 0, 0.06);
+        }
+
+        .kk-team-img {
+          width: 100%;
+          height: auto;
+          display: block;
+          object-fit: cover;
+        }
+
+        /* ── RIGHT PANEL: Minimalist & Clean Login Card ── */
+        .kk-right-panel {
+          background: #ffffff;
+          padding: 48px 44px;
           display: flex;
           flex-direction: column;
           justify-content: center;
+          position: relative;
         }
 
+        @media (max-width: 960px) {
+          .kk-right-panel {
+            padding: 36px 24px;
+          }
+        }
+
+        /* Brand Header Center */
         .kk-auth-brand-center {
           display: flex;
           flex-direction: column;
           align-items: center;
           text-align: center;
-          margin-bottom: 16px;
+          margin-bottom: 14px;
         }
 
+        /* Logo Rounded Square (EXACT BRAND LOGO PRESERVED) */
         .kk-auth-icon-box {
-          width: 52px;
-          height: 52px;
-          border-radius: 16px;
+          width: 48px;
+          height: 48px;
+          border-radius: 14px;
           background: linear-gradient(135deg, #10b981 0%, #059669 100%);
           display: flex;
           align-items: center;
           justify-content: center;
           color: #ffffff;
-          box-shadow: 0 5px 16px rgba(16, 185, 129, 0.25);
-          margin-bottom: 9px;
+          box-shadow: 0 4px 14px rgba(16, 185, 129, 0.25);
+          margin-bottom: 8px;
+          transition: transform 180ms ease;
+        }
+
+        .kk-auth-icon-box:hover {
+          transform: scale(1.05);
         }
 
         .kk-auth-portal-title {
-          font-size: 18px;
+          font-size: 17px;
           font-weight: 700;
-          color: #10b981;
+          color: #059669;
           letter-spacing: -0.2px;
-        }
-
-        .kk-auth-portal-sub {
-          font-size: 10.5px;
-          font-weight: 700;
-          color: #404944;
-          letter-spacing: 0.8px;
-          text-transform: uppercase;
-          margin-top: 2px;
+          line-height: 1.2;
         }
 
         .kk-auth-welcome {
           font-family: 'Playfair Display', Georgia, serif;
-          font-size: 24px;
+          font-size: 23px;
           font-weight: 700;
           color: #0d1f18;
           text-align: center;
-          margin: 0 0 3px 0;
+          margin: 0 0 4px 0;
+          letter-spacing: -0.2px;
         }
 
         .kk-auth-welcome-sub {
           font-size: 12.5px;
-          color: #404944;
+          color: #526359;
           text-align: center;
-          margin: 0 0 18px 0;
+          margin: 0 0 20px 0;
         }
 
+        /* Form Inputs with Consistent Spacing */
         .kk-form-group {
-          margin-bottom: 14px;
+          margin-bottom: 16px;
           text-align: left;
         }
 
@@ -495,7 +358,7 @@ export default function LoginPage() {
           font-size: 12.5px;
           font-weight: 600;
           color: #0d1f18;
-          margin-bottom: 5px;
+          margin-bottom: 8px;
         }
 
         .kk-input-wrap {
@@ -506,7 +369,7 @@ export default function LoginPage() {
 
         .kk-input-icon {
           position: absolute;
-          left: 13px;
+          left: 14px;
           color: #10b981;
           pointer-events: none;
           font-size: 19px;
@@ -514,46 +377,46 @@ export default function LoginPage() {
 
         .kk-input {
           width: 100%;
-          height: 44px;
-          padding-left: 40px;
+          height: 46px;
+          padding-left: 42px;
           padding-right: 14px;
-          background: #f0fdf4;
-          border: 1px solid #d1fae5;
-          border-radius: 11px;
+          background: #f8fdfa;
+          border: 1.5px solid #d1fae5;
+          border-radius: 12px;
           font-size: 13.5px;
           font-family: inherit;
           color: #0d1f18;
           outline: none;
-          transition: all 0.2s ease;
+          transition: all 180ms ease;
         }
 
         .kk-input.has-eye {
-          padding-right: 40px;
+          padding-right: 42px;
         }
 
         .kk-input:focus {
           background: #ffffff;
           border-color: #10b981;
-          box-shadow: 0 0 0 3px rgba(16, 185, 129, 0.18);
+          box-shadow: 0 0 0 3.5px rgba(16, 185, 129, 0.16);
         }
 
         .kk-input::placeholder {
-          color: #707973;
+          color: #94a39b;
         }
 
         .kk-eye-btn {
           position: absolute;
-          right: 9px;
+          right: 10px;
           background: none;
           border: none;
           cursor: pointer;
           color: #707973;
-          padding: 5px;
+          padding: 6px;
           display: flex;
           align-items: center;
           justify-content: center;
           border-radius: 6px;
-          transition: color 0.2s;
+          transition: color 180ms ease;
         }
 
         .kk-eye-btn:hover {
@@ -562,7 +425,7 @@ export default function LoginPage() {
 
         .kk-error-msg {
           font-size: 11.5px;
-          color: #ba1a1a;
+          color: #dc2626;
           margin-top: 4px;
           font-weight: 500;
         }
@@ -571,32 +434,34 @@ export default function LoginPage() {
           display: flex;
           align-items: center;
           justify-content: space-between;
-          margin: 10px 0 18px 0;
+          margin: 16px 0 24px 0;
         }
 
         .kk-remember-label {
           display: flex;
           align-items: center;
-          gap: 6px;
+          gap: 8px;
           cursor: pointer;
           font-size: 12.5px;
-          color: #0d1f18;
+          color: #334155;
           user-select: none;
         }
 
         .kk-remember-checkbox {
-          width: 15px;
-          height: 15px;
+          width: 16px;
+          height: 16px;
           accent-color: #10b981;
           cursor: pointer;
+          border-radius: 4px;
         }
 
         .kk-forgot-link {
-          font-size: 12px;
+          font-size: 12.5px;
           font-weight: 600;
           color: #059669;
           text-decoration: none;
           cursor: pointer;
+          transition: color 180ms ease;
         }
 
         .kk-forgot-link:hover {
@@ -604,11 +469,12 @@ export default function LoginPage() {
           text-decoration: underline;
         }
 
+        /* Submit Button with Smooth Scale Hover */
         .kk-submit-btn {
           width: 100%;
-          height: 44px;
+          height: 48px;
           border-radius: 999px;
-          background: #10b981;
+          background: linear-gradient(135deg, #10b981 0%, #059669 100%);
           color: #ffffff;
           font-size: 14.5px;
           font-weight: 700;
@@ -618,262 +484,277 @@ export default function LoginPage() {
           display: flex;
           align-items: center;
           justify-content: center;
-          gap: 7px;
-          box-shadow: 0 4px 14px rgba(16, 185, 129, 0.25);
-          transition: all 0.2s ease;
+          gap: 8px;
+          box-shadow: 0 4px 14px rgba(16, 185, 129, 0.3);
+          transition: all 180ms cubic-bezier(0.4, 0, 0.2, 1);
         }
 
         .kk-submit-btn:hover {
-          background: #059669;
-          box-shadow: 0 6px 18px rgba(16, 185, 129, 0.35);
-          transform: translateY(-1px);
+          background: linear-gradient(135deg, #059669 0%, #047857 100%);
+          box-shadow: 0 6px 20px rgba(16, 185, 129, 0.4);
+          transform: scale(1.02) translateY(-1px);
         }
 
         .kk-submit-btn:active {
-          transform: translateY(0);
+          transform: scale(0.99) translateY(0);
         }
 
         .kk-submit-btn:disabled {
-          opacity: 0.75;
+          opacity: 0.8;
           cursor: not-allowed;
           transform: none;
+        }
+
+        /* Success Banner when logged in */
+        .kk-success-banner {
+          background: #ecfdf5;
+          border: 1px solid #6ee7b7;
+          border-radius: 12px;
+          padding: 10px 14px;
+          display: flex;
+          align-items: center;
+          gap: 10px;
+          margin-bottom: 16px;
+          color: #065f46;
+          font-size: 13px;
+          font-weight: 600;
+          animation: fadeIn 0.3s ease;
+        }
+
+        @keyframes fadeIn {
+          from { opacity: 0; transform: translateY(-4px); }
+          to { opacity: 1; transform: translateY(0); }
+        }
+
+        /* ── CUSTOM TOAST STYLING ── */
+        .kk-custom-toast.p-toast {
+          z-index: 99999 !important;
+        }
+
+        .kk-custom-toast .p-toast-message {
+          border-radius: 16px !important;
+          border: 1px solid rgba(16, 185, 129, 0.3) !important;
+          background: #ffffff !important;
+          box-shadow: 0 16px 36px -4px rgba(6, 78, 59, 0.16), 0 4px 12px rgba(0, 0, 0, 0.04) !important;
+          backdrop-filter: blur(12px) !important;
+          overflow: hidden !important;
+          margin-bottom: 12px !important;
+        }
+
+        .kk-custom-toast .p-toast-message-content {
+          padding: 14px 18px !important;
+          display: flex !important;
+          align-items: center !important;
+          gap: 12px !important;
+        }
+
+        .kk-custom-toast .p-toast-message.p-toast-message-success {
+          border-left: 5px solid #10b981 !important;
+        }
+
+        .kk-custom-toast .p-toast-message.p-toast-message-error {
+          border-left: 5px solid #ef4444 !important;
+          border-color: rgba(239, 68, 68, 0.3) !important;
+        }
+
+        .kk-custom-toast .p-toast-message.p-toast-message-warn {
+          border-left: 5px solid #f59e0b !important;
+          border-color: rgba(245, 158, 11, 0.3) !important;
+        }
+
+        .kk-custom-toast .p-toast-summary {
+          font-family: 'Plus Jakarta Sans', sans-serif !important;
+          font-weight: 700 !important;
+          font-size: 13.5px !important;
+          color: #064e3b !important;
+        }
+
+        .kk-custom-toast .p-toast-detail {
+          font-family: 'Plus Jakarta Sans', sans-serif !important;
+          font-size: 12.5px !important;
+          color: #374151 !important;
+          margin-top: 2px !important;
+        }
+
+        .kk-custom-toast .p-toast-icon-close {
+          color: #9ca3af !important;
+          border-radius: 6px !important;
+          transition: all 0.2s !important;
+        }
+
+        .kk-custom-toast .p-toast-icon-close:hover {
+          color: #064e3b !important;
+          background: rgba(16, 185, 129, 0.1) !important;
         }
       `}</style>
 
       <div className="kk-page-wrapper">
-        <div className="kk-container">
-          <div className="kk-grid">
-            {/* ── LEFT COLUMN: Showcase & Stacked Floating Cards ── */}
-            <div className="kk-left-card">
-              {/* Background Ambient Glows */}
-              <div className="kk-glow-top"></div>
-              <div className="kk-glow-bottom"></div>
-
-              {/* Top Brand Tag & Headline */}
-              <div style={{ position: 'relative', zIndex: 10 }}>
-                <div className="kk-tag-pill">
-                  <span className="kk-pulsing-dot"></span>
-                  <span className="material-symbols-outlined" style={{ fontSize: '14px', color: '#6ee7b7' }}>spa</span>
-                  <span className="kk-tag-text">KLINIK KECANTIKAN &amp; ESTETIKA</span>
-                </div>
-
-                <h1 className="kk-headline">
-                  Pancarkan Pesona Alami <br />
-                  <span className="kk-headline-highlight">Kulit Sehat &amp; Bersinar</span>
-                </h1>
-                <p className="kk-lead-desc">
-                  Pelayanan dermatologi profesional berstandar medis dengan teknologi terkini dan sentuhan perawatan personal.
-                </p>
+        <div className="kk-main-card">
+          {/* ── LEFT PANEL: High Quality Medical Team Illustration & Brand Showcase ── */}
+          <div className="kk-left-panel">
+            {/* Top Brand Header */}
+            <div>
+              <div className="kk-tag-pill">
+                <span className="kk-pulsing-dot"></span>
+                <span className="material-symbols-outlined" style={{ fontSize: '15px', color: '#059669' }}>
+                  spa
+                </span>
+                <span className="kk-tag-text">KLINIK KECANTIKAN &amp; ESTETIKA</span>
               </div>
 
-              {/* 3 Luxury Feature Glass Cards */}
-              <div className="kk-feature-list">
-                {/* Feature 1 */}
-                <div className="kk-feature-card">
-                  <div className="kk-feature-icon-box">
-                    <span className="material-symbols-outlined" style={{ fontSize: '18px' }}>
-                      stethoscope
-                    </span>
-                  </div>
-                  <div style={{ flex: 1, minWidth: 0 }}>
-                    <div className="kk-feature-title">
-                      <span>Dokter Spesialis Kulit</span>
-                      <span className="kk-feature-pill">Sp.D.V.E</span>
-                    </div>
-                    <p className="kk-feature-sub">
-                      Konsultasi mendalam &amp; diagnosa akurat langsung oleh dokter spesialis berpengalaman.
-                    </p>
-                  </div>
-                </div>
-
-                {/* Feature 2 */}
-                <div className="kk-feature-card">
-                  <div className="kk-feature-icon-box">
-                    <span className="material-symbols-outlined" style={{ fontSize: '18px' }}>
-                      auto_awesome
-                    </span>
-                  </div>
-                  <div style={{ flex: 1, minWidth: 0 }}>
-                    <div className="kk-feature-title">
-                      <span>Teknologi Laser &amp; Facial Medis</span>
-                      <span className="kk-feature-pill">FDA Approved</span>
-                    </div>
-                    <p className="kk-feature-sub">
-                      Treatment peremajaan kulit modern, higienis, steril, dan minim downtime.
-                    </p>
-                  </div>
-                </div>
-
-                {/* Feature 3 */}
-                <div className="kk-feature-card">
-                  <div className="kk-feature-icon-box">
-                    <span className="material-symbols-outlined" style={{ fontSize: '18px' }}>
-                      verified
-                    </span>
-                  </div>
-                  <div style={{ flex: 1, minWidth: 0 }}>
-                    <div className="kk-feature-title">
-                      <span>Skincare Teruji Klinis</span>
-                      <span className="kk-feature-pill">BPOM &amp; Halal</span>
-                    </div>
-                    <p className="kk-feature-sub">
-                      Formulasi bahan aktif medis yang aman dan teruji klinis untuk hasil kulit jangka panjang.
-                    </p>
-                  </div>
-                </div>
-              </div>
-
-              {/* Bottom Trust & Accreditation Strip */}
-              <div className="kk-trust-strip">
-                <div className="kk-trust-main">
-                  <div className="kk-rating-badge">
-                    <div className="kk-stars-row">
-                      ★ ★ ★ ★ ★
-                    </div>
-                    <div>
-                      <span className="kk-rating-num">4.9 / 5.0</span>
-                      <span className="kk-rating-label"> (10.000+ Pasien Percaya)</span>
-                    </div>
-                  </div>
-
-                  <div className="kk-trust-pills">
-                    <div className="kk-trust-badge">
-                      <span className="material-symbols-outlined" style={{ fontSize: '13px', color: '#6ee7b7' }}>
-                        verified_user
-                      </span>
-                      <span>Standar Medis RS</span>
-                    </div>
-                    <div className="kk-trust-badge">
-                      <span className="material-symbols-outlined" style={{ fontSize: '13px', color: '#6ee7b7' }}>
-                        sanitizer
-                      </span>
-                      <span>Higienis &amp; Steril</span>
-                    </div>
-                  </div>
-                </div>
-
-                <p className="kk-trust-quote">
-                  <span className="material-symbols-outlined" style={{ fontSize: '13px', color: '#6ee7b7' }}>
-                    favorite
-                  </span>
-                  Dedikasi profesional untuk kecantikan kulit yang sehat, alami, dan percaya diri.
-                </p>
-              </div>
+              <h1 className="kk-headline">
+                Pancarkan Pesona Alami <br />
+                <span className="kk-headline-highlight">Kulit Sehat &amp; Bersinar</span>
+              </h1>
             </div>
 
-            {/* ── RIGHT COLUMN: Authentication Form (Clean & Focused) ── */}
-            <div className="kk-right-card">
-              {/* Brand Center */}
-              <div className="kk-auth-brand-center">
-                <div className="kk-auth-icon-box">
-                  <span className="material-symbols-outlined" style={{ fontSize: '26px' }}>spa</span>
+            {/* Elevated Illustration Card */}
+            <div className="kk-team-img-wrap">
+              <Image
+                src={teamHeroImg}
+                alt="Tim Medis &amp; Dokter Spesialis Klinik Kecantikan"
+                className="kk-team-img"
+                priority
+                sizes="(max-width: 768px) 100vw, 440px"
+              />
+            </div>
+          </div>
+
+          {/* ── RIGHT PANEL: Minimalist & Clean Login Form ── */}
+          <div className="kk-right-panel">
+            {/* Brand Logo (Exact Icon & Branding Preserved, Subtitle Removed) */}
+            <div className="kk-auth-brand-center">
+              <div className="kk-auth-icon-box">
+                <span className="material-symbols-outlined" style={{ fontSize: '28px' }}>
+                  spa
+                </span>
+              </div>
+              <span className="kk-auth-portal-title">Klinik Kecantikan</span>
+            </div>
+
+            {/* Welcome Heading */}
+            <h2 className="kk-auth-welcome">Selamat Datang</h2>
+            <p className="kk-auth-welcome-sub">Silakan masuk ke akun Anda</p>
+
+            {/* Login Success Notification Banner */}
+            {loginSuccess && (
+              <div className="kk-success-banner">
+                <span className="material-symbols-outlined" style={{ color: '#10b981', fontSize: '20px' }}>
+                  check_circle
+                </span>
+                <span>Login Berhasil! Mengalihkan ke Dashboard...</span>
+              </div>
+            )}
+
+            {/* Login Form */}
+            <form onSubmit={formik.handleSubmit}>
+              {/* Username Input */}
+              <div className="kk-form-group">
+                <label className="kk-label" htmlFor="username-input">
+                  Email / Username
+                </label>
+                <div className="kk-input-wrap">
+                  <span className="material-symbols-outlined kk-input-icon">person</span>
+                  <input
+                    id="username-input"
+                    name="username"
+                    type="text"
+                    required
+                    value={formik.values.username}
+                    onChange={formik.handleChange}
+                    onBlur={formik.handleBlur}
+                    placeholder="Masukkan username Anda"
+                    className="kk-input"
+                    autoComplete="username"
+                  />
                 </div>
-                <span className="kk-auth-portal-title">Klinik Kecantikan</span>
-                <span className="kk-auth-portal-sub">Aesthetic &amp; Wellness Portal</span>
+                {formik.touched.username && formik.errors.username && (
+                  <div className="kk-error-msg">{formik.errors.username}</div>
+                )}
               </div>
 
-              {/* Heading */}
-              <h2 className="kk-auth-welcome">Selamat Datang</h2>
-              <p className="kk-auth-welcome-sub">Silakan masuk ke akun Anda</p>
-
-              {/* Form */}
-              <form onSubmit={formik.handleSubmit}>
-                {/* Email / Username */}
-                <div className="kk-form-group">
-                  <label className="kk-label" htmlFor="username-input">
-                    Email / Username
-                  </label>
-                  <div className="kk-input-wrap">
-                    <span className="material-symbols-outlined kk-input-icon">person</span>
-                    <input
-                      id="username-input"
-                      name="username"
-                      type="text"
-                      required
-                      value={formik.values.username}
-                      onChange={formik.handleChange}
-                      onBlur={formik.handleBlur}
-                      placeholder="Masukkan username Anda"
-                      className="kk-input"
-                    />
-                  </div>
-                  {formik.touched.username && formik.errors.username && (
-                    <div className="kk-error-msg">{formik.errors.username}</div>
-                  )}
+              {/* Password Input */}
+              <div className="kk-form-group">
+                <label className="kk-label" htmlFor="password-input">
+                  Password
+                </label>
+                <div className="kk-input-wrap">
+                  <span className="material-symbols-outlined kk-input-icon">lock</span>
+                  <input
+                    id="password-input"
+                    name="password"
+                    type={showPassword ? 'text' : 'password'}
+                    required
+                    value={formik.values.password}
+                    onChange={formik.handleChange}
+                    onBlur={formik.handleBlur}
+                    placeholder="Masukkan password Anda"
+                    className="kk-input has-eye"
+                    autoComplete="current-password"
+                  />
+                  <button
+                    type="button"
+                    aria-label="Tampilkan atau sembunyikan kata sandi"
+                    onClick={() => setShowPassword(!showPassword)}
+                    className="kk-eye-btn"
+                  >
+                    <span className="material-symbols-outlined" style={{ fontSize: '18px' }}>
+                      {showPassword ? 'visibility_off' : 'visibility'}
+                    </span>
+                  </button>
                 </div>
+                {formik.touched.password && formik.errors.password && (
+                  <div className="kk-error-msg">{formik.errors.password}</div>
+                )}
+              </div>
 
-                {/* Password */}
-                <div className="kk-form-group">
-                  <label className="kk-label" htmlFor="password-input">
-                    Password
-                  </label>
-                  <div className="kk-input-wrap">
-                    <span className="material-symbols-outlined kk-input-icon">lock</span>
-                    <input
-                      id="password-input"
-                      name="password"
-                      type={showPassword ? 'text' : 'password'}
-                      required
-                      value={formik.values.password}
-                      onChange={formik.handleChange}
-                      onBlur={formik.handleBlur}
-                      placeholder="Masukkan password Anda"
-                      className="kk-input has-eye"
-                    />
-                    <button
-                      type="button"
-                      aria-label="Tampilkan atau sembunyikan kata sandi"
-                      onClick={() => setShowPassword(!showPassword)}
-                      className="kk-eye-btn"
+              {/* Options: Remember me & Forgot Password */}
+              <div className="kk-form-options">
+                <label className="kk-remember-label">
+                  <input
+                    type="checkbox"
+                    name="remember_me"
+                    checked={Boolean(formik.values.remember_me)}
+                    onChange={formik.handleChange}
+                    className="kk-remember-checkbox"
+                  />
+                  <span>Ingat Saya</span>
+                </label>
+
+                <a href="#" onClick={handleForgotPassword} className="kk-forgot-link">
+                  Lupa password?
+                </a>
+              </div>
+
+              {/* Submit Button with Smooth Scale Hover */}
+              <button type="submit" disabled={state.load || loginSuccess} className="kk-submit-btn">
+                {state.load ? (
+                  <>
+                    <span
+                      className="material-symbols-outlined"
+                      style={{ animation: 'spin 1s linear infinite', fontSize: '18px' }}
                     >
-                      <span className="material-symbols-outlined" style={{ fontSize: '18px' }}>
-                        {showPassword ? 'visibility_off' : 'visibility'}
-                      </span>
-                    </button>
-                  </div>
-                  {formik.touched.password && formik.errors.password && (
-                    <div className="kk-error-msg">{formik.errors.password}</div>
-                  )}
-                </div>
-
-                {/* Options: Remember me & Forgot Password */}
-                <div className="kk-form-options">
-                  <label className="kk-remember-label">
-                    <input
-                      type="checkbox"
-                      name="remember_me"
-                      checked={Boolean(formik.values.remember_me)}
-                      onChange={formik.handleChange}
-                      className="kk-remember-checkbox"
-                    />
-                    <span>Ingat Saya</span>
-                  </label>
-
-                  <a href="#" onClick={handleForgotPassword} className="kk-forgot-link">
-                    Lupa password?
-                  </a>
-                </div>
-
-                {/* Submit Button */}
-                <button type="submit" disabled={state.load} className="kk-submit-btn">
-                  {state.load ? (
-                    <>
-                      <span className="material-symbols-outlined" style={{ animation: 'spin 1s linear infinite', fontSize: '16px' }}>
-                        progress_activity
-                      </span>
-                      <span>Memproses Masuk...</span>
-                    </>
-                  ) : (
-                    <>
-                      <span>Masuk</span>
-                      <span className="material-symbols-outlined" style={{ fontSize: '16px' }}>
-                        arrow_forward
-                      </span>
-                    </>
-                  )}
-                </button>
-              </form>
-            </div>
+                      progress_activity
+                    </span>
+                    <span>Memproses Masuk...</span>
+                  </>
+                ) : loginSuccess ? (
+                  <>
+                    <span className="material-symbols-outlined" style={{ fontSize: '18px' }}>
+                      check
+                    </span>
+                    <span>Berhasil Masuk</span>
+                  </>
+                ) : (
+                  <>
+                    <span>Masuk</span>
+                    <span className="material-symbols-outlined" style={{ fontSize: '18px' }}>
+                      arrow_forward
+                    </span>
+                  </>
+                )}
+              </button>
+            </form>
           </div>
         </div>
       </div>

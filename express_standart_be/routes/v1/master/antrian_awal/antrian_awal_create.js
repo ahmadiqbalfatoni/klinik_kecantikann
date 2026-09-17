@@ -42,6 +42,8 @@ router.post("/", async (req, res) => {
       });
     }
 
+    const branchCode = oPayload.kode_cabang || req?.auth?.kode_cabang || "CBG-001";
+
     // ─── MODE BULK (TAMBAH CEPAT RANGE 01-50) ──────────────────────────────
     if (oPayload.mode === "bulk" || (oPayload.dari !== undefined && oPayload.sampai !== undefined)) {
       const dari = parseInt(oPayload.dari, 10);
@@ -77,6 +79,7 @@ router.post("/", async (req, res) => {
       await DB.transaction(async (trx) => {
         const lastRecord = await trx("trx_antrian_awal")
           .where("kode_antrian_awal", "like", `${prefixAntrian}%`)
+          .where("kode_cabang", branchCode)
           .orderBy("id", "desc")
           .first();
 
@@ -89,7 +92,9 @@ router.post("/", async (req, res) => {
           }
         }
 
-        const existingRecords = await trx("trx_antrian_awal").select("nomor_antrian");
+        const existingRecords = await trx("trx_antrian_awal")
+          .where("kode_cabang", branchCode)
+          .select("nomor_antrian");
         const existingSet = new Set(existingRecords.map((r) => String(r.nomor_antrian).toLowerCase()));
 
         const vaInsertData = [];
@@ -107,6 +112,7 @@ router.post("/", async (req, res) => {
           nextSeq++;
 
           const oData = {
+            kode_cabang: branchCode,
             kode_antrian_awal: cKodeAntrian,
             nomor_antrian: cNoAntrian,
             status: statusParam === "diambil" || statusParam === "selesai" ? "terpakai" : statusParam,
@@ -174,8 +180,6 @@ router.post("/", async (req, res) => {
       },
       oPayload,
       {
-        uniqueField: ["nomor_antrian"],
-        table: "trx_antrian_awal",
         allowUnknown: true,
       }
     );
@@ -197,6 +201,7 @@ router.post("/", async (req, res) => {
 
       const lastRecord = await trx("trx_antrian_awal")
         .where("kode_antrian_awal", "like", `${prefixAntrian}%`)
+        .where("kode_cabang", branchCode)
         .orderBy("id", "desc")
         .first();
 
@@ -215,15 +220,17 @@ router.post("/", async (req, res) => {
 
       const existingNo = await trx("trx_antrian_awal")
         .where("nomor_antrian", cNoAntrian)
+        .where("kode_cabang", branchCode)
         .first();
 
       if (existingNo) {
-        const error = new Error(`Nomor antrian ${cNoAntrian} sudah digunakan / sudah ada.`);
+        const error = new Error(`Nomor antrian ${cNoAntrian} sudah digunakan / sudah ada di cabang ini.`);
         error.statusCode = 422;
         throw error;
       }
 
       const oData = {
+        kode_cabang: branchCode,
         kode_antrian_awal: cKodeAntrian,
         nomor_antrian: cNoAntrian,
         status: oPayload.status === "diambil" || oPayload.status === "selesai" ? "terpakai" : (oPayload.status || "tersedia"),

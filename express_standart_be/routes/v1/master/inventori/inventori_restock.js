@@ -4,12 +4,14 @@ import DB from "../../../../core/config/knex.js";
 import { formatDateSystem } from "../../components/tools/date_tools.js";
 import { Logging, ChangesLog, validatePayload } from "../../components/tools/servertool.js";
 import { status } from "../../components/tools/general.js";
+import { getBranchScope } from "../../components/tools/branch_scope.js";
 
 const router = express.Router();
 
 router.post("/", async (req, res) => {
   const oPayload = req.body;
   const username = req?.auth?.username || "system";
+  const branchCode = getBranchScope(req, oPayload.kode_cabang) || req?.auth?.kode_cabang || "CBG-001";
 
   try {
     const cValidation = await validatePayload(
@@ -34,7 +36,9 @@ router.post("/", async (req, res) => {
 
     await DB.transaction(async (trx) => {
       // 1. Cek Produk
-      const produk = await trx("mst_produk").where("kode_produk", oPayload.kode_produk).forUpdate().first();
+      let qProd = trx("mst_produk").where("kode_produk", oPayload.kode_produk);
+      if (branchCode) qProd = qProd.andWhere("kode_cabang", branchCode);
+      const produk = await qProd.forUpdate().first();
       if (!produk) {
         const err = new Error("Data produk tidak ditemukan");
         err.statusCode = 404;
@@ -42,7 +46,9 @@ router.post("/", async (req, res) => {
       }
 
       // 2. Cek Supplier
-      const supplier = await trx("mst_supplier").where("kode_supplier", oPayload.kode_supplier).first();
+      let qSup = trx("mst_supplier").where("kode_supplier", oPayload.kode_supplier);
+      if (branchCode) qSup = qSup.andWhere("kode_cabang", branchCode);
+      const supplier = await qSup.first();
       if (!supplier) {
         const err = new Error("Data supplier tidak ditemukan");
         err.statusCode = 404;
@@ -76,6 +82,7 @@ router.post("/", async (req, res) => {
 
       // 5. Simpan ke trx_purchase_order
       const oPo = {
+        kode_cabang: branchCode,
         kode_po: kodePo,
         kode_supplier: oPayload.kode_supplier,
         tanggal_po: tglPo,
@@ -112,6 +119,7 @@ router.post("/", async (req, res) => {
       const kodeMovement = `MOV-${todayStr}-${String(nextMovNum).padStart(3, "0")}`;
 
       const oMovement = {
+        kode_cabang: branchCode,
         kode_stok_movement: kodeMovement,
         kode_produk: oPayload.kode_produk,
         jenis_movement: "masuk",

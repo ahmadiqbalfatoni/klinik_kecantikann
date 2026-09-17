@@ -79,10 +79,7 @@ const DashboardPage: React.FC = () => {
         style={{ marginBottom: '24px' }}
       >
         <div>
-          <h1
-            className="font-fraunces text-2xl md:text-3xl font-medium m-0 tracking-tight"
-            style={{ color: '#154F3B' }}
-          >
+          <h1 className="text-2xl md:text-3xl font-bold text-900 m-0 tracking-tight">
             Klinik Kecantikan
           </h1>
           <p className="text-xs md:text-sm m-0 mt-1" style={{ color: '#6F7A74' }}>

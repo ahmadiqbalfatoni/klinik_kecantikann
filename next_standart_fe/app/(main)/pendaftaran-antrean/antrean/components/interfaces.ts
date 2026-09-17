@@ -44,6 +44,15 @@ export interface AntrianLayananData {
         nama_petugas: string;
         jabatan_petugas?: string;
     }>;
+    rekomendasi_produk_dokter?: Array<{
+        kode_produk: string;
+        nama_produk: string;
+        harga: number;
+        qty: number;
+        subtotal: number;
+        satuan?: string;
+        foto?: string | null;
+    }>;
 }
 
 export interface RuanganFormField {

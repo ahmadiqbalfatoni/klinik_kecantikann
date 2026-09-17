@@ -13,6 +13,7 @@ import DB from "../../../../core/config/knex.js";
 import { formatDateSystem } from "../../components/tools/date_tools.js";
 import { Logging, ChangesLog } from "../../components/tools/servertool.js";
 import { status } from "../../components/tools/general.js";
+import { getBranchScope } from "../../components/tools/branch_scope.js";
 
 const router = express.Router();
 
@@ -20,6 +21,7 @@ router.post("/", async (req, res) => {
   const { body } = req;
   const oPayload = body || {};
   const username = req?.auth?.username || "system";
+  const branchCode = getBranchScope(req, oPayload.kode_cabang) || req?.auth?.kode_cabang || "CBG-001";
 
   try {
     const noRm = (oPayload.no_rm || "").trim();
@@ -337,18 +339,25 @@ router.post("/", async (req, res) => {
 
     let dokterKonsulList = [];
     if (isBookingButuhKonsulCheck === 1) {
-      dokterKonsulList = await DB("mst_jadwal_karyawan as j")
+      const qDoc = DB("mst_jadwal_karyawan as j")
         .join("mst_ruangan as r", "j.kode_ruangan", "r.kode_ruangan")
         .join("mst_karyawan as k", "j.no_sip", "k.no_sip")
         .where("r.is_konsultasi", 1)
         .where("j.hari", dayName)
-        .where("j.status", "aktif")
-        .select(
-          "j.kode_jadwal",
-          "j.jam_mulai",
-          "j.jam_selesai",
-          "k.nama as nama_dokter"
-        );
+        .where("j.status", "aktif");
+
+      if (branchCode) {
+        qDoc.where(function () {
+          this.where("j.kode_cabang", branchCode).orWhere("k.kode_cabang", branchCode);
+        });
+      }
+
+      dokterKonsulList = await qDoc.select(
+        "j.kode_jadwal",
+        "j.jam_mulai",
+        "j.jam_selesai",
+        "k.nama as nama_dokter"
+      );
 
       if (dokterKonsulList.length === 0) {
         const HARI_LABEL = {
@@ -656,6 +665,7 @@ router.post("/", async (req, res) => {
       }
 
       const oInsertData = {
+        kode_cabang: branchCode,
         kode_booking: cKodeBooking,
         no_rm: noRm,
         kode_ruangan: kodeRuangan,

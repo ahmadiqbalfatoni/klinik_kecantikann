@@ -82,17 +82,20 @@ router.post("/", async (req, res) => {
       return res.status(422).json(oResult);
     }
 
-    const oUser = await DB("user_credential")
-      .where("username", oPayload.username)
+    const oUser = await DB("user_credential as u")
+      .leftJoin("mst_cabang as c", "u.kode_cabang", "c.kode_cabang")
+      .where("u.username", oPayload.username)
       .select(
-        "user_code",
-        "password",
-        "username",
-        "role",
-        "fullname",
-        "status",
-        "telp",
-        "created_at"
+        "u.user_code",
+        "u.password",
+        "u.username",
+        "u.role",
+        "u.fullname",
+        "u.status",
+        "u.telp",
+        "u.kode_cabang",
+        "u.created_at",
+        "c.nama_cabang"
       )
       .first();
 
@@ -135,6 +138,8 @@ router.post("/", async (req, res) => {
         username: oUser.username,
         fullname: oUser.fullname,
         role: oUser.role,
+        kode_cabang: oUser.kode_cabang || null,
+        nama_cabang: oUser.nama_cabang || (oUser.role === 'superadmin' ? 'Semua Cabang (Kantor Pusat)' : 'Cabang Utama'),
       };
 
       const oToken = await generateUserTokens(oUser, oPayload.remember_me == '1' ? true : false)

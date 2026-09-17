@@ -4,12 +4,14 @@ import DB from "../../../../core/config/knex.js";
 import { formatDateSystem } from "../../components/tools/date_tools.js";
 import { Logging, ChangesLog, validatePayload } from "../../components/tools/servertool.js";
 import { status } from "../../components/tools/general.js";
+import { getBranchScope } from "../../components/tools/branch_scope.js";
 
 const router = express.Router();
 
 router.post("/", async (req, res) => {
   const oPayload = req.body;
   const username = req?.auth?.username || "system";
+  const branchCode = getBranchScope(req, oPayload.kode_cabang) || req?.auth?.kode_cabang || "CBG-001";
 
   try {
     const cValidation = await validatePayload(
@@ -37,7 +39,9 @@ router.post("/", async (req, res) => {
 
     await DB.transaction(async (trx) => {
       // 1. Verifikasi Supplier
-      const supplier = await trx("mst_supplier").where("kode_supplier", oPayload.kode_supplier).first();
+      let qSup = trx("mst_supplier").where("kode_supplier", oPayload.kode_supplier);
+      if (branchCode) qSup = qSup.andWhere("kode_cabang", branchCode);
+      const supplier = await qSup.first();
       if (!supplier) {
         const err = new Error("Data supplier tidak ditemukan");
         err.statusCode = 404;
@@ -62,6 +66,7 @@ router.post("/", async (req, res) => {
 
       // 3. Simpan produk baru ke mst_produk dengan stok_tersedia = qtyBeli
       const oProduk = {
+        kode_cabang: branchCode,
         kode_produk: kodeProduk,
         kode_kategori_produk: oPayload.kode_kategori_produk,
         kode_supplier: oPayload.kode_supplier,
@@ -88,6 +93,7 @@ router.post("/", async (req, res) => {
 
       // 5. Simpan transaksi purchase order
       const oPo = {
+        kode_cabang: branchCode,
         kode_po: kodePo,
         kode_supplier: oPayload.kode_supplier,
         tanggal_po: tglPo,
@@ -124,6 +130,7 @@ router.post("/", async (req, res) => {
       const kodeMovement = `MOV-${todayStr}-${String(nextMovNum).padStart(3, "0")}`;
 
       const oMovement = {
+        kode_cabang: branchCode,
         kode_stok_movement: kodeMovement,
         kode_produk: kodeProduk,
         jenis_movement: "masuk",

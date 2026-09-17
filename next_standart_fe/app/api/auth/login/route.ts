@@ -45,6 +45,8 @@ interface AuthResponse {
             username: string,
             fullname: string,
             role: string,
+            kode_cabang?: string | null,
+            nama_cabang?: string | null,
         }
     };
 }
@@ -88,6 +90,8 @@ export const POST = async (req: NextRequest) => {
                 name: oData?.user_info.fullname,
                 username: oData?.user_info.username,
                 user_code: oData?.user_info.user_code,
+                kode_cabang: oData?.user_info?.kode_cabang || null,
+                nama_cabang: oData?.user_info?.nama_cabang || null,
                 remember_me: credentials?.remember_me === '1',
                 access_token: oData.access_token,
                 refresh_token: oData.refresh_token,

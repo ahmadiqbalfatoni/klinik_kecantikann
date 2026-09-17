@@ -29,14 +29,14 @@ export const RevenueHero: React.FC<RevenueHeroProps> = ({ totalOmzet, omzetHariI
       <div>
         <span
           className="text-xs font-semibold tracking-wide block mb-2"
-          style={{ color: '#1F6F52', height: '16px', lineHeight: '16px' }}
+          style={{ color: 'var(--primary-700, #047857)', height: '16px', lineHeight: '16px' }}
         >
           Total pendapatan
         </span>
 
         <div
-          className="font-fraunces text-3xl lg:text-4xl font-medium tracking-tight my-1 tabular-nums flex align-items-baseline"
-          style={{ color: '#154F3B', lineHeight: 1.1, minHeight: '40px' }}
+          className="text-3xl lg:text-4xl font-bold tracking-tight my-1 tabular-nums flex align-items-baseline"
+          style={{ color: 'var(--primary-900, #064e3b)', lineHeight: 1.1, minHeight: '40px' }}
         >
           {formatRupiah(totalOmzet)}
         </div>
@@ -59,7 +59,7 @@ export const RevenueHero: React.FC<RevenueHeroProps> = ({ totalOmzet, omzetHariI
             width: '6px',
             height: '6px',
             borderRadius: '50%',
-            backgroundColor: isTodayEmpty ? '#9AA39D' : '#1F6F52',
+            backgroundColor: isTodayEmpty ? '#9AA39D' : 'var(--primary-color, #10b981)',
             display: 'inline-block',
             flexShrink: 0,
           }}

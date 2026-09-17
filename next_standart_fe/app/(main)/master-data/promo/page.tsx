@@ -141,7 +141,7 @@ const Page = () => {
     };
 
     return (
-        <div className="p-4">
+        <div className="w-full">
             <Toast ref={toast} />
             <ConfirmDialog />
 
@@ -222,7 +222,7 @@ const Page = () => {
                     onPage={(e) => { setPage((e.page || 0) + 1); setRows(e.rows); }}
                     selection={selectedRows}
                     onSelectionChange={(e) => setSelectedRows(e.value as any[])}
-                    dataKey="kode_promo"
+                    dataKey="id"
                     className="p-datatable-sm"
                     emptyMessage="Data promo tidak ditemukan."
                     responsiveLayout="scroll"

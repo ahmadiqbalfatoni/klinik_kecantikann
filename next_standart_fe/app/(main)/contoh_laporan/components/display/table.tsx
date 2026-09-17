@@ -10,6 +10,7 @@ import { IconField } from 'primereact/iconfield';
 import { InputIcon } from 'primereact/inputicon';
 import { Calendar } from 'primereact/calendar';
 import { MultiSelect } from 'primereact/multiselect';
+import { Dropdown } from 'primereact/dropdown';
 import { OverlayPanel } from 'primereact/overlaypanel';
 import { Tag } from 'primereact/tag';
 import { Tooltip } from 'primereact/tooltip';
@@ -20,7 +21,38 @@ import { formatDateSystem } from '@/lib/tools/dateTools';
 import { formatCurrency, showSuccess } from '@/lib/tools/generalTools';
 import { TableData, TableProps } from '../interfaces';
 import { apiEndpointGet } from '../endpoints';
-import UserDialog from '@/app/components/dialogComponents/userDialog';
+
+// Opsi default filter status pekerjaan servis
+const DEFAULT_STATUS_OPTIONS = [
+    { label: 'Menunggu', value: 'menunggu' },
+    { label: 'Pengecekan', value: 'pengecekan' },
+    { label: 'Pengerjaan', value: 'pengerjaan' },
+    { label: 'Menunggu Suku Cadang', value: 'menunggu_suku_cadang' },
+    { label: 'Selesai', value: 'selesai' },
+    { label: 'Sudah Diambil', value: 'diambil' },
+    { label: 'Batal', value: 'batal' }
+];
+
+// Opsi default jenis tiket dari sistem
+const DEFAULT_JENIS_TIKET_OPTIONS = [
+    { label: 'Reguler', value: 'Reguler' },
+    { label: 'Garansi', value: 'Garansi' },
+    { label: 'Premium', value: 'Premium' }
+];
+
+// Opsi default status pembayaran dari sistem
+const DEFAULT_PEMBAYARAN_OPTIONS = [
+    { label: 'Belum Bayar', value: 'Belum Bayar' },
+    { label: 'DP / Sebagian', value: 'DP' },
+    { label: 'Lunas', value: 'Lunas' }
+];
+
+// Opsi default teknisi dari sistem
+const DEFAULT_TEKNISI_OPTIONS = [
+    { label: 'Soni Alamsyah (TEK001)', value: 'TEK001' },
+    { label: 'Rian Hidayat (TEK002)', value: 'TEK002' },
+    { label: 'Andi Wijaya (TEK003)', value: 'TEK003' }
+];
 
 // Konfigurasi palet warna status operasional servis terbaru
 const STATUS_COLOR_MAP: Record<string, string> = {
@@ -164,9 +196,9 @@ const Table = ({
                     loading={state.filterLoad}
                     severity={
                         (state.selectedStatus && state.selectedStatus.length > 0) ||
-                            (state.selectedJenisTiket && state.selectedJenisTiket.length > 0) ||
-                            (state.selectedPembayaran && state.selectedPembayaran.length > 0) ||
-                            state.selectedTeknisi
+                        state.selectedJenisTiket ||
+                        state.selectedPembayaran ||
+                        state.selectedTeknisi
                             ? 'warning'
                             : 'secondary'
                     }
@@ -203,17 +235,18 @@ const Table = ({
                     tooltip="Reset Semua Filter"
                     tooltipOptions={{ position: 'bottom' }}
                     onClick={() => {
+                        const now = new Date();
+                        const defaultStart = new Date(now.getFullYear(), now.getMonth(), 1);
                         setState((p) => ({
                             ...p,
                             searchVal: '',
                             keyword: '',
-                            tanggalAwal: new Date(),
-                            tanggalAkhir: new Date(),
+                            tanggalAwal: defaultStart,
+                            tanggalAkhir: now,
                             selectedStatus: null,
                             selectedJenisTiket: null,
                             selectedPembayaran: null,
-                            selectedTeknisi: '',
-                            ketTeknisi: '',
+                            selectedTeknisi: null,
                             page: 1,
                             first: 0
                         }));
@@ -227,24 +260,18 @@ const Table = ({
                     <span className="font-bold text-lg border-bottom-1 border-300 pb-2">Filter Tambahan Laporan</span>
 
                     <div className="grid formgrid p-fluid">
-                        {/* Filter Status Servis */}
+                        {/* A. Filter Status Pekerjaan */}
                         <div className="field col-12 md:col-6 mb-3">
                             <label className="font-semibold text-xs text-700 block mb-2">Status Pekerjaan</label>
                             <MultiSelect
                                 value={state.selectedStatus}
-                                options={[
-                                    { label: 'Menunggu', value: 'menunggu' },
-                                    { label: 'Pengecekan', value: 'pengecekan' },
-                                    { label: 'Pengerjaan', value: 'pengerjaan' },
-                                    { label: 'Menunggu Suku Cadang', value: 'menunggu_suku_cadang' },
-                                    { label: 'Selesai', value: 'selesai' },
-                                    { label: 'Diambil', value: 'diambil' },
-                                    { label: 'Batal', value: 'batal' },
-                                ]}
+                                options={state.optionsStatus || DEFAULT_STATUS_OPTIONS}
                                 optionLabel="label"
                                 optionValue="value"
                                 placeholder="Semua Status Pekerjaan"
                                 display="chip"
+                                selectAll={true}
+                                showSelectAll={true}
                                 className="w-full text-sm"
                                 onChange={(e) => {
                                     setState((p) => ({ ...p, selectedStatus: e.value, page: 1, first: 0 }));
@@ -252,59 +279,93 @@ const Table = ({
                             />
                         </div>
 
-                        {/* Filter Jenis Tiket */}
+                        {/* B. Filter Jenis Tiket */}
                         <div className="field col-12 md:col-6 mb-3">
                             <label className="font-semibold text-xs text-700 block mb-2">Jenis Tiket</label>
-                            <MultiSelect
+                            <Dropdown
                                 value={state.selectedJenisTiket}
-                                options={[
-                                    { label: 'Reguler', value: 'reguler' },
-                                    { label: 'Garansi', value: 'garansi' },
-                                ]}
+                                options={state.optionsJenisTiket || DEFAULT_JENIS_TIKET_OPTIONS}
                                 optionLabel="label"
                                 optionValue="value"
                                 placeholder="Semua Jenis Tiket"
-                                display="chip"
+                                showClear
                                 className="w-full text-sm"
                                 onChange={(e) => {
-                                    setState((p) => ({ ...p, selectedJenisTiket: e.value, page: 1, first: 0 }));
+                                    setState((p) => ({ ...p, selectedJenisTiket: e.value || null, page: 1, first: 0 }));
                                 }}
                             />
                         </div>
 
-                        {/* Filter Status Pembayaran */}
+                        {/* C. Filter Status Pembayaran */}
                         <div className="field col-12 md:col-6 mb-3">
                             <label className="font-semibold text-xs text-700 block mb-2">Status Pembayaran</label>
-                            <MultiSelect
+                            <Dropdown
                                 value={state.selectedPembayaran}
-                                options={[
-                                    { label: 'Belum Bayar', value: 'belum_bayar' },
-                                    { label: 'Sebagian', value: 'sebagian' },
-                                    { label: 'Lunas', value: 'lunas' },
-                                ]}
+                                options={state.optionsPembayaran || DEFAULT_PEMBAYARAN_OPTIONS}
                                 optionLabel="label"
                                 optionValue="value"
                                 placeholder="Semua Status Bayar"
-                                display="chip"
+                                showClear
                                 className="w-full text-sm"
                                 onChange={(e) => {
-                                    setState((p) => ({ ...p, selectedPembayaran: e.value, page: 1, first: 0 }));
+                                    setState((p) => ({ ...p, selectedPembayaran: e.value || null, page: 1, first: 0 }));
                                 }}
                             />
                         </div>
 
-                        {/* Filter Teknisi Lapangan */}
+                        {/* D. Filter Teknisi Penanggung Jawab */}
                         <div className="field col-12 md:col-6 mb-3">
                             <label className="font-semibold text-xs text-700 block mb-2">Teknisi Penanggung Jawab</label>
-                            <div className="p-inputgroup">
-                                <InputText readOnly value={state.ketTeknisi || ''} placeholder="Pilih Teknisi" className="text-sm" />
-                                <Button
-                                    icon="pi pi-search"
-                                    className="p-button-secondary"
-                                    onClick={() => setState(p => ({ ...p, showTeknisi: true }))}
-                                />
-                            </div>
+                            <Dropdown
+                                value={state.selectedTeknisi}
+                                options={state.optionsTeknisi || DEFAULT_TEKNISI_OPTIONS}
+                                optionLabel="label"
+                                optionValue="value"
+                                placeholder="Pilih Teknisi"
+                                filter
+                                showClear
+                                filterPlaceholder="Cari Teknisi..."
+                                className="w-full text-sm"
+                                onChange={(e) => {
+                                    setState((p) => ({ ...p, selectedTeknisi: e.value || null, page: 1, first: 0 }));
+                                }}
+                            />
                         </div>
+                    </div>
+
+                    <Divider className="my-1" />
+
+                    {/* Tombol di bagian bawah panel filter */}
+                    <div className="flex justify-content-between align-items-center pt-1">
+                        <Button
+                            type="button"
+                            label="Reset Filter"
+                            icon="pi pi-filter-slash"
+                            size="small"
+                            outlined
+                            severity="danger"
+                            onClick={() => {
+                                setState((p) => ({
+                                    ...p,
+                                    selectedStatus: null,
+                                    selectedJenisTiket: null,
+                                    selectedPembayaran: null,
+                                    selectedTeknisi: null,
+                                    page: 1,
+                                    first: 0
+                                }));
+                            }}
+                        />
+                        <Button
+                            type="button"
+                            label="Terapkan Filter"
+                            icon="pi pi-check"
+                            size="small"
+                            onClick={() => {
+                                op.current?.hide();
+                                getData(apiEndpointGet);
+                            }}
+                        />
                     </div>
                 </div>
             </OverlayPanel>
@@ -517,19 +578,6 @@ const Table = ({
                     {/* <Column header="Aksi" align="center" frozen alignFrozen="right" style={{ minWidth: '6rem' }} body={actionBodyTemplate}></Column> */}
                 </DataTable>
             </div>
-
-            {/* Dialog Overlay Pemilihan Teknisi Tunggal */}
-            <UserDialog
-                visible={state.showTeknisi || false}
-                multiple={false}
-                onSelect={(v) => setState((p) => ({
-                    ...p,
-                    ketTeknisi: v[0].fullname,
-                    selectedTeknisi: v[0].username, // property identitas teknisi yang sesuai (v[0].kode / v[0].username)
-                    showTeknisi: false
-                }))}
-                onHide={() => setState((p) => ({ ...p, showTeknisi: false }))}
-            />
         </>
     );
 };

@@ -525,7 +525,7 @@ export const TabCetakAntrean: React.FC<TabCetakAntreanProps> = ({
                     <div>
                         <h3 className="font-bold text-xl mb-1">Reset Seluruh Antrean (Pool 01-50)?</h3>
                         <p className="text-color-secondary text-sm">
-                            Seluruh nomor kartu fisik (01-50) akan dikembalikan ke status 'Tersedia' dan data transaksi sebelumnya akan dibersihkan untuk pelayanan hari ini.
+                            Seluruh nomor kartu fisik (01-50) akan dikembalikan ke status &apos;Tersedia&apos; dan data transaksi sebelumnya akan dibersihkan untuk pelayanan hari ini.
                         </p>
                     </div>
                 </div>

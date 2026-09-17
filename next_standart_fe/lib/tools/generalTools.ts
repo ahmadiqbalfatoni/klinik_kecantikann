@@ -105,10 +105,12 @@ export const formatCurrency = (value: number | string | null | undefined) => {
     }).format(Number(value));
 };
 
+export const formatRupiah = formatCurrency;
+
 export const formatReceiptCurrency = (value: number | string | null | undefined) => {
     if (value === null || value === undefined || value === '') return '0';
     return new Intl.NumberFormat('id-ID', {
         minimumFractionDigits: 0,
         maximumFractionDigits: 0
     }).format(Number(value));
-};
+};

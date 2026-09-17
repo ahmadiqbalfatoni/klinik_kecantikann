@@ -20,20 +20,22 @@ import { status } from "../../components/tools/general.js";
 import DB from "../../../../core/config/knex.js";
 import { Logging, ChangesLog } from "../../components/tools/servertool.js";
 import { formatDateSystem } from "../../components/tools/date_tools.js";
+import { getBranchScope } from "../../components/tools/branch_scope.js";
 
 const router = express.Router();
 
 router.post("/", async (req, res) => {
   const { body } = req;
-  const oPayload = body;
+  const oPayload = body || {};
   const username = req?.auth?.username || "";
+  const branchCode = getBranchScope(req, oPayload.kode_cabang) || req?.auth?.kode_cabang || "CBG-001";
 
   try {
     let jumlahReset = 0;
 
     await DB.transaction(async (trx) => {
       // Ambil seluruh data kartu pool master yang aktif untuk dicatat di audit log sebelum di-reset
-      const recordsToReset = await trx("trx_antrian_awal")
+      let qRecords = trx("trx_antrian_awal")
         .where("status", "!=", "nonaktif")
         .where(function () {
           this.where("status", "!=", "tersedia")
@@ -41,14 +43,18 @@ router.post("/", async (req, res) => {
             .orWhereNotNull("dipanggil_at")
             .orWhereNotNull("no_rm")
             .orWhereNotNull("kode_kunjungan");
-        })
+        });
+      if (branchCode) qRecords = qRecords.andWhere("kode_cabang", branchCode);
+      const recordsToReset = await qRecords
         .select("id", "kode_antrian_awal", "nomor_antrian", "status");
 
       jumlahReset = recordsToReset.length;
 
-      // Reset SEMUA kartu pool master (kecuali kartu yang dinonaktifkan secara manual)
-      await trx("trx_antrian_awal")
-        .where("status", "!=", "nonaktif")
+      // Reset kartu pool master untuk cabang terkait
+      let qUpdate = trx("trx_antrian_awal")
+        .where("status", "!=", "nonaktif");
+      if (branchCode) qUpdate = qUpdate.andWhere("kode_cabang", branchCode);
+      await qUpdate
         .update({
           status: "tersedia",
           diambil_at: null,

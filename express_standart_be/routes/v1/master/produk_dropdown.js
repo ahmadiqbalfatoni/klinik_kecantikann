@@ -13,18 +13,24 @@ import DB from "../../../core/config/knex.js";
 import { formatDateSystem } from "../components/tools/date_tools.js";
 import { Logging } from "../components/tools/servertool.js";
 import { status } from "../components/tools/general.js";
+import { getBranchScope } from "../components/tools/branch_scope.js";
 
 const router = express.Router();
 
 const handleProdukDropdown = async (req, res) => {
   const oPayload = { ...req.query, ...req.body };
   const username = req?.auth?.username || "system";
+  const branchCode = getBranchScope(req, oPayload.kode_cabang);
   const search = oPayload.search || oPayload.keyword || "";
 
   try {
     let query = DB("mst_produk")
       .where("status", "aktif")
-      .whereRaw("kode_produk NOT LIKE 'CUSTOM-%' AND kode_produk NOT LIKE 'CST-%'")
+      .whereRaw("kode_produk NOT LIKE 'CUSTOM-%' AND kode_produk NOT LIKE 'CST-%'");
+
+    if (branchCode) query = query.where("kode_cabang", branchCode);
+
+    query = query
       .select("kode_produk", "nama", "harga_jual", "satuan")
       .orderBy("nama", "asc");
 

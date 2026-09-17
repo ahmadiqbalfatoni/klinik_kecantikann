@@ -32,6 +32,7 @@ import {
     Sparkles,
     Stethoscope,
     Clock,
+    ShoppingBag,
 } from 'lucide-react';
 
 interface ActiveTreatmentPanelProps {
@@ -90,13 +91,11 @@ export const ActiveTreatmentPanel: React.FC<ActiveTreatmentPanelProps> = ({
     });
     const [lanjutKeTindakan, setLanjutKeTindakan] = useState<boolean>(true);
     const [uploadingBefore, setUploadingBefore] = useState<boolean>(false);
+    const [resepProdukDokter, setResepProdukDokter] = useState<any[]>([]);
+    const [loadingResepProduk, setLoadingResepProduk] = useState<boolean>(false);
 
-    // Dropdown Petugas / Dokter (SIP) State
-    const [karyawanOptions, setKaryawanOptions] = useState<any[]>([]);
     const [selectedPetugas, setSelectedPetugas] = useState<string>('');
-    const [isEditingBookingPetugas, setIsEditingBookingPetugas] = useState<boolean>(false);
 
-    // Multi-Select Terapis / Petugas Pendamping State
     const [selectedTerapisList, setSelectedTerapisList] = useState<Array<{
         no_sip: string;
         nama: string;
@@ -109,6 +108,7 @@ export const ActiveTreatmentPanel: React.FC<ActiveTreatmentPanelProps> = ({
     }>>([]);
 
     const isBookingPatient = useMemo(() => Boolean(activePatient?.kode_booking), [activePatient?.kode_booking]);
+
     const bookingNoSip = useMemo(() => (activePatient as any)?.booking_no_sip || (isBookingPatient ? activePatient?.kode_karyawan : null), [activePatient?.kode_karyawan, (activePatient as any)?.booking_no_sip, isBookingPatient]);
     const bookingNamaPetugas = useMemo(() => (activePatient as any)?.booking_nama_petugas || (isBookingPatient ? activePatient?.nama_petugas : null), [activePatient?.nama_petugas, (activePatient as any)?.booking_nama_petugas, isBookingPatient]);
     const bookingKodeJadwal = (activePatient as any)?.booking_kode_jadwal;
@@ -287,43 +287,22 @@ export const ActiveTreatmentPanel: React.FC<ActiveTreatmentPanelProps> = ({
     const [hasilNoRm, setHasilNoRm] = useState<string>('');
 
     useEffect(() => {
-        loadKaryawan();
-    }, []);
-
-    useEffect(() => {
         if (kodeRuangan) {
             loadFormFields();
         }
     }, [kodeRuangan]);
 
-    // Refs for reading latest values inside useEffects without subscribing to them
-    const availablePetugasOptionsRef = useRef<any[]>([]);
-    const selectedPetugasRef = useRef<string>('');
-    const isFormSavedRef = useRef<boolean>(false);
-
-    // Keep refs in sync on every render (before effects run)
-    availablePetugasOptionsRef.current = availablePetugasOptions;
-    selectedPetugasRef.current = selectedPetugas;
-    isFormSavedRef.current = isFormSaved;
-
     const [currentAntrianId, setCurrentAntrianId] = useState<string>('');
 
     // ── Patient-init effect ──────────────────────────────────────────────────
-    // Only re-runs when the patient ID actually changes (or isKonsultasi changes).
-    // Does NOT list selectedPetugas / availablePetugasOptions / currentAntrianId
-    // as deps → those are read via refs to avoid the infinite loop.
     useEffect(() => {
         const antrianId = activePatient?.kode_antrian_layanan;
         if (antrianId) {
             const ap = activePatient as any;
-            const isBooking = Boolean(ap.kode_booking);
-            const bookingSip = ap.booking_no_sip || (isBooking ? ap.kode_karyawan : null);
-            const opts = availablePetugasOptionsRef.current;
 
             if (antrianId !== currentAntrianId) {
-                // New patient in the panel — reset everything
+                // New patient in the panel — reset form state
                 setCurrentAntrianId(antrianId);
-                setIsEditingBookingPetugas(false);
 
                 let initialForm: any = {};
                 let hasForm = false;
@@ -347,22 +326,86 @@ export const ActiveTreatmentPanel: React.FC<ActiveTreatmentPanelProps> = ({
                     setSelectedPetugas('');
                 }
 
-                if (scheduledHelpers && scheduledHelpers.length > 0) {
-                    const helperList = scheduledHelpers.map((h: any) => ({
-                        no_sip: h.no_sip || h.kode_jadwal || '-',
-                        sip: h.no_sip || h.kode_jadwal || '-',
-                        nama: h.nama_karyawan || h.nama || 'Petugas Pendamping',
-                        jabatan: h.jabatan || 'terapis',
-                        role: (h.jabatan || 'TERAPIS').toUpperCase(),
-                        jam_mulai: h.jam_mulai || '',
-                        jam_selesai: h.jam_selesai || '',
-                        shift: h.jam_mulai && h.jam_selesai ? `${h.jam_mulai.slice(0, 5)} - ${h.jam_selesai.startsWith('24:00') ? '00:00' : h.jam_selesai.slice(0, 5)}` : '',
-                        kode_jadwal: h.kode_jadwal || '',
-                    }));
-                    setSelectedTerapisList(helperList);
-                } else {
-                    setSelectedTerapisList([]);
+                // Determine default terapis pendamping (Prioritas: Form tersimpan -> Booking -> Jadwal Karyawan/Helpers)
+                let defaultTerapisList: Array<{
+                    no_sip: string;
+                    nama: string;
+                    jabatan?: string;
+                    role?: string;
+                    jam_mulai?: string;
+                    jam_selesai?: string;
+                    shift?: string;
+                    kode_jadwal?: string;
+                }> = [];
+
+                if (Array.isArray(initialForm?.terapis_pendamping) && initialForm.terapis_pendamping.length > 0) {
+                    const seenSips = new Set<string>();
+                    for (const t of initialForm.terapis_pendamping) {
+                        const sipKey = extractNoSip(t.no_sip || t.sip || t.value) || t.no_sip || t.sip || t.nama || t.nama_petugas || '';
+                        if (sipKey && !seenSips.has(sipKey)) {
+                            seenSips.add(sipKey);
+                            defaultTerapisList.push({
+                                no_sip: extractNoSip(t.no_sip || t.sip || t.value) || t.no_sip || t.sip || '-',
+                                nama: t.nama || t.nama_petugas || 'Terapis',
+                                jabatan: t.jabatan || t.role || 'terapis',
+                                role: (t.role || t.jabatan || 'TERAPIS').toUpperCase(),
+                                jam_mulai: t.jam_mulai || '',
+                                jam_selesai: t.jam_selesai || '',
+                                shift: t.shift || (t.jam_mulai && t.jam_selesai ? `${t.jam_mulai.slice(0, 5)} - ${t.jam_selesai.slice(0, 5)}` : ''),
+                                kode_jadwal: t.kode_jadwal || '',
+                            });
+                        }
+                    }
+                } else if (initialForm?.terapis_pendamping?.no_sip || initialForm?.terapis_pendamping?.nama) {
+                    const t = initialForm.terapis_pendamping;
+                    defaultTerapisList = [{
+                        no_sip: extractNoSip(t.no_sip || t.sip || t.value) || t.no_sip || t.sip || '-',
+                        nama: t.nama || t.nama_petugas || 'Terapis',
+                        jabatan: t.jabatan || t.role || 'terapis',
+                        role: (t.role || t.jabatan || 'TERAPIS').toUpperCase(),
+                        jam_mulai: t.jam_mulai || '',
+                        jam_selesai: t.jam_selesai || '',
+                        shift: t.shift || '',
+                        kode_jadwal: t.kode_jadwal || '',
+                    }];
+                } else if (Array.isArray(ap.booking_petugas_pendamping) && ap.booking_petugas_pendamping.length > 0) {
+                    const seenSips = new Set<string>();
+                    for (const c of ap.booking_petugas_pendamping) {
+                        const sipKey = extractNoSip(c.no_sip || c.sip || c.value) || c.no_sip || c.nama_petugas || c.nama_karyawan || c.nama || '';
+                        if (sipKey && !seenSips.has(sipKey)) {
+                            seenSips.add(sipKey);
+                            defaultTerapisList.push({
+                                no_sip: extractNoSip(c.no_sip || c.sip || c.value) || c.no_sip || '',
+                                nama: c.nama_petugas || c.nama_karyawan || c.nama || 'Terapis',
+                                jabatan: c.jabatan_petugas || c.jabatan || 'terapis',
+                                role: (c.jabatan_petugas || c.jabatan || 'TERAPIS').toUpperCase(),
+                                jam_mulai: c.jam_mulai || ap.booking_jam_mulai || '',
+                                jam_selesai: c.jam_selesai || ap.booking_jam_selesai || '',
+                                shift: c.jam_mulai && c.jam_selesai ? `${c.jam_mulai.slice(0, 5)} - ${c.jam_selesai.slice(0, 5)}` : '',
+                                kode_jadwal: c.kode_jadwal || '',
+                            });
+                        }
+                    }
+                } else if (scheduledHelpers && scheduledHelpers.length > 0) {
+                    const seenSips = new Set<string>();
+                    for (const h of scheduledHelpers) {
+                        const sipKey = h.no_sip || h.kode_jadwal || h.nama_karyawan || h.nama || '';
+                        if (sipKey && !seenSips.has(sipKey)) {
+                            seenSips.add(sipKey);
+                            defaultTerapisList.push({
+                                no_sip: h.no_sip || h.kode_jadwal || '-',
+                                nama: h.nama_karyawan || h.nama || 'Petugas Pendamping',
+                                jabatan: h.jabatan || 'terapis',
+                                role: (h.jabatan || 'TERAPIS').toUpperCase(),
+                                jam_mulai: h.jam_mulai || '',
+                                jam_selesai: h.jam_selesai || '',
+                                shift: h.jam_mulai && h.jam_selesai ? `${h.jam_mulai.slice(0, 5)} - ${h.jam_selesai.startsWith('24:00') ? '00:00' : h.jam_selesai.slice(0, 5)}` : '',
+                                kode_jadwal: h.kode_jadwal || '',
+                            });
+                        }
+                    }
                 }
+                setSelectedTerapisList(defaultTerapisList);
 
                 setHeaderRMData({
                     foto_before: ap.foto_before || ap.data_konsultasi_foto_before || '',
@@ -395,17 +438,13 @@ export const ActiveTreatmentPanel: React.FC<ActiveTreatmentPanelProps> = ({
         } else {
             // No patient — clear panel
             setCurrentAntrianId('');
-            setIsEditingBookingPetugas(false);
             setFormData({});
             setCatatanPetugas('');
             setRekomendasiItems([]);
-            setSelectedPetugas('');
-            setSelectedTerapisList([]);
             setActiveStep('form');
             setIsFormSaved(false);
             setIsHasilSaved(false);
         }
-    // eslint-disable-next-line react-hooks/exhaustive-deps
     }, [activePatient?.kode_antrian_layanan, isKonsultasi]);
 
     // ── Petugas fallback effect ──────────────────────────────────────────────
@@ -431,6 +470,41 @@ export const ActiveTreatmentPanel: React.FC<ActiveTreatmentPanelProps> = ({
             setRekomendasiItems([]);
         }
     };
+
+    const loadResepProdukDokter = async (kodeKunjungan?: string, kodeAntrian?: string) => {
+        if (!kodeKunjungan && !kodeAntrian) {
+            setResepProdukDokter([]);
+            return;
+        }
+        if (Array.isArray(activePatient?.rekomendasi_produk_dokter) && activePatient.rekomendasi_produk_dokter.length > 0) {
+            setResepProdukDokter(activePatient.rekomendasi_produk_dokter);
+            return;
+        }
+        setLoadingResepProduk(true);
+        try {
+            const res = await postData('/master/kunjungan-produk-rekomendasi', {
+                kode_kunjungan: kodeKunjungan,
+                kode_antrian_layanan: kodeAntrian,
+            });
+            if (['00', '0000', 200].includes(res.data?.status) || res.status === 200) {
+                setResepProdukDokter(res.data?.data || []);
+            } else {
+                setResepProdukDokter([]);
+            }
+        } catch (_) {
+            setResepProdukDokter([]);
+        } finally {
+            setLoadingResepProduk(false);
+        }
+    };
+
+    useEffect(() => {
+        if (activePatient?.kode_kunjungan || activePatient?.kode_antrian_layanan) {
+            loadResepProdukDokter(activePatient.kode_kunjungan, activePatient.kode_antrian_layanan);
+        } else {
+            setResepProdukDokter([]);
+        }
+    }, [activePatient?.kode_antrian_layanan, activePatient?.kode_kunjungan, activePatient?.rekomendasi_produk_dokter]);
 
     const handleBeforePhotoUpload = async (e: React.ChangeEvent<HTMLInputElement>) => {
         const file = e.target.files?.[0];
@@ -466,22 +540,6 @@ export const ActiveTreatmentPanel: React.FC<ActiveTreatmentPanelProps> = ({
         }
     };
 
-    const loadKaryawan = async () => {
-        try {
-            const res = await postData('/master/karyawan-data', { page: 1, perPage: 100 });
-            const list = res.data?.data || [];
-            const opts = list.map((k: any) => ({
-                label: `${k.nama}${k.jabatan ? ` (${k.jabatan.toUpperCase()})` : ''}`,
-                value: k.no_sip,
-                nama: k.nama,
-                jabatan: k.jabatan,
-                no_sip: k.no_sip,
-            }));
-            setKaryawanOptions(opts);
-        } catch (_) {
-            // silent fail
-        }
-    };
 
     const loadFormFields = async () => {
         if (!kodeRuangan) return;
@@ -573,8 +631,8 @@ export const ActiveTreatmentPanel: React.FC<ActiveTreatmentPanelProps> = ({
             }
 
             // Update local officer info so header badge displays doctor name immediately
-            if (selectedPetugas) {
-                activePatient.nama_petugas = currentSelectedOfficer?.nama || activePatient.nama_petugas;
+            if (finalNoSip) {
+                activePatient.nama_petugas = dokterNama;
                 activePatient.kode_karyawan = finalNoSip;
             }
 
@@ -601,9 +659,9 @@ export const ActiveTreatmentPanel: React.FC<ActiveTreatmentPanelProps> = ({
     const handleSaveForm = (targetStatus?: string) => {
         if (!activePatient) return;
 
-        // Validation: Petugas / Dokter Examiner wajib dipilih
-        if (!selectedPetugas) {
-            showError(toast, 'Petugas / Dokter Penanggung Jawab wajib dipilih!');
+        // Validation: Petugas / Dokter PJ wajib dijadwalkan
+        if (!scheduledPj && !selectedPetugas) {
+            showError(toast, 'Belum ada Dokter / PJ yang dijadwalkan untuk ruangan ini pada Jadwal Karyawan!');
             return;
         }
 
@@ -688,7 +746,8 @@ export const ActiveTreatmentPanel: React.FC<ActiveTreatmentPanelProps> = ({
         dataKonsul?.kode_antrian_asal ||
         (dataKonsul?.data_konsultasi_keluhan && dataKonsul?.data_konsultasi_keluhan !== '-') ||
         (dataKonsul?.data_konsultasi_diagnosis && dataKonsul?.data_konsultasi_diagnosis !== '-') ||
-        dataKonsul?.data_konsultasi_hasil_form
+        dataKonsul?.data_konsultasi_hasil_form ||
+        resepProdukDokter.length > 0
     );
 
     let extraFormFields: Array<{ label: string; value: any }> = [];
@@ -815,7 +874,7 @@ export const ActiveTreatmentPanel: React.FC<ActiveTreatmentPanelProps> = ({
                                             : '';
                                         return (
                                             <div
-                                                key={`helper-${helper.no_sip || helper.kode_jadwal || idx}`}
+                                                key={`helper-${helper.no_sip || 'no-sip'}-${helper.kode_jadwal || helper.jam_mulai || idx}`}
                                                 className={`p-2.5 flex align-items-center justify-content-between gap-2.5 transition-colors hover:surface-hover ${idx > 0 ? 'border-top-1 surface-border' : ''}`}
                                             >
                                                 <div className="flex align-items-center gap-2.5 min-w-0 flex-1">
@@ -963,7 +1022,7 @@ export const ActiveTreatmentPanel: React.FC<ActiveTreatmentPanelProps> = ({
                                     <Building2 size={14} style={{ color: '#a7f3d0' }} className="flex-shrink-0" />
                                     <span>{namaRuangan}</span>
                                 </span>
-                                {(currentSelectedOfficer?.nama || activePatient.nama_petugas || availablePetugasOptions.find((k) => k.value === selectedPetugas)?.nama) && (
+                                {(scheduledPj?.nama_karyawan || scheduledPj?.nama || activePatient.nama_petugas) && (
                                     <span
                                         className="inline-flex align-items-center gap-2 px-3 py-1.5 font-medium"
                                         style={{
@@ -974,12 +1033,7 @@ export const ActiveTreatmentPanel: React.FC<ActiveTreatmentPanelProps> = ({
                                         }}
                                     >
                                         <Stethoscope size={14} style={{ color: '#a7f3d0' }} className="flex-shrink-0" />
-                                        <span>Dokter: <strong className="text-white">{currentSelectedOfficer?.nama || activePatient.nama_petugas}</strong></span>
-                                        {isDoctorChangedFromBooking && (
-                                            <span className="text-[10px] bg-amber-500 text-white font-bold px-1.5 py-0.2 border-round">
-                                                (Diubah)
-                                            </span>
-                                        )}
+                                        <span>Dokter: <strong className="text-white">{scheduledPj?.nama_karyawan || scheduledPj?.nama || activePatient.nama_petugas}</strong></span>
                                     </span>
                                 )}
                                 {selectedTerapisList.length > 0 && (
@@ -996,9 +1050,23 @@ export const ActiveTreatmentPanel: React.FC<ActiveTreatmentPanelProps> = ({
                                         <span>
                                             Terapis ({selectedTerapisList.length}):{' '}
                                             <strong className="text-white">
-                                                {selectedTerapisList.map((t) => t.nama).join(', ')}
+                                                {selectedTerapisList.map((t: any) => t.nama).join(', ')}
                                             </strong>
                                         </span>
+                                    </span>
+                                )}
+                                {resepProdukDokter.length > 0 && (
+                                    <span
+                                        className="inline-flex align-items-center gap-2 px-3 py-1.5 font-medium"
+                                        style={{
+                                            background: 'rgba(245, 158, 11, 0.18)',
+                                            border: '1px solid rgba(251, 191, 36, 0.4)',
+                                            borderRadius: '6px',
+                                            color: '#fef3c7'
+                                        }}
+                                    >
+                                        <ShoppingBag size={14} style={{ color: '#fbbf24' }} className="flex-shrink-0" />
+                                        <span>Resep Dokter: <strong className="text-white">{resepProdukDokter.length} Produk</strong></span>
                                     </span>
                                 )}
                             </div>
@@ -1598,6 +1666,70 @@ export const ActiveTreatmentPanel: React.FC<ActiveTreatmentPanelProps> = ({
                                 </div>
                             )}
 
+                            {/* 2. DISPLAY PRODUK PILIHAN DOKTER KONSULTASI */}
+                            {resepProdukDokter.length > 0 && (
+                                <div className="p-3 border-round-xl border-1 surface-border bg-white shadow-xs">
+                                    <div className="flex align-items-center justify-content-between mb-3 pb-2 border-bottom-1 surface-border">
+                                        <div className="flex align-items-center gap-2">
+                                            <div className="w-2rem h-2rem border-round-md bg-amber-50 text-amber-600 flex align-items-center justify-content-center flex-shrink-0">
+                                                <i className="pi pi-shopping-bag text-sm" />
+                                            </div>
+                                            <div>
+                                                <span className="font-extrabold text-700 text-xs uppercase tracking-wider block">
+                                                    PRODUK &amp; RESEP PILIHAN DOKTER KONSULTASI
+                                                </span>
+                                                <span className="text-[11px] text-500">
+                                                    Direkomendasikan oleh dokter untuk pasien ini &amp; otomatis diteruskan ke kasir
+                                                </span>
+                                            </div>
+                                        </div>
+                                        <Tag
+                                            severity="warning"
+                                            value={`${resepProdukDokter.length} Produk`}
+                                            icon="pi pi-sparkles"
+                                            className="text-xs font-bold px-2.5 py-1"
+                                        />
+                                    </div>
+
+                                    <div className="grid">
+                                        {resepProdukDokter.map((prod: any, idx: number) => {
+                                            const hrg = parseFloat(prod.harga || prod.harga_jual || 0);
+                                            const qty = parseInt(prod.qty || 1, 10);
+                                            const total = prod.subtotal ? parseFloat(prod.subtotal) : hrg * qty;
+                                            return (
+                                                <div key={idx} className="col-12 md:col-6 mb-2">
+                                                    <div className="p-2.5 border-round-lg border-1 border-amber-200 bg-amber-50/50 flex align-items-center justify-content-between gap-2">
+                                                        <div className="flex align-items-center gap-2.5 min-w-0">
+                                                            <div className="w-2.2rem h-2.2rem border-round-md bg-white border-1 border-amber-200 text-amber-700 flex align-items-center justify-content-center font-bold text-xs flex-shrink-0">
+                                                                <i className="pi pi-box text-sm" />
+                                                            </div>
+                                                            <div className="min-w-0">
+                                                                <span className="font-bold text-xs text-900 block truncate" title={prod.nama_produk || prod.nama}>
+                                                                    {prod.nama_produk || prod.nama}
+                                                                </span>
+                                                                <span className="text-[11px] text-600 block">
+                                                                    {prod.kode_produk} • {new Intl.NumberFormat('id-ID', { style: 'currency', currency: 'IDR', maximumFractionDigits: 0 }).format(hrg)}
+                                                                </span>
+                                                            </div>
+                                                        </div>
+                                                        <div className="text-right flex-shrink-0">
+                                                            <span className="inline-block bg-amber-600 text-white font-bold text-xs px-2 py-0.5 border-round-md">
+                                                                {qty} {prod.satuan || 'pcs'}
+                                                            </span>
+                                                            {total > 0 && (
+                                                                <span className="text-[10px] text-amber-900 font-bold block mt-0.5">
+                                                                    {new Intl.NumberFormat('id-ID', { style: 'currency', currency: 'IDR', maximumFractionDigits: 0 }).format(total)}
+                                                                </span>
+                                                            )}
+                                                        </div>
+                                                    </div>
+                                                </div>
+                                            );
+                                        })}
+                                    </div>
+                                </div>
+                            )}
+
                             {/* SECTION CATATAN PETUGAS / OBSERVASI RUANGAN */}
                             <div className="p-3 border-round-xl border-1 surface-border bg-white">
                                 <label className="block text-xs font-extrabold text-700 uppercase tracking-wider mb-2 flex align-items-center gap-2">
@@ -1644,7 +1776,7 @@ export const ActiveTreatmentPanel: React.FC<ActiveTreatmentPanelProps> = ({
                                 namaRuangan={namaRuangan}
                                 savedFormData={{ ...formData, foto_before: headerRMData.foto_before }}
                                 savedCatatanPetugas={catatanPetugas}
-                                savedPetugasNama={karyawanOptions.find((k) => k.value === selectedPetugas)?.nama}
+                                savedPetugasNama={scheduledPj?.nama_karyawan || scheduledPj?.nama || activePatient?.nama_petugas}
                                 selectedPetugas={selectedPetugas}
                                 initialFotoBeforeUrl={headerRMData.foto_before}
                                 onFotoBeforeChange={(url) => setHeaderRMData((prev) => ({ ...prev, foto_before: url }))}

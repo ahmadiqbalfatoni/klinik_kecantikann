@@ -13,6 +13,7 @@ import DB from "../../../../core/config/knex.js";
 import { formatDateSystem } from "../../components/tools/date_tools.js";
 import { Logging, ChangesLog } from "../../components/tools/servertool.js";
 import { status } from "../../components/tools/general.js";
+import { getBranchScope } from "../../components/tools/branch_scope.js";
 
 const router = express.Router();
 
@@ -20,6 +21,7 @@ const handleBatal = async (req, res) => {
   const { body } = req;
   const oPayload = body || {};
   const username = req?.auth?.username || "system";
+  const branchCode = getBranchScope(req, oPayload.kode_cabang);
 
   try {
     const kode_kunjungan = (oPayload.kode_kunjungan || "").trim();
@@ -34,6 +36,7 @@ const handleBatal = async (req, res) => {
     }
 
     const query = DB("trx_kunjungan");
+    if (branchCode) query.where("kode_cabang", branchCode);
     if (kode_kunjungan) query.where("kode_kunjungan", kode_kunjungan);
     else query.where("id", kunjungan_id);
 

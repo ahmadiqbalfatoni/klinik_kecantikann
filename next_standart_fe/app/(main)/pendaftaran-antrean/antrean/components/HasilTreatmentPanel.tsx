@@ -42,6 +42,7 @@ interface SelectedProduk {
     harga_jual: number;
     satuan?: string;
     qty: number;
+    is_rekomendasi_dokter?: boolean;
 }
 
 interface HasilTreatmentPanelProps {
@@ -148,10 +149,11 @@ export const HasilTreatmentPanel: React.FC<HasilTreatmentPanelProps> = ({
             if (list.length > 0) {
                 const mapped: SelectedProduk[] = list.map((item: any) => ({
                     kode_produk: item.kode_produk,
-                    nama: item.nama,
-                    harga_jual: parseFloat(item.harga_jual || 0),
+                    nama: item.nama || item.nama_produk,
+                    harga_jual: parseFloat(item.harga_jual || item.harga || 0),
                     satuan: item.satuan || 'pcs',
                     qty: parseInt(item.qty || 1, 10),
+                    is_rekomendasi_dokter: true,
                 }));
                 setSelectedProdukList(mapped);
             }
@@ -922,10 +924,15 @@ export const HasilTreatmentPanel: React.FC<HasilTreatmentPanelProps> = ({
                                                 }}
                                             >
                                                 <div className="flex-1 min-w-0 pr-1">
-                                                    <span className="font-bold text-xs text-900 block overflow-hidden text-ellipsis white-space-nowrap" title={item.nama}>
-                                                        {item.nama}
-                                                    </span>
-                                                    <span className="text-[11px] text-teal-700 font-medium block">
+                                                    <div className="flex align-items-center gap-1.5 flex-wrap">
+                                                        <span className="font-bold text-xs text-900 overflow-hidden text-ellipsis white-space-nowrap" title={item.nama}>
+                                                            {item.nama}
+                                                        </span>
+                                                        {item.is_rekomendasi_dokter && (
+                                                            <Tag value="Resep Dokter" severity="warning" className="text-[10px] py-0 px-1.5 font-bold" />
+                                                        )}
+                                                    </div>
+                                                    <span className="text-[11px] text-teal-700 font-medium block mt-0.5">
                                                         {formatRupiah(item.harga_jual)} &times; {item.qty} = <strong className="font-bold text-teal-900">{formatRupiah(subtotal)}</strong>
                                                     </span>
                                                 </div>

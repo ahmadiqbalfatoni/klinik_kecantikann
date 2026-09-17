@@ -13,12 +13,14 @@ import DB from "../../../../core/config/knex.js";
 import { formatDateSystem } from "../../components/tools/date_tools.js";
 import { Logging } from "../../components/tools/servertool.js";
 import { status } from "../../components/tools/general.js";
+import { getBranchScope } from "../../components/tools/branch_scope.js";
 
 const router = express.Router();
 
 const handleGetData = async (req, res) => {
   const oPayload = { ...req.query, ...req.body };
   const username = req?.auth?.username || "";
+  const branchCode = getBranchScope(req, oPayload.kode_cabang);
 
   const hasPagination = oPayload.page !== undefined || oPayload.perPage !== undefined;
   const keyword = (oPayload.keyword || "").trim();
@@ -49,6 +51,9 @@ const handleGetData = async (req, res) => {
       })
       .groupBy("al.id", "k.id", "p.id", "b.id", "j_book.id", "kar_book.id", "rm_asal.id", "rmf.id", "al_asal.id", "ral.id", "kar.id")
       .modify((qb) => {
+        if (branchCode) {
+          qb.where("al.kode_cabang", branchCode);
+        }
         if (filterTanggal) {
           qb.whereRaw("DATE(al.created_at) = ?", [filterTanggal]);
         }
@@ -82,6 +87,7 @@ const handleGetData = async (req, res) => {
       "al.kode_antrian_layanan",
       "al.kode_antrian_asal",
       "al.lanjut_ke_tindakan",
+      "al.kode_ruangan_tujuan_lanjutan",
       "al.kode_kunjungan",
       "al.nomor_antrian",
       "al.status",
@@ -135,7 +141,9 @@ const handleGetData = async (req, res) => {
     ];
 
     if (hasPagination) {
-      const countResult = await baseQuery.clone().count("al.id as total").first();
+      const countResult = await DB.count("* as total")
+        .from(baseQuery.clone().select("al.id").as("cnt_sub"))
+        .first();
       totalRecords = parseInt(countResult?.total || 0, 10);
 
       const page = Math.max(1, parseInt(oPayload.page || 1, 10));
@@ -177,6 +185,51 @@ const handleGetData = async (req, res) => {
       }));
     }
 
+    // Attach dokter rekomendasi produk dari antrean konsultasi / kunjungan ini
+    const kodeKunjunganList = vaData.map((d) => d.kode_kunjungan).filter(Boolean);
+    if (kodeKunjunganList.length > 0) {
+      const produkList = await DB("trx_detail_antrian_layanan as dal")
+        .leftJoin("mst_produk as p", "dal.kode_layanan", "p.kode_produk")
+        .whereIn("dal.kode_kunjungan", kodeKunjunganList)
+        .whereIn("dal.jenis_layanan", ["produk", "paket_produk"])
+        .select(
+          "dal.id",
+          "dal.kode_kunjungan",
+          "dal.kode_antrian_layanan",
+          "dal.jenis_layanan",
+          "dal.kode_layanan as kode_produk",
+          "dal.nama_layanan as nama_produk",
+          "dal.harga",
+          "p.satuan",
+          DB.raw("NULL as foto")
+        );
+
+      const produkMap = {};
+      for (const prd of produkList) {
+        if (!produkMap[prd.kode_kunjungan]) {
+          produkMap[prd.kode_kunjungan] = [];
+        }
+        const exist = produkMap[prd.kode_kunjungan].find((p) => p.kode_produk === prd.kode_produk);
+        if (exist) {
+          exist.qty = (exist.qty || 1) + 1;
+          exist.subtotal = exist.qty * parseFloat(exist.harga || 0);
+        } else {
+          produkMap[prd.kode_kunjungan].push({
+            ...prd,
+            qty: 1,
+            harga: parseFloat(prd.harga || 0),
+            subtotal: parseFloat(prd.harga || 0),
+            satuan: prd.satuan || "pcs",
+          });
+        }
+      }
+
+      vaData = vaData.map((item) => ({
+        ...item,
+        rekomendasi_produk_dokter: produkMap[item.kode_kunjungan] || [],
+      }));
+    }
+
     // Attach companion staff (petugas pendamping) for booking antrian
     const bookingJadwals = vaData.filter(
       (d) => d.kode_booking && d.booking_kode_ruangan && d.booking_hari && d.booking_jam_mulai && d.booking_jam_selesai
@@ -185,12 +238,20 @@ const handleGetData = async (req, res) => {
       const roomCodes = [...new Set(bookingJadwals.map((b) => b.booking_kode_ruangan))];
       const hariList = [...new Set(bookingJadwals.map((b) => b.booking_hari))];
 
-      const companionRows = await DB("mst_jadwal_karyawan as j")
+      const qCompanion = DB("mst_jadwal_karyawan as j")
         .leftJoin("mst_karyawan as k", "j.no_sip", "k.no_sip")
         .whereIn("j.kode_ruangan", roomCodes)
         .whereIn("j.hari", hariList)
         .where("j.is_penanggung_jawab", 0)
-        .where("j.status", "aktif")
+        .where("j.status", "aktif");
+
+      if (branchCode) {
+        qCompanion.where(function () {
+          this.where("j.kode_cabang", branchCode).orWhere("k.kode_cabang", branchCode);
+        });
+      }
+
+      const companionRows = await qCompanion
         .select(
           "j.kode_jadwal",
           "j.no_sip",

@@ -117,11 +117,18 @@ export const validateAccessToken = async (req, res, next) => {
     const secretKey = new TextEncoder().encode(process.env.USER_SECRET);
     const { payload } = await jwtVerify(token, secretKey);
 
+    const headerCabang = req.headers["x-kode-cabang"];
+    const isSuperAdmin = (payload.role || "").toLowerCase() === "superadmin";
+
     req.auth = {
       user_code: payload.user_code,
       username: payload.username,
       role: payload.role,
+      kode_cabang: isSuperAdmin && headerCabang ? headerCabang : (payload.kode_cabang || null),
+      nama_cabang: payload.nama_cabang || null,
+      is_superadmin: isSuperAdmin,
     };
+    req.user = req.auth;
 
     return next();
   } catch (error) {

@@ -33,7 +33,9 @@ router.post("/", async (req, res) => {
       }
       kode = `RNG-${String(n).padStart(3, "0")}`;
 
+      const branchCode = oPayload.kode_cabang || req?.auth?.kode_cabang || "CBG-001";
       const oData = {
+        kode_cabang: branchCode,
         kode_ruangan: kode,
         nama_ruangan: oPayload.nama_ruangan,
         status: oPayload.status,

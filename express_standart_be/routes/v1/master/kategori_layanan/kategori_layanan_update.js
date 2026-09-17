@@ -13,6 +13,7 @@ import Joi from "joi";
 import DB from "../../../../core/config/knex.js";
 import { Logging, ChangesLog, validatePayload } from "../../components/tools/servertool.js";
 import { formatDateSystem } from "../../components/tools/date_tools.js";
+import { getBranchScope } from "../../components/tools/branch_scope.js";
 
 const router = express.Router();
 
@@ -20,6 +21,7 @@ router.post("/", async (req, res) => {
   const { body } = req;
   const oPayload = body;
   const username = req?.auth?.username || "";
+  const branchCode = getBranchScope(req, oPayload?.kode_cabang);
 
   try {
     if (!oPayload || Object.keys(oPayload).length < 1) {
@@ -48,7 +50,13 @@ router.post("/", async (req, res) => {
     }
 
     await DB.transaction(async (trx) => {
-      const prevRecord = await trx("mst_kategori_layanan").where("kode_kategori_layanan", oPayload.kode_kategori_layanan).forUpdate().first();
+      let qPrev = trx("mst_kategori_layanan").where("kode_kategori_layanan", oPayload.kode_kategori_layanan);
+      if (branchCode) {
+        qPrev = qPrev.andWhere(function () {
+          this.where("kode_cabang", branchCode).orWhereNull("kode_cabang");
+        });
+      }
+      const prevRecord = await qPrev.forUpdate().first();
       if (!prevRecord) {
         const e = new Error("Data tidak ditemukan"); e.statusCode = 404; throw e;
       }

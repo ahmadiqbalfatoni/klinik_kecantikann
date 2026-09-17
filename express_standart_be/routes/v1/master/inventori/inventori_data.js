@@ -3,12 +3,14 @@ import DB from "../../../../core/config/knex.js";
 import { formatDateSystem } from "../../components/tools/date_tools.js";
 import { Logging } from "../../components/tools/servertool.js";
 import { status } from "../../components/tools/general.js";
+import { getBranchScope } from "../../components/tools/branch_scope.js";
 
 const router = express.Router();
 
 router.post("/", async (req, res) => {
   const oPayload = req.body;
   const username = req?.auth?.username || "";
+  const branchCode = getBranchScope(req, oPayload.kode_cabang);
   const keyword = oPayload.keyword || "";
   const filterStatusStok = oPayload.status_stok || null; // 'aman' | 'menipis' | 'habis'
   const filterSupplier = oPayload.kode_supplier || null;
@@ -23,6 +25,9 @@ router.post("/", async (req, res) => {
       .leftJoin("mst_supplier as s", "p.kode_supplier", "s.kode_supplier")
       .whereRaw("p.kode_produk NOT LIKE 'CUSTOM-%' AND p.kode_produk NOT LIKE 'CST-%'")
       .modify((qb) => {
+        if (branchCode) {
+          qb.where("p.kode_cabang", branchCode);
+        }
         if (keyword) {
           const lower = keyword.toLowerCase();
           qb.where(function () {
@@ -48,9 +53,13 @@ router.post("/", async (req, res) => {
       });
 
     // Ringkasan KPI Inventori
-    const summaryRaw = await DB("mst_produk")
+    const qSummary = DB("mst_produk")
       .whereRaw("kode_produk NOT LIKE 'CUSTOM-%' AND kode_produk NOT LIKE 'CST-%'")
-      .where("status", "aktif")
+      .where("status", "aktif");
+
+    if (branchCode) qSummary.where("kode_cabang", branchCode);
+
+    const summaryRaw = await qSummary
       .select(
         DB.raw("COUNT(id) as total_sku"),
         DB.raw("COALESCE(SUM(stok_tersedia), 0) as total_stok_unit"),

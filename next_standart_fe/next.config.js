@@ -1,7 +1,8 @@
 const rawAsset = process.env.PUBLIC_ASSET_ORG || '';
-const assetHost = (!rawAsset || rawAsset.includes('<') || rawAsset.includes('>'))
-    ? (process.env.NODE_ENV === 'production' ? 'https://worthy-illumination-production-844e.up.railway.app' : 'http://127.0.0.1:8000')
-    : rawAsset;
+const isLocalAsset = !rawAsset || rawAsset.includes('<') || rawAsset.includes('>') || rawAsset.includes('localhost') || rawAsset.includes('127.0.0.1');
+const assetHost = (process.env.NODE_ENV === 'production' && isLocalAsset)
+    ? 'https://worthy-illumination-production-844e.up.railway.app'
+    : (rawAsset || 'http://127.0.0.1:8000');
 
 /** @type {import('next').NextConfig} */
 const nextConfig = {

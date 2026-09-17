@@ -13,6 +13,7 @@ import Joi from "joi";
 import DB from "../../../../core/config/knex.js";
 import { Logging, ChangesLog, validatePayload } from "../../components/tools/servertool.js";
 import { formatDateSystem } from "../../components/tools/date_tools.js";
+import { getBranchScope } from "../../components/tools/branch_scope.js";
 
 const router = express.Router();
 
@@ -20,6 +21,7 @@ router.post("/", async (req, res) => {
   const { body } = req;
   const oPayload = body;
   const username = req?.auth?.username || "";
+  const branchCode = getBranchScope(req, oPayload?.kode_cabang);
 
   try {
     if (!oPayload || Object.keys(oPayload).length < 1) {
@@ -38,18 +40,24 @@ router.post("/", async (req, res) => {
     }
 
     await DB.transaction(async (trx) => {
-      const records = await trx("mst_kategori_layanan").whereIn("kode_kategori_layanan", oPayload.kode_kategori_layanan).forUpdate();
+      let qRecords = trx("mst_kategori_layanan").whereIn("kode_kategori_layanan", oPayload.kode_kategori_layanan);
+      if (branchCode) {
+        qRecords = qRecords.where("kode_cabang", branchCode);
+      }
+      const records = await qRecords.forUpdate();
       if (!records || records.length < 1) {
-        const e = new Error("Data tidak ditemukan"); e.statusCode = 404; throw e;
+        const e = new Error("Data tidak ditemukan atau tidak memiliki hak akses"); e.statusCode = 404; throw e;
       }
 
+      const validCodes = records.map((r) => r.kode_kategori_layanan);
+
       // Cek apakah ada layanan yang menggunakan kategori ini
-      const used = await trx("mst_layanan").whereIn("kode_kategori_layanan", oPayload.kode_kategori_layanan).first();
+      const used = await trx("mst_layanan").whereIn("kode_kategori_layanan", validCodes).first();
       if (used) {
         const e = new Error("Tidak dapat menghapus, kategori ini masih digunakan oleh data layanan"); e.statusCode = 422; throw e;
       }
 
-      await trx("mst_kategori_layanan").whereIn("kode_kategori_layanan", oPayload.kode_kategori_layanan).del();
+      await trx("mst_kategori_layanan").whereIn("kode_kategori_layanan", validCodes).del();
 
       for (const record of records) {
         await ChangesLog({ description: `Hapus Kategori Layanan ${record.kode_kategori_layanan}`, tableName: "mst_kategori_layanan", referenceCode: record.kode_kategori_layanan, action: "DELETE", dataBefore: record, dataAfter: null, user: username, tz: oPayload.tz || "UTC" }, trx);

@@ -48,7 +48,8 @@ const Page = () => {
         tipe: 'BEAUTY TREATMENT',
         harga_paket: 0,
         masa_berlaku_hari: 365,
-        is_selamanya: false,
+        is_masa_berlaku_selamanya: false,
+        is_selamanya: true,
         tanggal_mulai: '',
         tanggal_selesai: '',
         status: 'aktif',
@@ -169,7 +170,8 @@ const Page = () => {
             tipe: 'BEAUTY TREATMENT',
             harga_paket: initialPrice,
             masa_berlaku_hari: 365,
-            is_selamanya: false,
+            is_masa_berlaku_selamanya: false,
+            is_selamanya: true,
             tanggal_mulai: '',
             tanggal_selesai: '',
             status: 'aktif',
@@ -181,10 +183,13 @@ const Page = () => {
     const handleOpenEdit = (rowData: any) => {
         setIsEdit(true);
         setSubmitted(false);
+        const isMasaBerlakuSelamanya = Boolean(rowData.is_masa_berlaku_selamanya) || Number(rowData.masa_berlaku_hari) === 0 || rowData.masa_berlaku_hari === null;
         setFormData({
             ...rowData,
             tipe: rowData.tipe || 'BEAUTY TREATMENT',
             kode_ruangan: rowData.kode_ruangan || '',
+            masa_berlaku_hari: isMasaBerlakuSelamanya ? 365 : Number(rowData.masa_berlaku_hari),
+            is_masa_berlaku_selamanya: isMasaBerlakuSelamanya,
             is_selamanya: Boolean(rowData.is_selamanya),
             tanggal_mulai: formatYmd(rowData.tanggal_mulai),
             tanggal_selesai: formatYmd(rowData.tanggal_selesai),
@@ -359,7 +364,7 @@ const Page = () => {
     const normalTotal = calculateNormalTotal(formData.details || []);
 
     return (
-        <div className="p-4">
+        <div className="w-full">
             <Toast ref={toast} />
             <ConfirmDialog />
 
@@ -530,9 +535,9 @@ const Page = () => {
                     <Column
                         field="masa_berlaku_hari"
                         header="Masa Berlaku"
-                        body={(r) => Boolean(r.is_selamanya) ? (
+                        body={(r) => (Boolean(r.is_masa_berlaku_selamanya) || Number(r.masa_berlaku_hari) === 0 || r.masa_berlaku_hari === null) ? (
                             <Tag value="Selamanya" severity="success" icon="pi pi-infinity" className="text-xs" />
-                        ) : `${r.masa_berlaku_hari || 0} Hari`}
+                        ) : `${r.masa_berlaku_hari} Hari`}
                     ></Column>
                     <Column
                         header="Periode Aktif Paket"
@@ -559,7 +564,7 @@ const Page = () => {
                             const start = formatYmd(r.tanggal_mulai);
                             const end = formatYmd(r.tanggal_selesai);
                             const sisa = r.sisa_hari !== undefined ? parseInt(r.sisa_hari, 10) : 0;
-                            const isInactive = r.status === 'nonaktif' || sisa <= 0;
+                            const isInactive = r.status === 'nonaktif' || (end && sisa <= 0);
 
                             if (isInactive) {
                                 return (
@@ -574,17 +579,26 @@ const Page = () => {
                                 );
                             }
 
+                            if (end) {
+                                return (
+                                    <div className="flex flex-column gap-1 text-xs">
+                                        <span className="font-bold text-green-600 flex align-items-center gap-1">
+                                            <i className="pi pi-clock text-green-600 text-xs" />
+                                            Sisa {sisa} Hari
+                                        </span>
+                                        {start && (
+                                            <span className="text-500 text-[11px]">
+                                                {start} s/d {end}
+                                            </span>
+                                        )}
+                                    </div>
+                                );
+                            }
+
                             return (
                                 <div className="flex flex-column gap-1 text-xs">
-                                    <span className="font-bold text-green-600 flex align-items-center gap-1">
-                                        <i className="pi pi-clock text-green-600 text-xs" />
-                                        Sisa {sisa} Hari
-                                    </span>
-                                    {start && end && (
-                                        <span className="text-500 text-[11px]">
-                                            {start} s/d {end}
-                                        </span>
-                                    )}
+                                    <Tag severity="success" value="Aktif" className="text-[11px] py-1 px-2 font-bold" style={{ width: 'fit-content' }} />
+                                    {start && <span className="text-500 text-[11px]">Mulai {start}</span>}
                                 </div>
                             );
                         }}
@@ -700,11 +714,56 @@ const Page = () => {
                         </div>
                     </div>
 
+                    {/* 1. MASA BERLAKU SESI KONSUMEN (EXPIRED PASIEN) */}
                     <div className="surface-50 p-3 border-round-md border-1 surface-border">
-                        <div className="flex align-items-center justify-content-between mb-2">
+                        <div className="flex align-items-center justify-content-between mb-1">
                             <span className="font-bold text-sm text-900 flex align-items-center gap-2">
-                                <i className="pi pi-infinity text-purple-600" />
-                                Masa Berlaku Paket
+                                <i className="pi pi-user-check text-purple-600" />
+                                Masa Berlaku Konsumen (Sesi)
+                            </span>
+                            <div className="flex align-items-center gap-2">
+                                <span className="text-xs font-semibold text-700">Berlaku Selamanya</span>
+                                <InputSwitch
+                                    checked={Boolean(formData.is_masa_berlaku_selamanya)}
+                                    onChange={(e) => setFormData({ ...formData, is_masa_berlaku_selamanya: e.value })}
+                                />
+                            </div>
+                        </div>
+                        <p className="text-500 text-xs m-0 mb-2">
+                            Mencatat batas waktu kedaluwarsa sesi bagi pasien setelah membeli paket ini.
+                        </p>
+
+                        {formData.is_masa_berlaku_selamanya ? (
+                            <div className="text-xs text-green-700 bg-green-50 p-2 border-round-md border-1 border-green-200 flex align-items-center gap-2">
+                                <i className="pi pi-check-circle text-green-600 text-sm" />
+                                <span>
+                                    Sesi paket ini <strong>Berlaku Selamanya</strong> bagi pasien (tidak ada batas waktu kedaluwarsa setelah dibeli).
+                                </span>
+                            </div>
+                        ) : (
+                            <div>
+                                <label className="block text-xs font-semibold mb-1">Masa Berlaku Sesi Pasien (Hari) *</label>
+                                <InputNumber
+                                    value={formData.masa_berlaku_hari}
+                                    onValueChange={(e) => setFormData({ ...formData, masa_berlaku_hari: e.value })}
+                                    suffix=" hari"
+                                    min={1}
+                                    placeholder="Contoh: 365"
+                                    className="w-full text-sm border-round-md"
+                                />
+                                <small className="text-500 text-[11px] block mt-1">
+                                    Contoh: jika diisi 365 hari, pasien wajib menggunakan sesi sebelum 365 hari sejak tanggal pembelian.
+                                </small>
+                            </div>
+                        )}
+                    </div>
+
+                    {/* 2. PERIODE AKTIF PAKET LAYANAN (KATALOG KLINIK) */}
+                    <div className="surface-50 p-3 border-round-md border-1 surface-border">
+                        <div className="flex align-items-center justify-content-between mb-1">
+                            <span className="font-bold text-sm text-900 flex align-items-center gap-2">
+                                <i className="pi pi-calendar text-blue-600" />
+                                Periode Aktif Paket Layanan
                             </span>
                             <div className="flex align-items-center gap-2">
                                 <span className="text-xs font-semibold text-700">Aktif Selamanya</span>
@@ -714,26 +773,19 @@ const Page = () => {
                                 />
                             </div>
                         </div>
+                        <p className="text-500 text-xs m-0 mb-2">
+                            Mencatat masa ketersediaan paket ini untuk dijual di klinik / transaksi.
+                        </p>
 
                         {formData.is_selamanya ? (
-                            <div className="text-xs text-green-700 bg-green-50 p-2 border-round-md border-1 border-green-200 mt-1 flex align-items-center gap-2">
-                                <i className="pi pi-check-circle text-green-600 text-sm" />
+                            <div className="text-xs text-blue-700 bg-blue-50 p-2 border-round-md border-1 border-blue-200 flex align-items-center gap-2">
+                                <i className="pi pi-info-circle text-blue-600 text-sm" />
                                 <span>
-                                    Paket ini diset <strong>Aktif Selamanya</strong> dan tidak akan pernah kadaluwarsa.
+                                    Paket ini diset <strong>Aktif Selamanya</strong> di klinik tanpa batasan tanggal promo.
                                 </span>
                             </div>
                         ) : (
-                            <div className="grid pt-2">
-                                <div className="col-12">
-                                    <label className="block text-xs font-semibold mb-1">Masa Berlaku Sesi (Hari) *</label>
-                                    <InputNumber
-                                        value={formData.masa_berlaku_hari}
-                                        onValueChange={(e) => setFormData({ ...formData, masa_berlaku_hari: e.value })}
-                                        suffix=" hari"
-                                        min={1}
-                                        className="w-full text-sm border-round-md"
-                                    />
-                                </div>
+                            <div className="grid pt-1">
                                 <div className="col-6">
                                     <label className="block text-xs font-semibold mb-1">Tanggal Mulai Aktif</label>
                                     <InputText
@@ -745,14 +797,14 @@ const Page = () => {
                                     <small className="text-400 text-[11px] block mt-1">Kosongkan untuk tanggal hari ini</small>
                                 </div>
                                 <div className="col-6">
-                                    <label className="block text-xs font-semibold mb-1">Tanggal Selesai (Kustom)</label>
+                                    <label className="block text-xs font-semibold mb-1">Tanggal Selesai Aktif</label>
                                     <InputText
                                         type="date"
                                         value={formData.tanggal_selesai || ''}
                                         onChange={(e) => setFormData({ ...formData, tanggal_selesai: e.target.value })}
                                         className="w-full text-sm border-round-md"
                                     />
-                                    <small className="text-400 text-[11px] block mt-1">Otomatis dihitung dari masa berlaku jika kosong</small>
+                                    <small className="text-400 text-[11px] block mt-1">Kosongkan jika tidak dibatasi</small>
                                 </div>
                             </div>
                         )}

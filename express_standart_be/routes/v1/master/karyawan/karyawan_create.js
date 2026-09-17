@@ -33,7 +33,9 @@ router.post("/", async (req, res) => {
         kode_karyawan = `KRY-${String(maxNum + 1).padStart(3, "0")}`;
       }
 
+      const branchCode = oPayload.kode_cabang || req?.auth?.kode_cabang || "CBG-001";
       const oData = {
+        kode_cabang: branchCode,
         kode_karyawan,
         no_sip: oPayload.no_sip,
         kode_user: oPayload.kode_user || null,

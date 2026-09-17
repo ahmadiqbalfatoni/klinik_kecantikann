@@ -34,7 +34,9 @@ router.post("/", async (req, res) => {
         if (!isNaN(num) && num > maxNum) maxNum = num;
       }
       kode = `PRD-${String(maxNum + 1).padStart(3, "0")}`;
+      const branchCode = oPayload.kode_cabang || req?.auth?.kode_cabang || "CBG-001";
       const oData = {
+        kode_cabang: branchCode,
         kode_produk: kode,
         kode_kategori_produk: oPayload.kode_kategori_produk,
         nama: oPayload.nama,

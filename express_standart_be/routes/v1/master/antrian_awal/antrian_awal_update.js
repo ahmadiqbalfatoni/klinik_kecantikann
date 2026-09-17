@@ -25,6 +25,7 @@ import {
   validatePayload,
 } from "../../components/tools/servertool.js";
 import { formatDateSystem } from "../../components/tools/date_tools.js";
+import { getBranchScope } from "../../components/tools/branch_scope.js";
 
 const router = express.Router();
 
@@ -32,6 +33,7 @@ router.post("/", async (req, res) => {
   const { body } = req;
   const oPayload = body;
   const username = req?.auth?.username || "";
+  const branchCode = getBranchScope(req, oPayload?.kode_cabang);
 
   try {
     if (!oPayload || Object.keys(oPayload).length < 1) {
@@ -75,8 +77,10 @@ router.post("/", async (req, res) => {
     let previousRecord = null;
 
     await DB.transaction(async (trx) => {
-      previousRecord = await trx("trx_antrian_awal")
-        .where("kode_antrian_awal", oPayload.kode_antrian)
+      let qPrev = trx("trx_antrian_awal")
+        .where("kode_antrian_awal", oPayload.kode_antrian);
+      if (branchCode) qPrev = qPrev.andWhere("kode_cabang", branchCode);
+      previousRecord = await qPrev
         .forUpdate()
         .first();
 
@@ -86,11 +90,13 @@ router.post("/", async (req, res) => {
         throw error;
       }
 
-      // Check if another record already uses this nomor_antrian
-      const duplicateCheck = await trx("trx_antrian_awal")
+      // Check if another record already uses this nomor_antrian in this branch
+      const effectiveBranch = previousRecord.kode_cabang || branchCode;
+      let qDup = trx("trx_antrian_awal")
         .where("nomor_antrian", oPayload.no_antrian)
-        .whereNot("kode_antrian_awal", oPayload.kode_antrian)
-        .first();
+        .whereNot("kode_antrian_awal", oPayload.kode_antrian);
+      if (effectiveBranch) qDup = qDup.andWhere("kode_cabang", effectiveBranch);
+      const duplicateCheck = await qDup.first();
 
       if (duplicateCheck) {
         const error = new Error(`Nomor antrian ${oPayload.no_antrian} sudah digunakan oleh data lain.`);

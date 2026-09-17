@@ -13,6 +13,7 @@ import DB from "../../../../core/config/knex.js";
 import { formatDateSystem } from "../../components/tools/date_tools.js";
 import { Logging, ChangesLog } from "../../components/tools/servertool.js";
 import { status } from "../../components/tools/general.js";
+import { getBranchScope } from "../../components/tools/branch_scope.js";
 
 const router = express.Router();
 
@@ -20,6 +21,7 @@ router.post("/", async (req, res) => {
   const { body } = req;
   const oPayload = body || {};
   const username = req?.auth?.username || "system";
+  const branchCode = getBranchScope(req, oPayload.kode_cabang);
 
   try {
     const kodeBooking = (oPayload.kode_booking || "").trim();
@@ -33,9 +35,9 @@ router.post("/", async (req, res) => {
       });
     }
 
-    const booking = await DB("trx_booking")
-      .where("kode_booking", kodeBooking)
-      .first();
+    let bookingQuery = DB("trx_booking").where("kode_booking", kodeBooking);
+    if (branchCode) bookingQuery = bookingQuery.where("kode_cabang", branchCode);
+    const booking = await bookingQuery.first();
 
     if (!booking) {
       return res.status(404).json({

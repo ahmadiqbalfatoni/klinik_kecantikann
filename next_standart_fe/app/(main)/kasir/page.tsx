@@ -1,7 +1,9 @@
 'use client';
 
-import React, { useState, useCallback, useRef } from 'react';
+import React, { useState, useCallback, useRef, useEffect } from 'react';
 import { Toast } from 'primereact/toast';
+import { useSession } from 'next-auth/react';
+import { useRouter } from 'next/navigation';
 import postData from '@/lib/axios/postData';
 import { showError } from '@/lib/tools/generalTools';
 
@@ -67,7 +69,15 @@ export interface BayarResult {
 }
 
 export default function KasirPage() {
+  const { data: session } = useSession();
+  const router = useRouter();
   const toast = useRef<Toast>(null);
+
+  useEffect(() => {
+    if (session?.user?.role === 'superadmin') {
+      router.replace('/dashboard');
+    }
+  }, [session, router]);
 
   // State sidebar
   const [transaksiList, setTransaksiList] = useState<TransaksiListItem[]>([]);
@@ -150,54 +160,57 @@ export default function KasirPage() {
   };
 
   return (
-    <div
-      style={{
-        height: 'calc(100vh - 85px)',
-        overflow: 'hidden',
-      }}
-      className="flex gap-2 p-2 surface-ground border-round-xl"
-    >
-      <Toast ref={toast} position="top-right" />
+    <div className="w-full">
+      <div
+        style={{
+          height: 'calc(100vh - 9rem)',
+          minHeight: '600px',
+          overflow: 'hidden',
+        }}
+        className="flex gap-3 h-full overflow-hidden"
+      >
+        <Toast ref={toast} position="top-right" />
 
-      {/* SIDEBAR KIRI: Daftar Transaksi & Stat */}
-      <div style={{ width: '290px', flexShrink: 0 }} className="h-full overflow-hidden border-round-xl shadow-1">
-        <KasirSidebar
-          toast={toast}
-          selectedKodeTrx={selectedKodeTrx}
-          refreshKey={listRefreshKey}
-          onSelectTrx={handleSelectTrx}
-          onNewTrx={handleNewTrx}
-          onListChange={setTransaksiList}
+        {/* SIDEBAR KIRI: Daftar Transaksi & Stat */}
+        <div style={{ width: '290px', flexShrink: 0 }} className="h-full overflow-hidden border-round-xl shadow-1 border-1 surface-border">
+          <KasirSidebar
+            toast={toast}
+            selectedKodeTrx={selectedKodeTrx}
+            refreshKey={listRefreshKey}
+            onSelectTrx={handleSelectTrx}
+            onNewTrx={handleNewTrx}
+            onListChange={setTransaksiList}
+          />
+        </div>
+
+        {/* PANEL UTAMA POS: Katalog (Kiri 50%) & Cart/Checkout (Kanan 50%) */}
+        <div className="flex-1 h-full overflow-hidden">
+          <KasirPOSPanel
+            toast={toast}
+            kode_transaksi={selectedKodeTrx}
+            onDraftSaved={handleDraftSaved}
+            onOpenBayar={handleOpenBayar}
+          />
+        </div>
+
+        {/* MODAL BAYAR */}
+        <KasirBayarModal
+          visible={showBayarModal}
+          totalBayar={pendingBayarPayload?.sisa_bayar !== undefined ? pendingBayarPayload.sisa_bayar : (pendingBayarPayload?.total_bayar || 0)}
+          totalTagihanAsli={pendingBayarPayload?.total_bayar || 0}
+          dpNominal={pendingBayarPayload?.dp_nominal || 0}
+          metodeDp={pendingBayarPayload?.metode_pembayaran_dp || null}
+          onHide={() => setShowBayarModal(false)}
+          onConfirm={handleBayarConfirm}
+        />
+
+        {/* MODAL STRUK */}
+        <KasirStrukModal
+          visible={showStrukModal}
+          result={bayarResult}
+          onHide={() => setShowStrukModal(false)}
         />
       </div>
-
-      {/* PANEL UTAMA POS: Katalog (Kiri 50%) & Cart/Checkout (Kanan 50%) */}
-      <div className="flex-1 h-full overflow-hidden">
-        <KasirPOSPanel
-          toast={toast}
-          kode_transaksi={selectedKodeTrx}
-          onDraftSaved={handleDraftSaved}
-          onOpenBayar={handleOpenBayar}
-        />
-      </div>
-
-      {/* MODAL BAYAR */}
-      <KasirBayarModal
-        visible={showBayarModal}
-        totalBayar={pendingBayarPayload?.sisa_bayar !== undefined ? pendingBayarPayload.sisa_bayar : (pendingBayarPayload?.total_bayar || 0)}
-        totalTagihanAsli={pendingBayarPayload?.total_bayar || 0}
-        dpNominal={pendingBayarPayload?.dp_nominal || 0}
-        metodeDp={pendingBayarPayload?.metode_pembayaran_dp || null}
-        onHide={() => setShowBayarModal(false)}
-        onConfirm={handleBayarConfirm}
-      />
-
-      {/* MODAL STRUK */}
-      <KasirStrukModal
-        visible={showStrukModal}
-        result={bayarResult}
-        onHide={() => setShowStrukModal(false)}
-      />
     </div>
   );
 }

@@ -55,6 +55,7 @@ router.post("/", async (req, res) => {
           .required()
           .label("Telp"),
         role: Joi.string().required().label("Role"),
+        kode_cabang: Joi.string().allow('', null).label("Cabang"),
         password: Joi.string()
           .min(6)
           .label("Password")
@@ -118,6 +119,7 @@ router.post("/", async (req, res) => {
       telp: oPayload.telp,
       role: oPayload.role,
       status: oPayload.status,
+      kode_cabang: oPayload.kode_cabang !== undefined ? oPayload.kode_cabang : oDataBefore.kode_cabang,
       updated_by: username,
       updated_at: formatDateSystem(),
     };

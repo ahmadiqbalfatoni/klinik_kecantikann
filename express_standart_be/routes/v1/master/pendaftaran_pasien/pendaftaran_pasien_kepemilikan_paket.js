@@ -13,12 +13,14 @@ import DB from "../../../../core/config/knex.js";
 import { formatDateSystem } from "../../components/tools/date_tools.js";
 import { Logging } from "../../components/tools/servertool.js";
 import { status } from "../../components/tools/general.js";
+import { getBranchScope } from "../../components/tools/branch_scope.js";
 
 const router = express.Router();
 
 const handleGetKepemilikanPaket = async (req, res) => {
   const oPayload = { ...req.query, ...req.body };
   const username = req?.auth?.username || "";
+  const branchCode = getBranchScope(req, oPayload.kode_cabang);
   const keyword = (oPayload.keyword || "").trim();
   const filterNoRm = oPayload.no_rm || null;
   const filterStatus = oPayload.status || null;
@@ -53,6 +55,7 @@ const handleGetKepemilikanPaket = async (req, res) => {
               .orWhereRaw("LOWER(pkt.nama) LIKE ?", [`%${lower}%`]);
           });
         }
+        if (branchCode) qb.where("k.kode_cabang", branchCode);
         if (filterNoRm) qb.where("k.no_rm", filterNoRm);
         if (filterStatus) qb.where("k.status", filterStatus);
       });
@@ -92,10 +95,11 @@ const handleGetKepemilikanPaket = async (req, res) => {
     const [year, month, day] = todayStr.split("-").map(Number);
     const todayDay = HARI_MAP[new Date(year, month - 1, day).getDay()];
 
-    const activeSchedulesToday = await DB("mst_jadwal_karyawan as j")
+    let schedulesQuery = DB("mst_jadwal_karyawan as j")
       .where("j.status", "aktif")
-      .where("j.hari", todayDay)
-      .select("j.kode_ruangan", "j.is_penanggung_jawab");
+      .where("j.hari", todayDay);
+    if (branchCode) schedulesQuery = schedulesQuery.where("j.kode_cabang", branchCode);
+    const activeSchedulesToday = await schedulesQuery.select("j.kode_ruangan", "j.is_penanggung_jawab");
 
     const roomSchedulesMap = new Map();
     activeSchedulesToday.forEach((sch) => {
@@ -105,7 +109,9 @@ const handleGetKepemilikanPaket = async (req, res) => {
       roomSchedulesMap.get(sch.kode_ruangan).push(sch);
     });
 
-    const ruangKonsul = await DB("mst_ruangan").where("is_konsultasi", 1).where("status", "aktif").first();
+    let rkQuery = DB("mst_ruangan").where("is_konsultasi", 1).where("status", "aktif");
+    if (branchCode) rkQuery = rkQuery.where("kode_cabang", branchCode);
+    const ruangKonsul = await rkQuery.first();
     const kodeRuanganKonsul = ruangKonsul?.kode_ruangan || "RNG-007";
 
     // Attach detail session items per package ownership

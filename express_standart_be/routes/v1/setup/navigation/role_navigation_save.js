@@ -45,7 +45,7 @@ router.post("/", async (req, res) => {
     }
 
     const role = String(oPayload.role).toLowerCase();
-    const targetRole = role === "superadmin" || role === "admin" ? "master" : role;
+    const targetRole = role;
 
     let menuStr = "";
     if (typeof oPayload.menu === "string") {
@@ -54,22 +54,24 @@ router.post("/", async (req, res) => {
       menuStr = JSON.stringify(oPayload.menu);
     }
 
-    // 1. Simpan template ke mst_navigation
-    const existingMst = await DB("mst_navigation").where("role", targetRole).first();
-    if (existingMst) {
-      await DB("mst_navigation")
-        .where("id", existingMst.id)
-        .update({
+    // 1. Simpan template ke mst_navigation (role spesifik, tidak menimpa template 'master')
+    if (targetRole !== "master") {
+      const existingMst = await DB("mst_navigation").where("role", targetRole).first();
+      if (existingMst) {
+        await DB("mst_navigation")
+          .where("id", existingMst.id)
+          .update({
+            menu: menuStr,
+            updated_at: formatDateSystem(),
+          });
+      } else {
+        await DB("mst_navigation").insert({
+          role: targetRole,
           menu: menuStr,
+          created_at: formatDateSystem(),
           updated_at: formatDateSystem(),
         });
-    } else {
-      await DB("mst_navigation").insert({
-        role: targetRole,
-        menu: menuStr,
-        created_at: formatDateSystem(),
-        updated_at: formatDateSystem(),
-      });
+      }
     }
 
     // 2. Sinkronkan navigasi ke seluruh pengguna yang memiliki role ini

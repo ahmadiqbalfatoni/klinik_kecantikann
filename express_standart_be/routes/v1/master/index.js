@@ -238,4 +238,16 @@ router.use("/booking-checkin", (await import("../transaksi/booking/booking_check
 router.use("/booking-tidak-hadir", (await import("../transaksi/booking/booking_tidak_hadir.js")).default);
 router.use("/booking-mark-no-show", (await import("../transaksi/booking/booking_tidak_hadir.js")).default);
 
+// Multi-Branch / Cabang Klinik
+import cabangData from "./cabang/cabang_data.js";
+import cabangCreate from "./cabang/cabang_create.js";
+import cabangUpdate from "./cabang/cabang_update.js";
+import cabangDelete from "./cabang/cabang_delete.js";
+import cabangMonitoring from "./cabang/cabang_monitoring.js";
+router.use("/cabang-data", cabangData);
+router.use("/cabang-create", cabangCreate);
+router.use("/cabang-update", cabangUpdate);
+router.use("/cabang-delete", cabangDelete);
+router.use("/cabang-monitoring", cabangMonitoring);
+
 export default router;

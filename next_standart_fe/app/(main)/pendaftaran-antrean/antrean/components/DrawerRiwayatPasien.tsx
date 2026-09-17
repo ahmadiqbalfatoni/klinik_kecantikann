@@ -88,7 +88,7 @@ const getFullImageUrl = (url?: string) => {
         return url;
     }
     const clean = url.startsWith('/') ? url : `/${url}`;
-    return `http://127.0.0.1:8000${clean}`;
+    return clean;
 };
 
 export const DrawerRiwayatPasien: React.FC<DrawerRiwayatPasienProps> = ({
@@ -739,21 +739,23 @@ export const DrawerRiwayatPasien: React.FC<DrawerRiwayatPasienProps> = ({
                 {/* ── SECTION 4: SESI TINDAKAN & HASIL TREATMENT ── */}
                 <div className="surface-card border-round-xl border-1 surface-border overflow-hidden">
                     <div className="px-3 py-2.5 surface-100 border-bottom-1 surface-border flex align-items-center justify-content-between">
-                        <span className="text-xs font-bold text-700 uppercase tracking-wider flex align-items-center gap-2">
+                        <div className="flex align-items-center gap-2">
                             <Sparkles size={16} className="text-teal-700" />
-                            Sesi Tindakan & Hasil Treatment
-                        </span>
+                            <span className="text-xs font-bold text-700 uppercase tracking-wider">
+                                Sesi Tindakan &amp; Hasil Treatment
+                            </span>
+                        </div>
                         <span
                             className="text-xs font-bold px-2.5 py-0.5 border-round-pill"
-                            style={{ backgroundColor: '#f0fdfa', color: '#0f766e', border: '1px solid #99f6e4' }}
+                            style={{ backgroundColor: '#ecfdf5', color: '#0f766e', border: '1px solid #99f6e4' }}
                         >
                             {layananList.length} Sesi
                         </span>
                     </div>
                     <div className="p-3">
                         {layananList.length === 0 ? (
-                            <div className="p-4 text-center text-xs text-400 italic surface-50 border-round-lg border-1 surface-border">
-                                <FileText size={16} className="block mx-auto mb-2 text-400" />
+                            <div className="p-3 text-center text-xs text-400 italic surface-50 border-round-lg border-1 surface-border">
+                                <FileText size={15} className="block mx-auto mb-1.5 text-400" />
                                 Tidak ada catatan tindakan pada kunjungan ini.
                             </div>
                         ) : (
@@ -777,243 +779,281 @@ export const DrawerRiwayatPasien: React.FC<DrawerRiwayatPasienProps> = ({
                                             f.value !== ''
                                     );
 
-                                    const hasAnyContent =
+                                    const terapisList: any[] = Array.isArray(layanan.terapis_pendamping) && layanan.terapis_pendamping.length > 0
+                                        ? layanan.terapis_pendamping
+                                        : (Array.isArray(layanan.daftar_petugas) && layanan.daftar_petugas.length > 0
+                                            ? layanan.daftar_petugas.filter((p: any) => !p.is_dokter_pj && p.role !== 'DOKTER')
+                                            : (Array.isArray(headerRM.terapis_list) ? headerRM.terapis_list : []));
+
+                                    const dokterPelaksana = layanan.petugas || layanan.rekam_medis?.dokter_penanggung_jawab || (
+                                        Array.isArray(layanan.daftar_petugas) ? layanan.daftar_petugas.find((p: any) => p.is_dokter_pj || p.role === 'DOKTER') : null
+                                    ) || (headerRM.dokter_nama ? { nama: headerRM.dokter_nama, jabatan: headerRM.dokter_jabatan || 'Dokter', no_sip: headerRM.no_sip } : null);
+
+                                    const allPetugas: any[] = [];
+                                    if (dokterPelaksana) {
+                                        allPetugas.push({
+                                            nama: dokterPelaksana.nama,
+                                            no_sip: dokterPelaksana.kode_karyawan || dokterPelaksana.no_sip || headerRM.no_sip || '-',
+                                            role: (dokterPelaksana.jabatan || 'DOKTER').toUpperCase(),
+                                        });
+                                    }
+                                    terapisList.forEach((t: any) => {
+                                        allPetugas.push({
+                                            nama: t.nama || t.nama_petugas,
+                                            no_sip: t.no_sip || t.sip || '-',
+                                            role: (t.role || t.jabatan || 'TERAPIS').toUpperCase(),
+                                        });
+                                    });
+
+                                    const hasNotes = Boolean(
                                         layanan.catatan_petugas ||
                                         layanan.catatan_tindakan ||
-                                        layanan.catatan_hasil_treatment ||
+                                        layanan.catatan_hasil_treatment
+                                    );
+
+                                    const hasAnyContent =
+                                        allPetugas.length > 0 ||
+                                        hasNotes ||
                                         validFormData.length > 0 ||
                                         fotos.length > 0;
 
                                     return (
                                         <div
                                             key={layanan.kode_antrian_layanan || lIdx}
-                                            className="border-round-lg border-1 surface-border overflow-hidden"
+                                            className="border-round-xl border-1 surface-border overflow-hidden bg-white shadow-none"
                                         >
-                                            {/* Sesi Header */}
-                                            <div className="surface-50 px-3 py-2.5 border-bottom-1 surface-border flex align-items-center justify-content-between flex-wrap gap-2">
-                                                <div className="flex align-items-center gap-2">
+                                            {/* Header Sesi */}
+                                            <div className="surface-100 px-3 py-2.5 border-bottom-1 surface-border flex align-items-center justify-content-between flex-wrap gap-2">
+                                                <div className="flex align-items-center gap-2 min-w-0">
                                                     <span
-                                                        className="text-[10px] font-bold px-2 py-0.5 border-round-pill uppercase"
+                                                        className="text-[10px] font-bold px-2.5 py-0.5 border-round-pill uppercase flex-shrink-0"
                                                         style={
                                                             isKonsul
-                                                                ? {
-                                                                      backgroundColor: '#f1f5f9',
-                                                                      color: '#475569',
-                                                                      border: '1px solid #cbd5e1',
-                                                                  }
-                                                                : {
-                                                                      backgroundColor: '#f0fdfa',
-                                                                      color: '#0f766e',
-                                                                      border: '1px solid #99f6e4',
-                                                                  }
+                                                                ? { backgroundColor: '#e0f2fe', color: '#0284c7', border: '1px solid #bae6fd' }
+                                                                : { backgroundColor: '#ecfdf5', color: '#059669', border: '1px solid #a7f3d0' }
                                                         }
                                                     >
-                                                        {isKonsul ? 'Konsultasi' : 'Tindakan'}
+                                                        {isKonsul ? 'KONSULTASI' : 'TINDAKAN'}
                                                     </span>
-                                                    <span className="font-bold text-900 text-sm">
+                                                    <span className="font-bold text-900 text-xs md:text-sm truncate min-w-0">
                                                         {layanan.nama_layanan || 'Pelayanan Klinis'}
                                                     </span>
                                                 </div>
-                                                <div className="flex align-items-center gap-2">
+                                                <div className="flex align-items-center gap-2 flex-shrink-0">
                                                     {layanan.status && (
                                                         <span
-                                                            className="text-[10px] font-bold px-2 py-0.5 border-round-pill uppercase"
+                                                            className="text-[10px] font-bold px-2.5 py-0.5 border-round-pill uppercase"
                                                             style={
                                                                 layanan.status.toLowerCase() === 'selesai'
-                                                                    ? {
-                                                                          backgroundColor: '#f0fdfa',
-                                                                          color: '#0f766e',
-                                                                          border: '1px solid #99f6e4',
-                                                                      }
-                                                                    : {
-                                                                          backgroundColor: '#eff6ff',
-                                                                          color: '#1d4ed8',
-                                                                          border: '1px solid #bfdbfe',
-                                                                      }
+                                                                    ? { backgroundColor: '#ecfdf5', color: '#059669', border: '1px solid #a7f3d0' }
+                                                                    : { backgroundColor: '#eff6ff', color: '#2563eb', border: '1px solid #bfdbfe' }
                                                             }
                                                         >
                                                             {layanan.status}
                                                         </span>
                                                     )}
                                                     {layanan.nama_ruangan && (
-                                                        <span className="text-xs text-500 font-medium flex align-items-center gap-1 ml-1">
-                                                            <Building2 size={13} className="text-400" />
-                                                            {layanan.nama_ruangan}
+                                                        <span className="text-xs text-600 font-medium flex align-items-center gap-1 bg-white px-2 py-0.5 border-round-md border-1 surface-border">
+                                                            <Building2 size={13} className="text-teal-700" />
+                                                            <span className="truncate max-w-10rem">{layanan.nama_ruangan}</span>
                                                         </span>
                                                     )}
                                                 </div>
                                             </div>
 
-                                            {/* Sesi Body */}
+                                            {/* Sesi Content (Kotak-Kotak Konsisten dengan Bagian Atas) */}
                                             <div className="p-3 flex flex-column gap-3 text-xs">
-                                                {/* Petugas & Terapis Lengkap Row */}
-                                                {(() => {
-                                                    const terapisList: any[] = Array.isArray(layanan.terapis_pendamping) && layanan.terapis_pendamping.length > 0
-                                                        ? layanan.terapis_pendamping
-                                                        : (Array.isArray(layanan.daftar_petugas) && layanan.daftar_petugas.length > 0
-                                                            ? layanan.daftar_petugas.filter((p: any) => !p.is_dokter_pj && p.role !== 'DOKTER')
-                                                            : (Array.isArray(headerRM.terapis_list) ? headerRM.terapis_list : []));
-
-                                                    const dokterPelaksana = layanan.petugas || layanan.rekam_medis?.dokter_penanggung_jawab || (
-                                                        Array.isArray(layanan.daftar_petugas) ? layanan.daftar_petugas.find((p: any) => p.is_dokter_pj || p.role === 'DOKTER') : null
-                                                    ) || (headerRM.dokter_nama ? { nama: headerRM.dokter_nama, jabatan: headerRM.dokter_jabatan || 'Dokter', no_sip: headerRM.no_sip } : null);
-
-                                                    return (
-                                                        <div className="surface-50 p-2.5 border-round-lg border-1 surface-border flex flex-column gap-2">
-                                                            <div className="flex align-items-center justify-content-between">
-                                                                <span className="text-[10px] font-bold text-500 uppercase tracking-wider flex align-items-center gap-1.5">
-                                                                    <User size={13} className="text-teal-700" />
-                                                                    <span>Dokter &amp; Petugas Pelaksana Ruangan:</span>
-                                                                </span>
-                                                                <span className="text-[10px] font-semibold text-500 bg-surface-100 px-2 py-0.5 border-round">
-                                                                    {(terapisList.length > 0 ? terapisList.length + 1 : (dokterPelaksana ? 1 : 0))} Petugas
+                                                {/* KOTAK 1: Dokter & Petugas Pelaksana Ruangan */}
+                                                {allPetugas.length > 0 && (
+                                                    <div className="surface-50 border-round-lg border-1 surface-border p-3">
+                                                        <div className="flex align-items-center justify-content-between pb-2 mb-2 border-bottom-1 surface-border">
+                                                            <div className="flex align-items-center gap-1.5">
+                                                                <User size={15} className="text-teal-700" />
+                                                                <span className="text-xs font-bold text-700 uppercase tracking-wider">
+                                                                    Dokter &amp; Petugas Pelaksana Ruangan
                                                                 </span>
                                                             </div>
-                                                            <div className="grid formgrid m-0">
-                                                                {/* 1. Dokter / PJ Medis */}
-                                                                {dokterPelaksana && (
-                                                                    <div className="col-12 md:col-6 p-1">
-                                                                        <div className="bg-white p-2 border-round-md border-1 surface-border flex align-items-center gap-2">
-                                                                            <div className="w-2rem h-2rem border-round-md bg-teal-50 border-1 border-teal-100 text-teal-700 flex align-items-center justify-content-center text-xs flex-shrink-0">
-                                                                                👨‍⚕️
+                                                            <span className="text-[10px] font-bold px-2 py-0.5 border-round-pill bg-white border-1 surface-border text-500">
+                                                                {allPetugas.length} Petugas
+                                                            </span>
+                                                        </div>
+                                                        <div className="grid formgrid -m-1">
+                                                            {allPetugas.map((p: any, pIdx: number) => (
+                                                                <div key={pIdx} className={`col-12 ${allPetugas.length > 1 ? 'sm:col-6' : ''} p-1`}>
+                                                                    <div className="bg-white p-2.5 border-round-md border-1 surface-border flex align-items-center justify-content-between gap-2 h-full">
+                                                                        <div className="flex align-items-center gap-2.5 min-w-0">
+                                                                            <div
+                                                                                className="border-round-circle flex align-items-center justify-content-center flex-shrink-0 font-bold text-xs"
+                                                                                style={
+                                                                                    p.role === 'DOKTER'
+                                                                                        ? { width: '32px', height: '32px', backgroundColor: '#ecfdf5', color: '#059669', border: '1px solid #a7f3d0' }
+                                                                                        : { width: '32px', height: '32px', backgroundColor: '#f0fdfa', color: '#0f766e', border: '1px solid #99f6e4' }
+                                                                                }
+                                                                            >
+                                                                                {p.role === 'DOKTER' ? 'Dr' : 'Pt'}
                                                                             </div>
-                                                                            <div className="min-w-0 flex-1">
-                                                                                <div className="flex align-items-center gap-1.5 flex-wrap">
-                                                                                    <span className="font-bold text-900 text-xs line-height-2 text-overflow-ellipsis overflow-hidden">
-                                                                                        {dokterPelaksana?.nama || 'Dokter Penanggung Jawab'}
-                                                                                    </span>
-                                                                                    <span className="text-[9px] font-semibold bg-teal-50 text-teal-700 border-1 border-teal-200 px-1.5 py-0.5 border-round">
-                                                                                        {(dokterPelaksana?.jabatan || 'DOKTER/PJ').toUpperCase()}
-                                                                                    </span>
-                                                                                </div>
-                                                                                <span className="text-[10px] text-500 block">
-                                                                                    SIP: {dokterPelaksana?.kode_karyawan || dokterPelaksana?.no_sip || headerRM.no_sip || '-'}
+                                                                            <div className="min-w-0">
+                                                                                <span className="font-bold text-900 text-xs block truncate" title={p.nama}>
+                                                                                    {p.nama}
+                                                                                </span>
+                                                                                <span className="text-[11px] text-500 block truncate">
+                                                                                    SIP: {p.no_sip}
                                                                                 </span>
                                                                             </div>
                                                                         </div>
+                                                                        <span
+                                                                            className="text-[10px] font-bold px-2.5 py-0.5 border-round-pill uppercase flex-shrink-0"
+                                                                            style={
+                                                                                p.role === 'DOKTER'
+                                                                                    ? { backgroundColor: '#ecfdf5', color: '#059669', border: '1px solid #a7f3d0' }
+                                                                                    : { backgroundColor: '#f0fdfa', color: '#0f766e', border: '1px solid #99f6e4' }
+                                                                            }
+                                                                        >
+                                                                            {p.role}
+                                                                        </span>
                                                                     </div>
-                                                                )}
-
-                                                                {/* 2. Terapis / Petugas Pendamping (1, 2, 3 atau lebih) */}
-                                                                {terapisList.length > 0 && (
-                                                                    terapisList.map((terapis: any, tIdx: number) => {
-                                                                        const roleBadge = (terapis.role || terapis.jabatan || 'TERAPIS').toUpperCase();
-                                                                        let jamText = '';
-                                                                        if (terapis.jam_mulai && terapis.jam_selesai) {
-                                                                            const start = terapis.jam_mulai.slice(0, 5);
-                                                                            const end = terapis.jam_selesai.startsWith('24:00') ? '00:00' : terapis.jam_selesai.slice(0, 5);
-                                                                            jamText = `${start} - ${end}`;
-                                                                        } else if (terapis.shift) {
-                                                                            jamText = String(terapis.shift).replace(/[\[\]]/g, '').trim();
-                                                                        }
-
-                                                                        return (
-                                                                            <div key={`t-${tIdx}`} className="col-12 md:col-6 p-1">
-                                                                                <div className="bg-white p-2 border-round-md border-1 surface-border flex align-items-center gap-2">
-                                                                                    <div className="w-2rem h-2rem border-round-md bg-purple-50 border-1 border-purple-100 text-purple-700 flex align-items-center justify-content-center text-xs flex-shrink-0">
-                                                                                        💆‍♀️
-                                                                                    </div>
-                                                                                    <div className="min-w-0 flex-1">
-                                                                                        <div className="flex align-items-center gap-1.5 flex-wrap">
-                                                                                            <span className="font-bold text-900 text-xs line-height-2 text-overflow-ellipsis overflow-hidden">
-                                                                                                {terapis.nama || terapis.nama_petugas}
-                                                                                            </span>
-                                                                                            <span className="text-[9px] font-semibold bg-purple-50 text-purple-700 border-1 border-purple-200 px-1.5 py-0.5 border-round">
-                                                                                                {roleBadge}
-                                                                                            </span>
-                                                                                        </div>
-                                                                                        <div className="text-[10px] text-500 flex align-items-center gap-1.5 flex-wrap">
-                                                                                            <span>SIP: {terapis.no_sip || terapis.sip || '-'}</span>
-                                                                                            {jamText && (
-                                                                                                <>
-                                                                                                    <span className="text-300">•</span>
-                                                                                                    <span>{jamText}</span>
-                                                                                                </>
-                                                                                            )}
-                                                                                        </div>
-                                                                                    </div>
-                                                                                </div>
-                                                                            </div>
-                                                                        );
-                                                                    })
-                                                                )}
-                                                            </div>
-                                                        </div>
-                                                    );
-                                                })()}
-
-                                                {/* Catatan Petugas */}
-                                                {layanan.catatan_petugas && (
-                                                    <div
-                                                        className="surface-50 p-3 border-round-lg border-1 surface-border border-left-3"
-                                                        style={{ borderLeftColor: '#0f766e' }}
-                                                    >
-                                                        <span className="text-[10px] font-bold text-500 uppercase block mb-1 flex align-items-center gap-1">
-                                                            <FileText size={12} className="text-teal-700" />
-                                                            Catatan Petugas:
-                                                        </span>
-                                                        <div className="white-space-pre-line">
-                                                            {renderFieldContent(layanan.catatan_petugas)}
-                                                        </div>
-                                                    </div>
-                                                )}
-
-                                                {/* Catatan Tindakan & Hasil Treatment */}
-                                                {(layanan.catatan_tindakan || layanan.catatan_hasil_treatment) && (
-                                                    <div className="grid formgrid">
-                                                        {layanan.catatan_tindakan && (
-                                                            <div className="col-12 md:col-6 mb-2 md:mb-0">
-                                                                <div className="surface-50 p-3 border-round-lg border-1 surface-border h-full">
-                                                                    <span className="text-[10px] font-bold text-500 uppercase block mb-1">
-                                                                        Catatan Tindakan:
-                                                                    </span>
-                                                                    {renderFieldContent(layanan.catatan_tindakan)}
-                                                                </div>
-                                                            </div>
-                                                        )}
-                                                        {layanan.catatan_hasil_treatment && (
-                                                            <div className="col-12 md:col-6">
-                                                                <div className="surface-50 p-3 border-round-lg border-1 surface-border h-full">
-                                                                    <span className="text-[10px] font-bold text-500 uppercase block mb-1">
-                                                                        Hasil Treatment:
-                                                                    </span>
-                                                                    {renderFieldContent(layanan.catatan_hasil_treatment)}
-                                                                </div>
-                                                            </div>
-                                                        )}
-                                                    </div>
-                                                )}
-
-                                                {/* Data Form Klinis */}
-                                                {validFormData.length > 0 && (
-                                                    <div className="surface-50 p-3 border-round-lg border-1 surface-border">
-                                                        <span className="text-[10px] font-bold text-500 uppercase block mb-2 flex align-items-center gap-1">
-                                                            <ClipboardList size={13} className="text-teal-700" />
-                                                            Data Klinis Ruangan:
-                                                        </span>
-                                                        <div className="grid formgrid">
-                                                            {validFormData.map((f: any, fIdx: number) => (
-                                                                <div key={fIdx} className="col-12 sm:col-6 mb-1.5">
-                                                                    <span className="text-400 text-[10px] block font-medium">
-                                                                        {f.label}
-                                                                    </span>
-                                                                    <span className="font-medium text-900 text-xs">
-                                                                        {String(f.value)}
-                                                                    </span>
                                                                 </div>
                                                             ))}
                                                         </div>
                                                     </div>
                                                 )}
 
-                                                {/* Foto Before & After */}
+                                                {/* KOTAK 2: Catatan Klinis Sesi (SOAP Style Kotak-Kotak Beraksen Teal) */}
+                                                {hasNotes && (
+                                                    <div className="grid formgrid -m-1.5">
+                                                        {/* Catatan Petugas */}
+                                                        {layanan.catatan_petugas && (
+                                                            <div
+                                                                className={`col-12 ${
+                                                                    layanan.catatan_tindakan && layanan.catatan_hasil_treatment
+                                                                        ? 'lg:col-4 md:col-6'
+                                                                        : (layanan.catatan_tindakan || layanan.catatan_hasil_treatment ? 'md:col-6' : '')
+                                                                } p-1.5`}
+                                                            >
+                                                                <div
+                                                                    className="surface-50 border-round-lg border-1 surface-border p-3 h-full flex flex-column border-left-3"
+                                                                    style={{ borderLeftColor: '#0f766e' }}
+                                                                >
+                                                                    <div className="flex align-items-center gap-1.5 pb-2 mb-2 border-bottom-1 surface-border">
+                                                                        <FileText size={15} className="text-teal-700" />
+                                                                        <span className="text-xs font-bold text-700 uppercase">
+                                                                            Catatan Petugas Ruangan
+                                                                        </span>
+                                                                    </div>
+                                                                    <div
+                                                                        className="flex-grow-1 text-xs text-800 line-height-2"
+                                                                        style={{ wordBreak: 'break-word', overflowWrap: 'anywhere' }}
+                                                                    >
+                                                                        {renderFieldContent(layanan.catatan_petugas)}
+                                                                    </div>
+                                                                </div>
+                                                            </div>
+                                                        )}
+
+                                                        {/* Catatan Tindakan */}
+                                                        {layanan.catatan_tindakan && (
+                                                            <div
+                                                                className={`col-12 ${
+                                                                    layanan.catatan_petugas && layanan.catatan_hasil_treatment
+                                                                        ? 'lg:col-4 md:col-6'
+                                                                        : (layanan.catatan_petugas || layanan.catatan_hasil_treatment ? 'md:col-6' : '')
+                                                                } p-1.5`}
+                                                            >
+                                                                <div
+                                                                    className="surface-50 border-round-lg border-1 surface-border p-3 h-full flex flex-column border-left-3"
+                                                                    style={{ borderLeftColor: '#0f766e' }}
+                                                                >
+                                                                    <div className="flex align-items-center gap-1.5 pb-2 mb-2 border-bottom-1 surface-border">
+                                                                        <Activity size={15} className="text-teal-700" />
+                                                                        <span className="text-xs font-bold text-700 uppercase">
+                                                                            Catatan Prosedur / Tindakan
+                                                                        </span>
+                                                                    </div>
+                                                                    <div
+                                                                        className="flex-grow-1 text-xs text-800 line-height-2"
+                                                                        style={{ wordBreak: 'break-word', overflowWrap: 'anywhere' }}
+                                                                    >
+                                                                        {renderFieldContent(layanan.catatan_tindakan)}
+                                                                    </div>
+                                                                </div>
+                                                            </div>
+                                                        )}
+
+                                                        {/* Hasil Treatment */}
+                                                        {layanan.catatan_hasil_treatment && (
+                                                            <div
+                                                                className={`col-12 ${
+                                                                    layanan.catatan_petugas && layanan.catatan_tindakan
+                                                                        ? 'lg:col-4 md:col-6'
+                                                                        : (layanan.catatan_petugas || layanan.catatan_tindakan ? 'md:col-6' : '')
+                                                                } p-1.5`}
+                                                            >
+                                                                <div
+                                                                    className="surface-50 border-round-lg border-1 surface-border p-3 h-full flex flex-column border-left-3"
+                                                                    style={{ borderLeftColor: '#0f766e' }}
+                                                                >
+                                                                    <div className="flex align-items-center gap-1.5 pb-2 mb-2 border-bottom-1 surface-border">
+                                                                        <Sparkles size={15} className="text-teal-700" />
+                                                                        <span className="text-xs font-bold text-700 uppercase">
+                                                                            Hasil Treatment &amp; Evaluasi
+                                                                        </span>
+                                                                    </div>
+                                                                    <div
+                                                                        className="flex-grow-1 text-xs text-800 line-height-2"
+                                                                        style={{ wordBreak: 'break-word', overflowWrap: 'anywhere' }}
+                                                                    >
+                                                                        {renderFieldContent(layanan.catatan_hasil_treatment)}
+                                                                    </div>
+                                                                </div>
+                                                            </div>
+                                                        )}
+                                                    </div>
+                                                )}
+
+                                                {/* KOTAK 3: Data & Parameter Klinis Ruangan */}
+                                                {validFormData.length > 0 && (
+                                                    <div className="surface-50 border-round-lg border-1 surface-border p-3">
+                                                        <div className="flex align-items-center gap-1.5 pb-2 mb-2 border-bottom-1 surface-border">
+                                                            <ClipboardList size={15} className="text-teal-700" />
+                                                            <span className="text-xs font-bold text-700 uppercase tracking-wider">
+                                                                Data &amp; Parameter Klinis Ruangan
+                                                            </span>
+                                                        </div>
+                                                        <div className="grid formgrid -m-1">
+                                                            {validFormData.map((f: any, fIdx: number) => (
+                                                                <div key={fIdx} className="col-12 sm:col-6 md:col-4 p-1">
+                                                                    <div className="bg-white p-2.5 border-round-md border-1 surface-border h-full flex flex-column justify-content-between">
+                                                                        <span className="text-500 font-bold uppercase block mb-1 text-[10px] truncate">
+                                                                            {f.label}
+                                                                        </span>
+                                                                        <span
+                                                                            className="font-semibold text-900 text-xs block break-words"
+                                                                            style={{ wordBreak: 'break-word', overflowWrap: 'anywhere' }}
+                                                                        >
+                                                                            {renderFieldContent(f.value)}
+                                                                        </span>
+                                                                    </div>
+                                                                </div>
+                                                            ))}
+                                                        </div>
+                                                    </div>
+                                                )}
+
+                                                {/* KOTAK 4: Dokumentasi Foto Sesi */}
                                                 {fotos && fotos.length > 0 && (
-                                                    <div className="pt-2 border-top-1 surface-border">
-                                                        <span className="text-[10px] font-bold text-500 uppercase block mb-2 flex align-items-center gap-1">
-                                                            <ImageIcon size={13} className="text-teal-700" />
-                                                            Dokumentasi Foto Sesi:
-                                                        </span>
-                                                        <div className="flex gap-3 flex-wrap">
+                                                    <div className="surface-50 border-round-lg border-1 surface-border p-3">
+                                                        <div className="flex align-items-center justify-content-between pb-2 mb-2 border-bottom-1 surface-border">
+                                                            <div className="flex align-items-center gap-1.5">
+                                                                <ImageIcon size={15} className="text-teal-700" />
+                                                                <span className="text-xs font-bold text-700 uppercase tracking-wider">
+                                                                    Dokumentasi Foto Sesi (Sebelum &amp; Sesudah)
+                                                                </span>
+                                                            </div>
+                                                            <span className="text-[10px] text-500 italic">
+                                                                Klik untuk perbesar
+                                                            </span>
+                                                        </div>
+                                                        <div className="flex gap-2.5 flex-wrap align-items-center">
                                                             {fotos.map((foto: any, fIdx: number) => {
                                                                 const isBefore =
                                                                     foto.tipe === 'before' || foto.tipe === 'foto_before';
@@ -1023,13 +1063,13 @@ export const DrawerRiwayatPasien: React.FC<DrawerRiwayatPasienProps> = ({
                                                                     ? 'BEFORE'
                                                                     : isAfter
                                                                     ? 'AFTER'
-                                                                    : foto.tipe;
+                                                                    : String(foto.tipe || 'FOTO').toUpperCase();
                                                                 const fullUrl = getFullImageUrl(foto.url_foto);
 
                                                                 return (
                                                                     <div
                                                                         key={foto.id || fIdx}
-                                                                        className="flex flex-column align-items-center gap-1.5 cursor-pointer"
+                                                                        className="bg-white p-2 border-round-lg border-1 surface-border flex flex-column align-items-center gap-1.5 cursor-pointer hover:shadow-1 transition-all"
                                                                         onClick={() =>
                                                                             openPhotoZoom(
                                                                                 foto.url_foto,
@@ -1038,8 +1078,8 @@ export const DrawerRiwayatPasien: React.FC<DrawerRiwayatPasienProps> = ({
                                                                         }
                                                                     >
                                                                         <div
-                                                                            className="relative border-round-lg overflow-hidden border-1 surface-border shadow-1 hover:shadow-2 transition-all"
-                                                                            style={{ width: '80px', height: '80px' }}
+                                                                            className="relative border-round-md overflow-hidden border-1 surface-border bg-gray-50"
+                                                                            style={{ width: '68px', height: '68px' }}
                                                                         >
                                                                             <img
                                                                                 src={fullUrl}
@@ -1060,7 +1100,7 @@ export const DrawerRiwayatPasien: React.FC<DrawerRiwayatPasienProps> = ({
                                                                             </div>
                                                                         </div>
                                                                         <span
-                                                                            className="text-[9px] font-bold px-1.5 py-0.5 border-round uppercase"
+                                                                            className="text-[9px] font-bold px-2 py-0.5 border-round-pill uppercase"
                                                                             style={
                                                                                 isBefore
                                                                                     ? {
@@ -1069,9 +1109,9 @@ export const DrawerRiwayatPasien: React.FC<DrawerRiwayatPasienProps> = ({
                                                                                           border: '1px solid #cbd5e1',
                                                                                       }
                                                                                     : {
-                                                                                          backgroundColor: '#f0fdfa',
-                                                                                          color: '#0f766e',
-                                                                                          border: '1px solid #99f6e4',
+                                                                                          backgroundColor: '#ecfdf5',
+                                                                                          color: '#059669',
+                                                                                          border: '1px solid #a7f3d0',
                                                                                       }
                                                                             }
                                                                         >
@@ -1084,12 +1124,12 @@ export const DrawerRiwayatPasien: React.FC<DrawerRiwayatPasienProps> = ({
                                                     </div>
                                                 )}
 
-                                                {/* Fallback jika tidak ada catatan/foto khusus */}
+                                                {/* Fallback jika tidak ada konten khusus */}
                                                 {!hasAnyContent && (
-                                                    <div className="surface-50 border-round p-2 text-xs text-400 italic flex align-items-center gap-1.5">
-                                                        <CheckCircle2 size={14} className="text-teal-600" />
+                                                    <div className="surface-50 border-round-lg border-1 surface-border p-3 text-xs text-400 italic flex align-items-center gap-2">
+                                                        <CheckCircle2 size={15} className="text-teal-600 flex-shrink-0" />
                                                         <span>
-                                                            Pelayanan sesi telah diselesaikan tanpa catatan klinis tambahan.
+                                                            Sesi pelayanan telah selesai sesuai prosedur standar klinis tanpa catatan khusus.
                                                         </span>
                                                     </div>
                                                 )}
@@ -1464,7 +1504,8 @@ export const DrawerRiwayatPasien: React.FC<DrawerRiwayatPasienProps> = ({
                             onError={(e) => {
                                 const target = e.target as HTMLImageElement;
                                 if (previewPhotoUrl && !target.src.includes('/api/assets')) {
-                                    target.src = `/api/assets${previewPhotoUrl.replace('http://127.0.0.1:8000', '')}`;
+                                    const cleanPath = previewPhotoUrl.replace(/^https?:\/\/[^/]+/, '');
+                                    target.src = `/api/assets${cleanPath}`;
                                 }
                             }}
                         />

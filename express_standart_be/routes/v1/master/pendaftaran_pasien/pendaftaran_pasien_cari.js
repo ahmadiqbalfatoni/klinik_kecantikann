@@ -13,12 +13,14 @@ import DB from "../../../../core/config/knex.js";
 import { formatDateSystem } from "../../components/tools/date_tools.js";
 import { Logging } from "../../components/tools/servertool.js";
 import { status } from "../../components/tools/general.js";
+import { getBranchScope } from "../../components/tools/branch_scope.js";
 
 const router = express.Router();
 
 const handleSearch = async (req, res) => {
   const oPayload = { ...req.query, ...req.body };
   const username = req?.auth?.username || "";
+  const branchCode = getBranchScope(req, oPayload.kode_cabang);
   const keyword = (oPayload.keyword || oPayload.q || "").trim();
   const nik = (oPayload.nik || "").trim();
   const no_hp = (oPayload.no_hp || "").trim();
@@ -31,6 +33,9 @@ const handleSearch = async (req, res) => {
     const baseQuery = DB("mst_pasien as p")
       .where("p.status", "aktif")
       .modify((qb) => {
+        if (branchCode) {
+          qb.where("p.kode_cabang", branchCode);
+        }
         if (nik) {
           qb.where("p.nik", nik);
         } else if (no_hp) {

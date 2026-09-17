@@ -93,7 +93,10 @@ router.post("/", async (req, res) => {
       }
       kode = `JDW-${String(n).padStart(3, "0")}`;
 
+      const branchCode = oPayload.kode_cabang || req?.auth?.kode_cabang || "CBG-001";
+
       const oData = {
+        kode_cabang: branchCode,
         kode_jadwal: kode,
         no_sip: oPayload.no_sip,
         kode_ruangan: oPayload.kode_ruangan || null,

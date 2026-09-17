@@ -13,6 +13,7 @@ import DB from "../../../../core/config/knex.js";
 import { formatDateSystem } from "../../components/tools/date_tools.js";
 import { Logging, ChangesLog } from "../../components/tools/servertool.js";
 import { status } from "../../components/tools/general.js";
+import { getBranchScope } from "../../components/tools/branch_scope.js";
 
 const router = express.Router();
 
@@ -20,6 +21,7 @@ router.post("/", async (req, res) => {
   const { body } = req;
   const oPayload = body || {};
   const username = req?.auth?.username || "system";
+  const branchCode = getBranchScope(req, oPayload.kode_cabang);
 
   try {
     const kodeBooking = (oPayload.kode_booking || "").trim();
@@ -38,9 +40,9 @@ router.post("/", async (req, res) => {
 
     if (!isAutoScan && kodeBooking) {
       // 1. MODE SINGLE: Tandai 1 booking spesifik
-      const booking = await DB("trx_booking")
-        .where("kode_booking", kodeBooking)
-        .first();
+      let singleQuery = DB("trx_booking").where("kode_booking", kodeBooking);
+      if (branchCode) singleQuery = singleQuery.where("kode_cabang", branchCode);
+      const booking = await singleQuery.first();
 
       if (!booking) {
         return res.status(404).json({
@@ -104,7 +106,7 @@ router.post("/", async (req, res) => {
       const mins = toleransiMenit % 60;
       const addTimeStr = `${String(hours).padStart(2, "0")}:${String(mins).padStart(2, "0")}:00`;
 
-      const expiredBookings = await DB("trx_booking")
+      let autoQuery = DB("trx_booking")
         .where("status", "dikonfirmasi")
         .where(function () {
           this.where("tanggal_booking", "<", todayYmd).orWhere(function () {
@@ -113,8 +115,9 @@ router.post("/", async (req, res) => {
               [addTimeStr, nowTimeStr]
             );
           });
-        })
-        .select("id", "kode_booking", "dp_status", "tanggal_booking", "jam_booking");
+        });
+      if (branchCode) autoQuery = autoQuery.where("kode_cabang", branchCode);
+      const expiredBookings = await autoQuery.select("id", "kode_booking", "dp_status", "tanggal_booking", "jam_booking");
 
       if (expiredBookings.length === 0) {
         return res.status(200).json({

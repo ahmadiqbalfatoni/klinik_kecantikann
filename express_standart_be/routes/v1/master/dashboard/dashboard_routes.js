@@ -3,6 +3,7 @@ import DB from "../../../../core/config/knex.js";
 import { formatDateSystem } from "../../components/tools/date_tools.js";
 import { Logging } from "../../components/tools/servertool.js";
 import { status } from "../../components/tools/general.js";
+import { getBranchScope } from "../../components/tools/branch_scope.js";
 
 const router = express.Router();
 
@@ -14,47 +15,60 @@ const router = express.Router();
 router.post("/role-data", async (req, res) => {
   const { body } = req;
   const role = (body.role || "owner").toLowerCase();
+  const branchCode = getBranchScope(req, body.kode_cabang);
 
   try {
     const todayStr = formatDateSystem(new Date(), "yyyy-MM-dd");
 
     // ── 1. METRIK OWNER / MANAGER ──
     // Kunjungan hari ini & total pasien
-    const kunjunganToday = await DB("trx_kunjungan")
-      .whereRaw("DATE(tanggal_kunjungan) = ?", [todayStr])
-      .count("id as count")
-      .first();
+    const qKunjunganToday = DB("trx_kunjungan").whereRaw("DATE(tanggal_kunjungan) = ?", [todayStr]);
+    if (branchCode) qKunjunganToday.where("kode_cabang", branchCode);
+    const kunjunganToday = await qKunjunganToday.count("id as count").first();
 
-    const totalPasien = await DB("mst_pasien").count("id as count").first();
-    const totalLayanan = await DB("mst_layanan").where("status", "aktif").count("id as count").first();
+    const qTotalPasien = DB("mst_pasien");
+    if (branchCode) qTotalPasien.where("kode_cabang", branchCode);
+    const totalPasien = await qTotalPasien.count("id as count").first();
+
+    const qTotalLayanan = DB("mst_layanan").where("status", "aktif");
+    if (branchCode) qTotalLayanan.where("kode_cabang", branchCode);
+    const totalLayanan = await qTotalLayanan.count("id as count").first();
 
     const tanggalDari = body.tanggal_dari || null;
     const tanggalSampai = body.tanggal_sampai || null;
 
     // Omzet hari ini (Pelunasan hari ini + DP booking diterima hari ini)
-    const pelunasanToday = await DB("trx_transaksi")
+    const qPelunasanToday = DB("trx_transaksi")
       .whereRaw("DATE(tanggal_transaksi) = ?", [todayStr])
-      .whereIn("status", ["lunas", "selesai"])
-      .sum(DB.raw("COALESCE(sisa_bayar, total_bayar) as total"))
+      .whereIn("status", ["lunas", "selesai"]);
+    if (branchCode) qPelunasanToday.where("kode_cabang", branchCode);
+    const pelunasanToday = await qPelunasanToday
+      .select(DB.raw("SUM(COALESCE(sisa_bayar, total_bayar)) as total"))
       .first();
 
-    const dpReceivedToday = await DB("trx_booking")
+    const qDpReceivedToday = DB("trx_booking")
       .whereRaw("DATE(COALESCE(dp_dibayar_at, created_at)) = ?", [todayStr])
-      .whereIn("dp_status", ["sudah_bayar", "dipotong_treatment", "hangus"])
+      .whereIn("dp_status", ["sudah_bayar", "dipotong_treatment", "hangus"]);
+    if (branchCode) qDpReceivedToday.where("kode_cabang", branchCode);
+    const dpReceivedToday = await qDpReceivedToday
       .sum("dp_nominal as total")
       .first();
 
     const omzetTodayVal = parseFloat(pelunasanToday?.total || 0) + parseFloat(dpReceivedToday?.total || 0);
 
     // Total omzet keseluruhan (Nilai transaksi tindakan lunas + DP hangus)
-    const omzetTrxTotal = await DB("trx_transaksi")
-      .whereIn("status", ["lunas", "selesai"])
+    const qOmzetTrxTotal = DB("trx_transaksi")
+      .whereIn("status", ["lunas", "selesai"]);
+    if (branchCode) qOmzetTrxTotal.where("kode_cabang", branchCode);
+    const omzetTrxTotal = await qOmzetTrxTotal
       .sum("total_bayar as total")
       .first();
 
-    const dpHangusTotal = await DB("trx_booking")
+    const qDpHangusTotal = DB("trx_booking")
       .where("status", "tidak_hadir")
-      .where("dp_status", "hangus")
+      .where("dp_status", "hangus");
+    if (branchCode) qDpHangusTotal.where("kode_cabang", branchCode);
+    const dpHangusTotal = await qDpHangusTotal
       .sum("dp_nominal as total")
       .first();
 
@@ -135,43 +149,53 @@ router.post("/role-data", async (req, res) => {
     }));
 
     // Top Treatment
-    const topTreatments = await DB("trx_detail_antrian_layanan")
-      .select("nama_layanan", "kode_layanan")
-      .count("id as total_sesi")
-      .whereNotNull("nama_layanan")
-      .groupBy("kode_layanan", "nama_layanan")
+    const qTopTreatments = DB("trx_detail_antrian_layanan as dal")
+      .select("dal.nama_layanan", "dal.kode_layanan")
+      .count("dal.id as total_sesi")
+      .whereNotNull("dal.nama_layanan");
+    if (branchCode) {
+      qTopTreatments.join("trx_antrian_layanan as al_top", "dal.kode_antrian_layanan", "al_top.kode_antrian_layanan")
+        .where("al_top.kode_cabang", branchCode);
+    }
+    const topTreatments = await qTopTreatments
+      .groupBy("dal.kode_layanan", "dal.nama_layanan")
       .orderBy("total_sesi", "desc")
       .limit(5);
 
     // Inventory status ringkas
-    const inventorySummary = await DB("mst_produk")
+    const qInventory = DB("mst_produk")
       .select(
         DB.raw("COUNT(id) as total_sku"),
         DB.raw("COALESCE(SUM(harga_beli * stok_tersedia), 0) as total_aset"),
         DB.raw("COALESCE(SUM(CASE WHEN stok_tersedia <= stok_minimum THEN 1 ELSE 0 END), 0) as stok_menipis"),
         DB.raw("COALESCE(SUM(CASE WHEN stok_tersedia <= 0 THEN 1 ELSE 0 END), 0) as stok_habis")
-      )
-      .first();
+      );
+    if (branchCode) qInventory.where("kode_cabang", branchCode);
+    const inventorySummary = await qInventory.first();
 
     // Performa SDM (Dokter & Beautician)
-    const dokterPerforma = await DB("mst_karyawan as k")
+    const qDokter = DB("mst_karyawan as k")
       .leftJoin("trx_rekam_medis as rm", "k.kode_karyawan", "rm.kode_karyawan")
-      .where("k.jabatan", "dokter")
+      .where("k.jabatan", "dokter");
+    if (branchCode) qDokter.where("k.kode_cabang", branchCode);
+    const dokterPerforma = await qDokter
       .select("k.nama", "k.kode_karyawan")
       .count("rm.id as total_konsul")
       .groupBy("k.kode_karyawan", "k.nama")
       .limit(5);
 
-    const beauticianPerforma = await DB("mst_karyawan as k")
+    const qBeautician = DB("mst_karyawan as k")
       .leftJoin("trx_antrian_layanan as al", "k.kode_karyawan", "al.kode_karyawan")
-      .whereIn("k.jabatan", ["perawat", "terapis"])
+      .whereIn("k.jabatan", ["perawat", "terapis"]);
+    if (branchCode) qBeautician.where("k.kode_cabang", branchCode);
+    const beauticianPerforma = await qBeautician
       .select("k.nama", "k.jabatan", "k.kode_karyawan")
       .count("al.id as total_tindakan")
       .groupBy("k.kode_karyawan", "k.nama", "k.jabatan")
       .limit(5);
 
     // ── 2. METRIK DOKTER ──
-    const antreanDokter = await DB("trx_antrian_layanan as al")
+    const qAntreanDokter = DB("trx_antrian_layanan as al")
       .leftJoin("trx_kunjungan as k", "al.kode_kunjungan", "k.kode_kunjungan")
       .leftJoin("mst_pasien as p", "k.no_rm", "p.no_rm")
       .leftJoin("trx_detail_antrian_layanan as dal", "al.kode_antrian_layanan", "dal.kode_antrian_layanan")
@@ -184,11 +208,13 @@ router.post("/role-data", async (req, res) => {
         "al.nama_ruangan",
         "al.status",
         "al.created_at"
-      )
+      );
+    if (branchCode) qAntreanDokter.where("al.kode_cabang", branchCode);
+    const antreanDokter = await qAntreanDokter
       .orderBy("al.created_at", "desc")
       .limit(8);
 
-    const rekamMedisTerbaru = await DB("trx_rekam_medis as rm")
+    const qRekamMedis = DB("trx_rekam_medis as rm")
       .leftJoin("mst_pasien as p", "rm.no_rm", "p.no_rm")
       .leftJoin("mst_karyawan as d", "rm.kode_karyawan", "d.kode_karyawan")
       .select(
@@ -201,12 +227,14 @@ router.post("/role-data", async (req, res) => {
         "rm.plan",
         "rm.created_at as tanggal_pemeriksaan",
         "d.nama as nama_dokter"
-      )
+      );
+    if (branchCode) qRekamMedis.where("rm.kode_cabang", branchCode);
+    const rekamMedisTerbaru = await qRekamMedis
       .orderBy("rm.created_at", "desc")
       .limit(6);
 
     // ── 3. METRIK BEAUTICIAN ──
-    const treatmentBeautician = await DB("trx_antrian_layanan as al")
+    const qTreatmentBeautician = DB("trx_antrian_layanan as al")
       .leftJoin("trx_detail_antrian_layanan as dal", "al.kode_antrian_layanan", "dal.kode_antrian_layanan")
       .leftJoin("trx_kunjungan as k", "al.kode_kunjungan", "k.kode_kunjungan")
       .leftJoin("mst_pasien as p", "k.no_rm", "p.no_rm")
@@ -217,20 +245,24 @@ router.post("/role-data", async (req, res) => {
         "al.nama_ruangan",
         "al.status",
         "al.created_at"
-      )
+      );
+    if (branchCode) qTreatmentBeautician.where("al.kode_cabang", branchCode);
+    const treatmentBeautician = await qTreatmentBeautician
       .orderBy("al.created_at", "desc")
       .limit(8);
 
     // Foto Before After terbaru
-    const fotoBeforeAfter = await DB("trx_rekam_medis_foto as f")
+    const qFoto = DB("trx_rekam_medis_foto as f")
       .leftJoin("trx_rekam_medis as rm", "f.id_rekam_medis", "rm.id")
       .leftJoin("mst_pasien as p", "rm.no_rm", "p.no_rm")
-      .select("f.id", "f.url_foto", "f.tipe", "p.nama as nama_pasien", "f.created_at")
+      .select("f.id", "f.url_foto", "f.tipe", "p.nama as nama_pasien", "f.created_at");
+    if (branchCode) qFoto.where("rm.kode_cabang", branchCode);
+    const fotoBeforeAfter = await qFoto
       .orderBy("f.created_at", "desc")
       .limit(6);
 
     // ── 4. METRIK KASIR ──
-    const transaksiKasir = await DB("trx_transaksi as t")
+    const qTrxKasir = DB("trx_transaksi as t")
       .leftJoin("mst_pasien as p", "t.no_rm", "p.no_rm")
       .select(
         "t.id",
@@ -243,18 +275,21 @@ router.post("/role-data", async (req, res) => {
         "t.total_diskon",
         "t.total_bayar",
         "t.status"
-      )
+      );
+    if (branchCode) qTrxKasir.where("t.kode_cabang", branchCode);
+    const transaksiKasir = await qTrxKasir
       .orderBy("t.created_at", "desc")
       .limit(10);
 
-    const totalTrxKasirToday = await DB("trx_transaksi")
+    const qTotalKasir = DB("trx_transaksi")
       .count("id as total_trx")
       .sum("total_bayar as total_bayar")
-      .sum("total_diskon as total_diskon")
-      .first();
+      .sum("total_diskon as total_diskon");
+    if (branchCode) qTotalKasir.where("kode_cabang", branchCode);
+    const totalTrxKasirToday = await qTotalKasir.first();
 
     // ── 5. METRIK WAREHOUSE ──
-    const stockList = await DB("mst_produk as p")
+    const qStock = DB("mst_produk as p")
       .leftJoin("mst_kategori_produk as kp", "p.kode_kategori_produk", "kp.kode_kategori_produk")
       .select(
         "p.kode_produk",
@@ -266,11 +301,13 @@ router.post("/role-data", async (req, res) => {
         "p.harga_beli",
         "p.harga_jual",
         "p.status"
-      )
+      );
+    if (branchCode) qStock.where("p.kode_cabang", branchCode);
+    const stockList = await qStock
       .orderBy("p.stok_tersedia", "asc")
       .limit(10);
 
-    const purchaseOrders = await DB("trx_purchase_order as po")
+    const qPO = DB("trx_purchase_order as po")
       .leftJoin("mst_supplier as s", "po.kode_supplier", "s.kode_supplier")
       .select(
         "po.id",
@@ -279,7 +316,9 @@ router.post("/role-data", async (req, res) => {
         "po.tanggal_po",
         "po.total_po",
         "po.status"
-      )
+      );
+    if (branchCode) qPO.where("po.kode_cabang", branchCode);
+    const purchaseOrders = await qPO
       .orderBy("po.tanggal_po", "desc")
       .limit(6);
 

@@ -26,6 +26,7 @@ import {
   validatePayload,
 } from "../../components/tools/servertool.js";
 import { formatDateSystem } from "../../components/tools/date_tools.js";
+import { getBranchScope } from "../../components/tools/branch_scope.js";
 
 const router = express.Router();
 
@@ -54,6 +55,7 @@ router.post("/", async (req, res) => {
   const { body } = req;
   const oPayload = body;
   const username = req?.auth?.username || "";
+  const branchCode = getBranchScope(req, oPayload?.kode_cabang);
 
   try {
     if (!oPayload || Object.keys(oPayload).length < 1) {
@@ -95,8 +97,10 @@ router.post("/", async (req, res) => {
     let updatedRecord = null;
 
     await DB.transaction(async (trx) => {
-      const record = await trx("trx_antrian_awal")
-        .where("kode_antrian_awal", oPayload.kode_antrian)
+      let qRecord = trx("trx_antrian_awal")
+        .where("kode_antrian_awal", oPayload.kode_antrian);
+      if (branchCode) qRecord = qRecord.andWhere("kode_cabang", branchCode);
+      const record = await qRecord
         .forUpdate()
         .first();
 
@@ -123,12 +127,14 @@ router.post("/", async (req, res) => {
         throw error;
       }
 
-      // Validasi: Cegah memanggil antrean baru jika masih ada antrean lain yang sedang dipanggil (belum selesai)
+      // Validasi: Cegah memanggil antrean baru jika masih ada antrean lain yang sedang dipanggil (belum selesai) pada cabang yang sama
       if (aksi === "dipanggil") {
-        const existingDipanggil = await trx("trx_antrian_awal")
+        const effectiveBranch = record.kode_cabang || branchCode;
+        let qDipanggil = trx("trx_antrian_awal")
           .where("status", "dipanggil")
-          .where("kode_antrian_awal", "!=", oPayload.kode_antrian)
-          .first();
+          .where("kode_antrian_awal", "!=", oPayload.kode_antrian);
+        if (effectiveBranch) qDipanggil = qDipanggil.andWhere("kode_cabang", effectiveBranch);
+        const existingDipanggil = await qDipanggil.first();
 
         if (existingDipanggil) {
           const error = new Error(

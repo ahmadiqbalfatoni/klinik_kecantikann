@@ -76,8 +76,10 @@ export async function syncRekamMedisPerAntrian({
     }
 
     const now = formatDateSystem();
+    const resolvedCabangRM = kunjungan?.kode_cabang || "CBG-001";
     if (!existingHeaderRM) {
       const [insertedHeaderId] = await db("trx_rekam_medis").insert({
+        kode_cabang: resolvedCabangRM,
         kode_rekam_medis: `RKM-${Date.now()}`,
         kode_kunjungan,
         kode_antrian_layanan: kode_antrian_layanan || null,
@@ -101,6 +103,9 @@ export async function syncRekamMedisPerAntrian({
       updated_by: username,
       updated_at: new Date(),
     };
+    if (existingHeaderRM && !existingHeaderRM.kode_cabang && resolvedCabangRM) {
+      headerUpdate.kode_cabang = resolvedCabangRM;
+    }
     if (resolvedKodeKaryawan) headerUpdate.kode_karyawan = resolvedKodeKaryawan;
     if (resolvedNoSip !== "-") headerUpdate.no_sip = resolvedNoSip;
 

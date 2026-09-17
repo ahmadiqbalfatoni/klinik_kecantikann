@@ -42,6 +42,8 @@ app.use(
         allowedOrigins.includes("*") ||
         allowedOrigins.includes(origin) ||
         origin.endsWith(".up.railway.app") ||
+        origin.endsWith(".railway.app") ||
+        origin.endsWith(".vercel.app") ||
         origin.includes("localhost") ||
         origin.includes("127.0.0.1")
       ) {

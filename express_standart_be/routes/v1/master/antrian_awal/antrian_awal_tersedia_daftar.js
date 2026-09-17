@@ -19,16 +19,22 @@ import DB from "../../../../core/config/knex.js";
 import { formatDateSystem } from "../../components/tools/date_tools.js";
 import { Logging } from "../../components/tools/servertool.js";
 import { status } from "../../components/tools/general.js";
+import { getBranchScope } from "../../components/tools/branch_scope.js";
 
 const router = express.Router();
 
 router.post("/", async (req, res) => {
   const { body } = req;
+  const oPayload = body || {};
   const username = req?.auth?.username || "";
+  const branchCode = getBranchScope(req, oPayload.kode_cabang);
 
   try {
-    const vaData = await DB("trx_antrian_awal")
-      .where("status", "dipanggil")
+    let q = DB("trx_antrian_awal").where("status", "dipanggil");
+    if (branchCode) {
+      q = q.andWhere("kode_cabang", branchCode);
+    }
+    const vaData = await q
       .select("kode_antrian_awal as kode_antrian", "nomor_antrian as no_antrian", "status")
       .orderBy("nomor_antrian", "asc");
 

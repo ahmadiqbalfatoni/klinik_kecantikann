@@ -40,6 +40,7 @@ export const DialogIsiFormPenanganan: React.FC<DialogIsiFormPenangananProps> = (
     const [formData, setFormData] = useState<Record<string, any>>({});
     const [catatanPetugas, setCatatanPetugas] = useState<string>('');
     const [rekomendasiItems, setRekomendasiItems] = useState<RekomendasiItem[]>([]);
+    const [resepProdukDokter, setResepProdukDokter] = useState<any[]>([]);
     const [saving, setSaving] = useState<boolean>(false);
 
     // Form baku trx_rekam_medis_ruangan
@@ -90,6 +91,17 @@ export const DialogIsiFormPenanganan: React.FC<DialogIsiFormPenangananProps> = (
                 loadPendaftaranItems();
             } else {
                 setRekomendasiItems([]);
+            }
+
+            // Load rekomendasi produk dokter jika ada
+            if (Array.isArray(antrianData.rekomendasi_produk_dokter) && antrianData.rekomendasi_produk_dokter.length > 0) {
+                setResepProdukDokter(antrianData.rekomendasi_produk_dokter);
+            } else if (antrianData.kode_kunjungan) {
+                postData('/master/kunjungan-produk-rekomendasi', { kode_kunjungan: antrianData.kode_kunjungan })
+                    .then((res) => setResepProdukDokter(res.data?.data || []))
+                    .catch(() => setResepProdukDokter([]));
+            } else {
+                setResepProdukDokter([]);
             }
 
             // Prefill Header RM jika ada data konsultasi asal
@@ -340,6 +352,75 @@ export const DialogIsiFormPenanganan: React.FC<DialogIsiFormPenangananProps> = (
                             />
                         </div>
                     </div>
+
+                    {/* IF RUANG TINDAKAN: DISPLAY FORM HASIL KONSULTASI & PRODUK DOKTER (READ-ONLY) */}
+                    {!isKonsultasi && (antrianData?.kode_antrian_asal || (antrianData as any)?.data_konsultasi_diagnosis || (antrianData as any)?.data_konsultasi_keluhan || resepProdukDokter.length > 0) && (
+                        <div className="surface-card p-3 border-round-xl border-1 surface-border shadow-1 flex flex-column gap-3">
+                            {((antrianData as any)?.data_konsultasi_keluhan || (antrianData as any)?.data_konsultasi_diagnosis || (antrianData as any)?.data_konsultasi_plan) && (
+                                <div>
+                                    <label className="block text-xs font-bold text-teal-800 uppercase tracking-wider mb-2 pb-2 border-bottom-1 surface-border flex align-items-center gap-2">
+                                        <i className="pi pi-file-edit text-teal-600" />
+                                        FORM HASIL KONSULTASI DOKTER (DARI SESI KONSULTASI)
+                                    </label>
+                                    <div className="grid text-xs">
+                                        <div className="col-12 md:col-6 mb-2">
+                                            <span className="font-semibold text-color-secondary block mb-1">Keluhan Utama:</span>
+                                            <span className="font-bold text-900 text-sm block">{(antrianData as any)?.data_konsultasi_keluhan || '-'}</span>
+                                        </div>
+                                        <div className="col-12 md:col-6 mb-2">
+                                            <span className="font-semibold text-color-secondary block mb-1">Riwayat Alergi:</span>
+                                            <span className="font-bold text-red-600 text-sm block">{(antrianData as any)?.data_konsultasi_riwayat_alergi || 'Tidak Ada'}</span>
+                                        </div>
+                                        <div className="col-12 md:col-6 mb-2">
+                                            <span className="font-semibold text-color-secondary block mb-1">Diagnosis Dokter:</span>
+                                            <span className="font-bold text-900 text-sm block">{(antrianData as any)?.data_konsultasi_diagnosis || '-'}</span>
+                                        </div>
+                                        <div className="col-12 md:col-6 mb-2">
+                                            <span className="font-semibold text-color-secondary block mb-1">Rencana Penanganan (SOAP Plan):</span>
+                                            <span className="font-bold text-900 text-sm block">{(antrianData as any)?.data_konsultasi_plan || (antrianData as any)?.data_konsultasi_assessment || '-'}</span>
+                                        </div>
+                                    </div>
+                                </div>
+                            )}
+
+                            {resepProdukDokter.length > 0 && (
+                                <div className={((antrianData as any)?.data_konsultasi_keluhan || (antrianData as any)?.data_konsultasi_diagnosis) ? "border-top-1 surface-border pt-2" : ""}>
+                                    <div className="flex align-items-center justify-content-between mb-2">
+                                        <label className="text-xs font-bold text-amber-800 uppercase tracking-wider flex align-items-center gap-2 m-0">
+                                            <i className="pi pi-shopping-bag text-amber-600" />
+                                            PRODUK &amp; RESEP PILIHAN DOKTER KONSULTASI
+                                        </label>
+                                        <Tag value={`${resepProdukDokter.length} Produk`} severity="warning" className="text-[10px] font-bold" />
+                                    </div>
+                                    <div className="grid">
+                                        {resepProdukDokter.map((prod: any, idx: number) => {
+                                            const hrg = parseFloat(prod.harga || prod.harga_jual || 0);
+                                            const qty = parseInt(prod.qty || 1, 10);
+                                            return (
+                                                <div key={idx} className="col-12 md:col-6 mb-2">
+                                                    <div className="p-2 border-round-lg border-1 border-amber-200 bg-amber-50/50 flex align-items-center justify-content-between gap-2 text-xs">
+                                                        <div className="min-w-0 pr-1">
+                                                            <span className="font-bold text-900 block truncate" title={prod.nama_produk || prod.nama}>
+                                                                {prod.nama_produk || prod.nama}
+                                                            </span>
+                                                            <span className="text-[11px] text-600 block">
+                                                                {prod.kode_produk} • {new Intl.NumberFormat('id-ID', { style: 'currency', currency: 'IDR', maximumFractionDigits: 0 }).format(hrg)}
+                                                            </span>
+                                                        </div>
+                                                        <div className="text-right flex-shrink-0">
+                                                            <span className="bg-amber-600 text-white font-bold text-[11px] px-2 py-0.5 border-round">
+                                                                {qty} {prod.satuan || 'pcs'}
+                                                            </span>
+                                                        </div>
+                                                    </div>
+                                                </div>
+                                            );
+                                        })}
+                                    </div>
+                                </div>
+                            )}
+                        </div>
+                    )}
 
                     {/* IF KONSULTASI: HEADER RM & ANAMNESIS & DIAGNOSIS & CONTROL LANJUT KE TREATMENT */}
                     {isKonsultasi && (

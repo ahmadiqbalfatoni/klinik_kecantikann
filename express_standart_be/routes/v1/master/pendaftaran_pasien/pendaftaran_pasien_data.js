@@ -13,12 +13,14 @@ import DB from "../../../../core/config/knex.js";
 import { formatDateSystem } from "../../components/tools/date_tools.js";
 import { Logging } from "../../components/tools/servertool.js";
 import { status } from "../../components/tools/general.js";
+import { getBranchScope } from "../../components/tools/branch_scope.js";
 
 const router = express.Router();
 
 const handleGetData = async (req, res) => {
   const oPayload = { ...req.query, ...req.body };
   const username = req?.auth?.username || "";
+  const branchCode = getBranchScope(req, oPayload.kode_cabang);
 
   const hasPagination = oPayload.page !== undefined || oPayload.perPage !== undefined;
   const keyword = (oPayload.keyword || "").trim();
@@ -35,6 +37,9 @@ const handleGetData = async (req, res) => {
       .leftJoin("trx_detail_antrian_layanan as dal", "k.kode_kunjungan", "dal.kode_kunjungan")
       .groupBy("k.id", "p.id", "a.id")
       .modify((qb) => {
+        if (branchCode) {
+          qb.where("k.kode_cabang", branchCode);
+        }
         if (filterTanggal) {
           qb.where("k.tanggal_kunjungan", filterTanggal);
         }

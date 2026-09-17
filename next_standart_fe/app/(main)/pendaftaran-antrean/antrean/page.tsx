@@ -22,6 +22,12 @@ const AntreanLayananPage = () => {
     const [selectedRuangan, setSelectedRuangan] = useState<string>(ruanganParam);
 
     useEffect(() => {
+        if (session?.user?.role === 'superadmin') {
+            router.replace('/dashboard');
+        }
+    }, [session, router]);
+
+    useEffect(() => {
         setSelectedRuangan(ruanganParam);
     }, [ruanganParam]);
 
@@ -82,18 +88,18 @@ const AntreanLayananPage = () => {
     const isKonsul = typeParam === 'konsul';
 
     return (
-        <div className="p-4">
+        <>
             <Toast ref={toast} position="top-right" />
 
             {/* Title Card Header */}
             <div className="card p-0 mb-3 border-round-xl surface-border shadow-1 overflow-hidden">
-                <div className={`p-4 border-bottom-1 surface-border ${isKonsul ? 'bg-teal-50' : 'bg-blue-50'} flex flex-column sm:flex-row align-items-start sm:align-items-center justify-content-between gap-3`}>
+                <div className={`px-4 py-3 border-bottom-1 surface-border ${isKonsul ? 'bg-teal-50' : 'bg-blue-50'} flex flex-column sm:flex-row align-items-start sm:align-items-center justify-content-between gap-3`}>
                     <div>
-                        <h2 className={`text-3xl font-bold flex align-items-center gap-2 mb-1 ${isKonsul ? 'text-teal-900' : 'text-blue-900'}`}>
-                            <i className={`pi ${isKonsul ? 'pi-comments text-teal-600' : 'pi-sparkles text-blue-600'} text-3xl`} />
+                        <h2 className={`text-xl sm:text-2xl font-bold flex align-items-center gap-2 mb-1 ${isKonsul ? 'text-teal-900' : 'text-blue-900'}`}>
+                            <i className={`pi ${isKonsul ? 'pi-comments text-teal-600' : 'pi-sparkles text-blue-600'} text-2xl`} />
                             {isKonsul ? 'Panel Antrean Konsultasi Pasien' : 'Panel Antrean Layanan & Tindakan Pasien'}
                         </h2>
-                        <p className="text-color-secondary m-0 text-sm">
+                        <p className="text-color-secondary m-0 text-xs sm:text-sm">
                             {isKonsul
                                 ? 'Kelola dan panggil nomor antrean konsultasi dokter pasien berdasar lokasi ruangan konsultasi secara real-time.'
                                 : 'Kelola dan panggil nomor antrean tindakan pasien berdasar lokasi ruangan tindakan secara real-time.'}
@@ -105,7 +111,7 @@ const AntreanLayananPage = () => {
                             type="button"
                             label="Kembali ke Daftar Ruangan"
                             icon="pi pi-arrow-left"
-                            className="font-bold text-xs border-round-lg shadow-2 bg-white text-teal-800 border-1 border-teal-300 hover:bg-teal-100 hover:border-teal-400 py-2.5 px-3 flex-shrink-0 transition-all"
+                            className="font-bold text-xs border-round-lg shadow-2 bg-white text-teal-800 border-1 border-teal-300 hover:bg-teal-100 hover:border-teal-400 py-2 px-3 flex-shrink-0 transition-all"
                             onClick={handleBackToList}
                         />
                     )}
@@ -123,7 +129,7 @@ const AntreanLayananPage = () => {
                 setSelectedRuangan={setSelectedRuangan}
                 handleBackToList={handleBackToList}
             />
-        </div>
+        </>
     );
 };
 

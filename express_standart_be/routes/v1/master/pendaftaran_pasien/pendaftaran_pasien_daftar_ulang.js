@@ -13,6 +13,7 @@ import DB from "../../../../core/config/knex.js";
 import { formatDateSystem } from "../../components/tools/date_tools.js";
 import { Logging } from "../../components/tools/servertool.js";
 import { status } from "../../components/tools/general.js";
+import { getBranchScope } from "../../components/tools/branch_scope.js";
 
 const router = express.Router();
 
@@ -20,6 +21,7 @@ router.post("/", async (req, res) => {
   const { body } = req;
   const oPayload = body || {};
   const username = req?.auth?.username || "system";
+  const branchCode = getBranchScope(req, oPayload.kode_cabang);
 
   try {
     const no_rm = (oPayload.no_rm || "").trim();
@@ -33,10 +35,11 @@ router.post("/", async (req, res) => {
     }
 
     // Validasi Pasien Terdaftar
-    const pasien = await DB("mst_pasien")
+    let pasienQuery = DB("mst_pasien")
       .where("no_rm", no_rm)
-      .where("status", "aktif")
-      .first();
+      .where("status", "aktif");
+    if (branchCode) pasienQuery = pasienQuery.where("kode_cabang", branchCode);
+    const pasien = await pasienQuery.first();
 
     if (!pasien) {
       return res.status(404).json({

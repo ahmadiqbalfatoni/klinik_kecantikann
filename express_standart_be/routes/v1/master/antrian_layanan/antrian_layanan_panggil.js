@@ -14,13 +14,17 @@ import DB from "../../../../core/config/knex.js";
 import { formatDateSystem } from "../../components/tools/date_tools.js";
 import { Logging, ChangesLog } from "../../components/tools/servertool.js";
 import { status } from "../../components/tools/general.js";
+import { getBranchScope } from "../../components/tools/branch_scope.js";
 import { syncRekamMedisPerAntrian } from "../ruangan/rekam_medis_service.js";
+import { terbitkanAntreanLanjutanRuangan } from "../ruangan/antrian_lanjutan_service.js";
+import { syncCompletedItemsToKasirDraft } from "../kasir/kasir_sync_service.js";
 
 const router = express.Router();
 
 router.post("/", async (req, res) => {
   const oPayload = { ...req.query, ...req.body };
   const username = req?.auth?.username || "";
+  const branchCode = getBranchScope(req, oPayload.kode_cabang);
 
   try {
     const cValidation = await Joi.object({
@@ -39,8 +43,10 @@ router.post("/", async (req, res) => {
     let updatedRecord = null;
 
     await DB.transaction(async (trx) => {
-      const record = await trx("trx_antrian_layanan")
-        .where("kode_antrian_layanan", kodeAntrian)
+      let qRecord = trx("trx_antrian_layanan")
+        .where("kode_antrian_layanan", kodeAntrian);
+      if (branchCode) qRecord = qRecord.andWhere("kode_cabang", branchCode);
+      const record = await qRecord
         .forUpdate()
         .first();
 
@@ -78,171 +84,89 @@ router.post("/", async (req, res) => {
 
       updatedRecord = { ...record, ...updateData };
 
-      // ─── BUAT / SINKRONKAN DRAFT TRANSAKSI KASIR SAAT STATUS SELESAI ───────────
+      // ─── PROSES TINDAKAN LANJUTAN ATAU DRAFT TRANSAKSI KASIR SAAT SELESAI ───
       if (aksi === "selesai" && record.kode_kunjungan) {
         const kodeKunjungan = record.kode_kunjungan;
         const todayStr = new Date().toISOString().slice(0, 10).replace(/-/g, "");
         const todayYmd = new Date().toISOString().slice(0, 10);
 
-        // 1. Cek apakah sudah ada transaksi lunas untuk kunjungan ini
-        const lunasTrx = await trx("trx_transaksi")
-          .where("kode_kunjungan", kodeKunjungan)
-          .where("status", "lunas")
-          .first();
+        // Periksa apakah antrean ini adalah sesi konsultasi yang berlanjut ke ruang tindakan
+        let isKonsulLanjut = record.lanjut_ke_tindakan === 1 || Boolean(record.kode_ruangan_tujuan_lanjutan);
 
-        if (!lunasTrx) {
-          // 2. Cari atau buat draf transaksi
-          let draftTrx = await trx("trx_transaksi")
-            .where("kode_kunjungan", kodeKunjungan)
-            .where("status", "draft")
+        // Fallback untuk antrean lama (backward-compatibility)
+        if (!isKonsulLanjut && record.kode_ruangan) {
+          const roomInfo = await trx("mst_ruangan")
+            .where("kode_ruangan", record.kode_ruangan)
+            .select("is_konsultasi")
             .first();
 
-          let createdTransaksiKode = "";
-
-          if (draftTrx) {
-            createdTransaksiKode = draftTrx.kode_transaksi;
-          } else {
-            const prefixTrx = `TRX-${todayStr}-`;
-            const lastTrx = await trx("trx_transaksi")
-              .where("kode_transaksi", "like", `${prefixTrx}%`)
-              .orderBy("id", "desc")
-              .first();
-
-            let nextTrxSeq = 1;
-            if (lastTrx && lastTrx.kode_transaksi) {
-              const parts = lastTrx.kode_transaksi.split("-");
-              const num = parseInt(parts[parts.length - 1], 10);
-              if (!isNaN(num)) nextTrxSeq = num + 1;
-            }
-            createdTransaksiKode = `${prefixTrx}${String(nextTrxSeq).padStart(3, "0")}`;
-
-            const kunjunganData = await trx("trx_kunjungan")
-              .where("kode_kunjungan", kodeKunjungan)
-              .select("no_rm")
-              .first();
-            const resolvedNoRm = kunjunganData ? kunjunganData.no_rm : null;
-
-            const newTrx = {
-              kode_transaksi: createdTransaksiKode,
-              kode_kunjungan: kodeKunjungan,
-              no_rm: resolvedNoRm,
-              kode_rekam_medis: null,
-              tanggal_transaksi: todayYmd,
-              total_harga: 0,
-              total_diskon: 0,
-              total_bayar: 0,
-              metode_bayar: "tunai",
-              status: "draft",
-              tz: oPayload.tz || record.tz || "Asia/Jakarta",
-              created_by: username,
-              created_at: formatDateSystem(),
-              updated_by: username,
-              updated_at: formatDateSystem(),
-            };
-
-            await trx("trx_transaksi").insert(newTrx);
-          }
-
-          // 3. Ambil SEMUA item layanan dari antrian kunjungan ini yang berstatus 'selesai'
-          const completedItems = await trx("trx_detail_antrian_layanan as dal")
-            .join("trx_antrian_layanan as al", "dal.kode_antrian_layanan", "al.kode_antrian_layanan")
-            .where("al.kode_kunjungan", kodeKunjungan)
-            .where("al.status", "selesai")
-            .select(
-              "dal.id",
-              "dal.kode_detail_antrian_layanan",
-              "dal.kode_antrian_layanan",
-              "dal.kode_layanan",
-              "dal.nama_layanan",
-              "dal.harga",
-              "dal.jenis_layanan"
-            )
-            .orderBy("dal.id", "asc");
-
-          // 4. Sinkronkan ke trx_detail_transaksi secara idempotent (lacak kuantitas)
-          const existingDetails = await trx("trx_detail_transaksi")
-            .where("kode_transaksi", createdTransaksiKode);
-
-          const existingCounts = {};
-          existingDetails.forEach((d) => {
-            if (d.kode_layanan) {
-              existingCounts[d.kode_layanan] = (existingCounts[d.kode_layanan] || 0) + 1;
-            }
-          });
-
-          const prefixDetail = `DT-${todayStr}-`;
-          const lastDetail = await trx("trx_detail_transaksi")
-            .where("kode_detail_transaksi", "like", `${prefixDetail}%`)
-            .orderBy("id", "desc")
-            .first();
-
-          let nextDetailSeq = 1;
-          if (lastDetail && lastDetail.kode_detail_transaksi) {
-            const parts = lastDetail.kode_detail_transaksi.split("-");
-            const num = parseInt(parts[parts.length - 1], 10);
-            if (!isNaN(num)) nextDetailSeq = num + 1;
-          }
-
-          for (const item of completedItems) {
-            if (item.kode_layanan) {
-              const currentCount = existingCounts[item.kode_layanan] || 0;
-              if (currentCount > 0) {
-                existingCounts[item.kode_layanan]--;
-              } else {
-                const cKodeDetail = `${prefixDetail}${String(nextDetailSeq).padStart(3, "0")}`;
-                nextDetailSeq++;
-                const isKlaim = (item.jenis_layanan || "").toLowerCase() === "klaim_paket";
-                const hargaSatuan = isKlaim ? 0 : parseFloat(item.harga || 0);
-
-                await trx("trx_detail_transaksi").insert({
-                  kode_detail_transaksi: cKodeDetail,
-                  kode_transaksi: createdTransaksiKode,
-                  kode_layanan: item.kode_layanan,
-                  kode_produk: null,
-                  qty: 1,
-                  harga_satuan: hargaSatuan,
-                  subtotal: hargaSatuan,
-                  is_from_pendaftaran: 1,
-                  tz: oPayload.tz || record.tz || "Asia/Jakarta",
-                  created_by: username,
-                  created_at: formatDateSystem(),
-                  updated_by: username,
-                  updated_at: formatDateSystem(),
+          if (roomInfo && roomInfo.is_konsultasi === 1) {
+            const detailAsalKunjungan = await trx("trx_detail_antrian_layanan as dal")
+              .leftJoin("mst_layanan as l", "dal.kode_layanan", "l.kode_layanan")
+              .leftJoin("mst_ruangan as r_lay", "l.kode_ruangan", "r_lay.kode_ruangan")
+              .leftJoin("mst_paket_layanan as p", "dal.kode_layanan", "p.kode_paket_layanan")
+              .leftJoin("mst_ruangan as r_pkt", "p.kode_ruangan", "r_pkt.kode_ruangan")
+              .where("dal.kode_antrian_layanan", kodeAntrian)
+              .whereNotIn("dal.jenis_layanan", ["produk", "paket_produk"])
+              .where(function () {
+                this.where(function () {
+                  this.whereNotNull("l.kode_ruangan")
+                    .whereNot("l.kode_ruangan", record.kode_ruangan)
+                    .andWhere(function () {
+                      this.whereNull("r_lay.is_konsultasi").orWhere("r_lay.is_konsultasi", 0);
+                    });
+                }).orWhere(function () {
+                  this.whereNotNull("p.kode_ruangan")
+                    .whereNot("p.kode_ruangan", record.kode_ruangan)
+                    .andWhere(function () {
+                      this.whereNull("r_pkt.is_konsultasi").orWhere("r_pkt.is_konsultasi", 0);
+                    });
                 });
-              }
+              })
+              .select("dal.id", "l.kode_ruangan as lay_ruangan", "p.kode_ruangan as pkt_ruangan")
+              .first();
+
+            if (detailAsalKunjungan && (detailAsalKunjungan.lay_ruangan || detailAsalKunjungan.pkt_ruangan)) {
+              isKonsulLanjut = true;
             }
           }
-
-          // 5. Hitung total_harga & total_bayar
-          const sumResult = await trx("trx_detail_transaksi")
-            .where("kode_transaksi", createdTransaksiKode)
-            .sum("subtotal as total");
-
-          const grandTotal = parseFloat(sumResult[0]?.total || 0);
-
-          await trx("trx_transaksi")
-            .where("kode_transaksi", createdTransaksiKode)
-            .update({
-              total_harga: grandTotal,
-              total_bayar: grandTotal,
-              updated_by: username,
-              updated_at: formatDateSystem(),
-            });
         }
 
-        // 6. Cek apakah SEMUA antrean kunjungan ini sudah selesai/batal, update trx_kunjungan
-        const allAntrian = await trx("trx_antrian_layanan")
-          .where("kode_kunjungan", kodeKunjungan)
-          .select("status");
+        let referralsCreated = [];
+        if (isKonsulLanjut) {
+          referralsCreated = await terbitkanAntreanLanjutanRuangan(trx, {
+            currentAntrian: record,
+            kodeKunjungan,
+            username,
+            rekomendasiItems: [],
+            tz: oPayload.tz || record.tz || "Asia/Jakarta",
+          });
+        }
 
-        if (allAntrian.length > 0 && allAntrian.every((a) => a.status === "selesai" || a.status === "batal")) {
-          await trx("trx_kunjungan")
+        // Draf transaksi kasir & penutupan kunjungan HANYA dieksekusi jika BUKAN konsultasi berlanjut ke tindakan
+        // (atau jika tidak ada rujukan yang berhasil dibuat)
+        if (!isKonsulLanjut || referralsCreated.length === 0) {
+          // 1. Sinkronisasi terpusat ke draf transaksi Kasir
+          await syncCompletedItemsToKasirDraft(trx, {
+            kodeKunjungan,
+            username,
+            tz: oPayload.tz || record.tz || "Asia/Jakarta",
+          });
+
+          // 6. Cek apakah SEMUA antrean kunjungan ini sudah selesai/batal, update trx_kunjungan
+          const allAntrian = await trx("trx_antrian_layanan")
             .where("kode_kunjungan", kodeKunjungan)
-            .update({
-              status: "selesai",
-              updated_by: username,
-              updated_at: formatDateSystem(),
-            });
+            .select("status");
+
+          if (allAntrian.length > 0 && allAntrian.every((a) => a.status === "selesai" || a.status === "batal")) {
+            await trx("trx_kunjungan")
+              .where("kode_kunjungan", kodeKunjungan)
+              .update({
+                status: "selesai",
+                updated_by: username,
+                updated_at: formatDateSystem(),
+              });
+          }
         }
       }
 

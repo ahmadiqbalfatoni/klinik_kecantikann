@@ -3,6 +3,7 @@ import DB from "../../../../core/config/knex.js";
 import { formatDateSystem } from "../../components/tools/date_tools.js";
 import { Logging } from "../../components/tools/servertool.js";
 import { status } from "../../components/tools/general.js";
+import { getBranchScope } from "../../components/tools/branch_scope.js";
 const router = express.Router();
 router.post("/", async (req, res) => {
   const oPayload = req.body;
@@ -14,12 +15,14 @@ router.post("/", async (req, res) => {
   const perPage = parseInt(oPayload.perPage) || 10;
   const hasPagination = oPayload.page !== undefined || oPayload.perPage !== undefined;
   try {
+    const branchCode = getBranchScope(req, oPayload.kode_cabang);
     const baseQuery = DB("mst_karyawan as k").modify((qb) => {
+      if (branchCode) qb.where("k.kode_cabang", branchCode);
       if (keyword) { const lower = keyword.toLowerCase(); qb.where(function () { this.whereRaw("LOWER(k.kode_karyawan) LIKE ?", [`%${lower}%`]).orWhereRaw("LOWER(k.no_sip) LIKE ?", [`%${lower}%`]).orWhereRaw("LOWER(k.nama) LIKE ?", [`%${lower}%`]).orWhereRaw("LOWER(k.jabatan) LIKE ?", [`%${lower}%`]); }); }
       if (filterStatus) qb.where("k.status", filterStatus);
       if (filterJabatan) qb.where("k.jabatan", filterJabatan);
     });
-    const selectFields = ["k.id", "k.kode_karyawan", "k.no_sip", "k.kode_user", "k.nama", "k.jabatan", "k.no_hp", "k.email", "k.status", "k.created_by", "k.created_at", "k.updated_at"];
+    const selectFields = ["k.id", "k.kode_karyawan", "k.kode_cabang", "k.no_sip", "k.kode_user", "k.nama", "k.jabatan", "k.no_hp", "k.email", "k.status", "k.created_by", "k.created_at", "k.updated_at"];
     let totalRecords = 0, vaData = [];
     if (hasPagination) {
       const offset = (page - 1) * perPage;

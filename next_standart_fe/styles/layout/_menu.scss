@@ -2,16 +2,68 @@
     position: fixed;
     width: 250px;
     height: calc(100vh - 9rem);
+    max-height: calc(100vh - 9rem);
     z-index: 999;
-    overflow-y: auto;
     user-select: none;
     top: 7rem;
     left: 2rem;
     transition: transform $transitionDuration, left $transitionDuration;
     background-color: var(--surface-overlay);
     border-radius: $borderRadius;
-    padding: 0.5rem 1.5rem;
+    padding: 0.75rem 0.5rem 0.75rem 1.25rem;
     box-shadow: 0px 3px 5px rgba(0, 0, 0, .02), 0px 0px 2px rgba(0, 0, 0, .05), 0px 1px 4px rgba(0, 0, 0, .08);
+    display: flex;
+    flex-direction: column;
+    overflow: hidden;
+
+    .layout-sidebar-search {
+        display: flex;
+        width: 100%;
+        justify-content: center;
+        align-items: center;
+        padding: 0.25rem 0.75rem 0.75rem 0;
+        flex-shrink: 0;
+    }
+
+    .layout-menu-container {
+        flex: 1 1 auto;
+        min-height: 0;
+        overflow-y: auto;
+        overflow-x: hidden;
+        overscroll-behavior: contain;
+        overflow-anchor: none;
+        padding-right: 0.75rem;
+
+        /* Clean modern scrollbar: hidden by default, subtle on hover */
+        scrollbar-width: thin;
+        scrollbar-color: transparent transparent;
+
+        &:hover {
+            scrollbar-color: rgba(0, 0, 0, 0.15) transparent;
+        }
+
+        &::-webkit-scrollbar {
+            width: 4px;
+        }
+
+        &::-webkit-scrollbar-track {
+            background: transparent;
+        }
+
+        &::-webkit-scrollbar-thumb {
+            background: transparent;
+            border-radius: 4px;
+            transition: background 0.2s ease;
+        }
+
+        &:hover::-webkit-scrollbar-thumb {
+            background: rgba(0, 0, 0, 0.15);
+        }
+
+        &:hover::-webkit-scrollbar-thumb:hover {
+            background: rgba(0, 0, 0, 0.3);
+        }
+    }
 }
 
 .layout-menu {
@@ -42,7 +94,46 @@
         }
 
         > ul {
-            max-height: auto;
+            max-height: none;
+        }
+    }
+
+    .laporan-accordion-wrapper {
+        display: grid;
+        grid-template-rows: 0fr;
+        transition: grid-template-rows 0.32s cubic-bezier(0.25, 1, 0.5, 1);
+        overflow: hidden !important;
+        overflow-anchor: none;
+
+        &.is-open {
+            grid-template-rows: 1fr;
+        }
+
+        &.is-closed {
+            grid-template-rows: 0fr;
+            pointer-events: none;
+        }
+
+        .laporan-accordion-inner {
+            min-height: 0;
+            overflow: hidden;
+            transition: opacity 0.25s ease;
+        }
+
+        &.is-open .laporan-accordion-inner {
+            opacity: 1;
+        }
+
+        &.is-closed .laporan-accordion-inner {
+            opacity: 0;
+        }
+
+        .laporan-dropdown-submenu {
+            list-style: none;
+            margin: 0.25rem 0 0.5rem 0;
+            padding: 0 0 0 0.5rem;
+            overflow: visible !important;
+            max-height: none !important;
         }
     }
 

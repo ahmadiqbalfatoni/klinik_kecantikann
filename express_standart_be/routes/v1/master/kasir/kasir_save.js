@@ -8,6 +8,7 @@ import DB from "../../../../core/config/knex.js";
 import { formatDateSystem } from "../../components/tools/date_tools.js";
 import { Logging } from "../../components/tools/servertool.js";
 import { status } from "../../components/tools/general.js";
+import { getBranchScope } from "../../components/tools/branch_scope.js";
 
 const router = express.Router();
 
@@ -140,6 +141,8 @@ router.post("/", async (req, res) => {
 
     let sisa_bayar = Math.max(0, total_bayar - dp_nominal);
 
+    let currentTrxCabang = getBranchScope(req, body.kode_cabang) || "CBG-001";
+
     if (kode_trx) {
       // UPDATE existing draft
       const existing = await trx("trx_transaksi").where("kode_transaksi", kode_trx).first();
@@ -152,6 +155,8 @@ router.post("/", async (req, res) => {
         return res.status(400).json({ status: status.BAD_REQUEST, message: "Transaksi sudah lunas, tidak bisa diubah", datetime: formatDateSystem() });
       }
 
+      currentTrxCabang = existing.kode_cabang || currentTrxCabang;
+
       // Jika transaksi ini khusus produk saja, filter ulang items (hapus layanan)
       if (existing.is_product_only) {
         items = items.filter((item) => item.jenis === "produk");
@@ -162,6 +167,7 @@ router.post("/", async (req, res) => {
       }
 
       await trx("trx_transaksi").where("kode_transaksi", kode_trx).update({
+        kode_cabang: currentTrxCabang,
         kode_kunjungan: kode_kunjungan || existing.kode_kunjungan,
         kode_promo: validKodePromoStr,
         total_harga,
@@ -182,6 +188,7 @@ router.post("/", async (req, res) => {
       // CREATE baru
       kode_trx = await generateKode("TRX", "trx_transaksi", "kode_transaksi");
       await trx("trx_transaksi").insert({
+        kode_cabang: currentTrxCabang,
         kode_transaksi: kode_trx,
         kode_kunjungan: kode_kunjungan || null,
         no_rm,
@@ -222,6 +229,7 @@ router.post("/", async (req, res) => {
       dtSeq++;
 
       await trx("trx_detail_transaksi").insert({
+        kode_cabang: currentTrxCabang,
         kode_detail_transaksi: kode_detail,
         kode_transaksi: kode_trx,
         kode_layanan: item.jenis === "layanan" ? item.kode : null,

@@ -16,6 +16,7 @@ import { formatDateSystem } from "../components/tools/date_tools.js";
 import { Logging } from "../components/tools/servertool.js";
 import { status } from "../components/tools/general.js";
 import { syncRekamMedisPerAntrian } from "./ruangan/rekam_medis_service.js";
+import { syncCompletedItemsToKasirDraft } from "./kasir/kasir_sync_service.js";
 
 const router = express.Router();
 
@@ -120,212 +121,19 @@ const handleHasilTreatmentSave = async (req, res) => {
           });
       }
 
-      // ─── 4. AMBIL SEMUA LAYANAN SELESAI (PENDAFTARAN MAUPUN RUJUKAN) ─────────
-      // Mengambil SEMUA antrean layanan (trx_antrian_layanan) untuk kunjungan ini yang statusnya 'selesai'
-      // tanpa membuang antrean rujukan (tidak ada whereNull kode_antrian_asal) dan harga asli masing-masing
-      const layananPendaftaran = await trx("trx_detail_antrian_layanan as dal")
-        .join("trx_antrian_layanan as al", "dal.kode_antrian_layanan", "al.kode_antrian_layanan")
-        .where("al.kode_kunjungan", kode_kunjungan)
-        .where("al.status", "selesai")
-        .select(
-          "dal.id",
-          "dal.kode_detail_antrian_layanan",
-          "dal.kode_antrian_layanan",
-          "dal.kode_layanan",
-          "dal.nama_layanan",
-          "dal.harga",
-          "dal.jenis_layanan",
-          "dal.kode_promo",
-          "dal.nama_promo",
-          "dal.jenis_diskon",
-          "dal.nilai_diskon"
-        )
-        .orderBy("dal.id", "asc");
+      // ─── 4. SINKRONISASI TERPUSAT KE DRAF TRANSAKSI KASIR ─────────────────────
+      const syncResult = await syncCompletedItemsToKasirDraft(trx, {
+        kodeKunjungan: kode_kunjungan,
+        noRm: no_rm,
+        kodeRekamMedis: resolvedKodeRM,
+        username,
+        tz,
+        extraProdukItems: produkItems,
+      });
 
-      // ─── 5. GABUNGKAN LAYANAN SELESAI + PRODUK DOKTER ────────────────────────
-      const hasItems = layananPendaftaran.length > 0 || produkItems.length > 0;
-
-      if (hasItems) {
-        let existingTrx = await trx("trx_transaksi")
-          .where("kode_kunjungan", kode_kunjungan)
-          .where("status", "draft")
-          .first();
-
-        if (existingTrx) {
-          createdTransaksiKode = existingTrx.kode_transaksi;
-          if (resolvedKodeRM) {
-            await trx("trx_transaksi")
-              .where("kode_transaksi", createdTransaksiKode)
-              .update({
-                kode_rekam_medis: resolvedKodeRM,
-                updated_by: username,
-                updated_at: formatDateSystem(),
-              });
-          }
-        } else {
-          const prefixTrx = `TRX-${todayStr}-`;
-          const lastTrx = await trx("trx_transaksi")
-            .where("kode_transaksi", "like", `${prefixTrx}%`)
-            .orderBy("id", "desc")
-            .first();
-
-          let nextTrxSeq = 1;
-          if (lastTrx && lastTrx.kode_transaksi) {
-            const parts = lastTrx.kode_transaksi.split("-");
-            const num = parseInt(parts[parts.length - 1], 10);
-            if (!isNaN(num)) nextTrxSeq = num + 1;
-          }
-          createdTransaksiKode = `${prefixTrx}${String(nextTrxSeq).padStart(3, "0")}`;
-
-          const kunjunganData = await trx("trx_kunjungan")
-            .where("kode_kunjungan", kode_kunjungan)
-            .select("no_rm")
-            .first();
-          const resolvedNoRm = no_rm || (kunjunganData ? kunjunganData.no_rm : null);
-
-          const newTrx = {
-            kode_transaksi: createdTransaksiKode,
-            kode_kunjungan: kode_kunjungan,
-            no_rm: resolvedNoRm,
-            kode_rekam_medis: resolvedKodeRM || null,
-            tanggal_transaksi: todayYmd,
-            total_harga: 0,
-            total_diskon: 0,
-            total_bayar: 0,
-            metode_bayar: "tunai",
-            status: "draft",
-            tz: tz,
-            created_by: username,
-            created_at: formatDateSystem(),
-            updated_by: username,
-            updated_at: formatDateSystem(),
-          };
-
-          await trx("trx_transaksi").insert(newTrx);
-        }
-
-        // Hapus detail lama untuk sync ulang
-        await trx("trx_detail_transaksi")
-          .where("kode_transaksi", createdTransaksiKode)
-          .delete();
-
-        const prefixDetail = `DT-${todayStr}-`;
-        const lastDetail = await trx("trx_detail_transaksi")
-          .where("kode_detail_transaksi", "like", `${prefixDetail}%`)
-          .orderBy("id", "desc")
-          .first();
-
-        let nextDetailSeq = 1;
-        if (lastDetail && lastDetail.kode_detail_transaksi) {
-          const parts = lastDetail.kode_detail_transaksi.split("-");
-          const num = parseInt(parts[parts.length - 1], 10);
-          if (!isNaN(num)) nextDetailSeq = num + 1;
-        }
-
-        // Insert layanan pendaftaran
-        for (const layanan of layananPendaftaran) {
-          const cKodeDetail = `${prefixDetail}${String(nextDetailSeq).padStart(3, "0")}`;
-          nextDetailSeq++;
-          const isKlaim = (layanan.jenis_layanan || "").toLowerCase() === "klaim_paket";
-          const hargaSatuan = isKlaim ? 0 : parseFloat(layanan.harga || 0);
-
-          await trx("trx_detail_transaksi").insert({
-            kode_detail_transaksi: cKodeDetail,
-            kode_transaksi: createdTransaksiKode,
-            kode_layanan: layanan.kode_layanan,
-            kode_produk: null,
-            qty: 1,
-            harga_satuan: hargaSatuan,
-            subtotal: hargaSatuan,
-            is_from_pendaftaran: 1,
-            tz: tz,
-            created_by: username,
-            created_at: formatDateSystem(),
-            updated_by: username,
-            updated_at: formatDateSystem(),
-          });
-        }
-
-        // Insert produk dokter
-        const kodeProdukList = produkItems.map((i) => i.kode_produk).filter(Boolean);
-        let produkPriceMap = {};
-        if (kodeProdukList.length > 0) {
-          const mstProdukList = await trx("mst_produk")
-            .whereIn("kode_produk", kodeProdukList)
-            .select("kode_produk", "nama", "harga_jual");
-          mstProdukList.forEach((p) => {
-            produkPriceMap[p.kode_produk] = parseFloat(p.harga_jual || 0);
-          });
-        }
-
-        for (const item of produkItems) {
-          const isCustom = item.kode_produk && (String(item.kode_produk).startsWith("CUSTOM-") || String(item.kode_produk).startsWith("CST-"));
-          if (isCustom && item.nama) {
-            const existP = await trx("mst_produk").where("kode_produk", item.kode_produk).first();
-            if (!existP) {
-              const kat = await trx("mst_kategori_produk").where("status", "aktif").first();
-              const defaultKatKode = kat?.kode_kategori_produk || "KATPRD-001";
-
-              await trx("mst_produk").insert({
-                kode_produk: item.kode_produk,
-                kode_kategori_produk: defaultKatKode,
-                nama: item.nama,
-                satuan: item.satuan || "item",
-                harga_beli: 0,
-                harga_jual: parseFloat(item.harga_jual || item.harga_satuan || 0),
-                stok_minimum: 0,
-                stok_tersedia: 999,
-                status: "nonaktif", // Diset nonaktif agar hanya berlaku per transaksi dan tidak mencemari master data produk
-                tz: tz || "Asia/Jakarta",
-                created_by: username,
-                created_at: formatDateSystem(),
-                updated_by: username,
-                updated_at: formatDateSystem(),
-              });
-            }
-            produkPriceMap[item.kode_produk] = parseFloat(item.harga_jual || item.harga_satuan || 0);
-          }
-
-          const cKodeDetail = `${prefixDetail}${String(nextDetailSeq).padStart(3, "0")}`;
-          nextDetailSeq++;
-          const qty = Math.max(1, parseInt(item.qty || 1, 10));
-          const hargaSatuan = produkPriceMap[item.kode_produk] !== undefined
-            ? produkPriceMap[item.kode_produk]
-            : parseFloat(item.harga_jual || item.harga_satuan || 0);
-          const subtotal = qty * hargaSatuan;
-
-          await trx("trx_detail_transaksi").insert({
-            kode_detail_transaksi: cKodeDetail,
-            kode_transaksi: createdTransaksiKode,
-            kode_layanan: null,
-            kode_produk: item.kode_produk,
-            qty: qty,
-            harga_satuan: hargaSatuan,
-            subtotal: subtotal,
-            is_from_pendaftaran: 0,
-            tz: tz,
-            created_by: username,
-            created_at: formatDateSystem(),
-            updated_by: username,
-            updated_at: formatDateSystem(),
-          });
-        }
-
-        // Recalculate total
-        const allDetails = await trx("trx_detail_transaksi")
-          .where("kode_transaksi", createdTransaksiKode)
-          .sum("subtotal as total");
-
-        grandTotal = parseFloat(allDetails[0]?.total || 0);
-
-        await trx("trx_transaksi")
-          .where("kode_transaksi", createdTransaksiKode)
-          .update({
-            total_harga: grandTotal,
-            total_bayar: grandTotal,
-            updated_by: username,
-            updated_at: formatDateSystem(),
-          });
+      if (syncResult) {
+        createdTransaksiKode = syncResult.kode_transaksi;
+        grandTotal = syncResult.total_bayar;
       }
 
 

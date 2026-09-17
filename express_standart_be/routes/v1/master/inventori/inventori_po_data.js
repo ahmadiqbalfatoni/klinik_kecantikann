@@ -3,12 +3,14 @@ import DB from "../../../../core/config/knex.js";
 import { formatDateSystem } from "../../components/tools/date_tools.js";
 import { Logging } from "../../components/tools/servertool.js";
 import { status } from "../../components/tools/general.js";
+import { getBranchScope } from "../../components/tools/branch_scope.js";
 
 const router = express.Router();
 
 router.post("/", async (req, res) => {
   const oPayload = req.body;
   const username = req?.auth?.username || "";
+  const branchCode = getBranchScope(req, oPayload.kode_cabang);
   const keyword = oPayload.keyword || "";
   const filterSupplier = oPayload.kode_supplier || null;
   const filterStatus = oPayload.status || null;
@@ -20,6 +22,11 @@ router.post("/", async (req, res) => {
     const baseQuery = DB("trx_purchase_order as po")
       .leftJoin("mst_supplier as s", "po.kode_supplier", "s.kode_supplier")
       .modify((qb) => {
+        if (branchCode) {
+          qb.where(function () {
+            this.where("po.kode_cabang", branchCode).orWhere("s.kode_cabang", branchCode);
+          });
+        }
         if (keyword) {
           const lower = keyword.toLowerCase();
           qb.where(function () {

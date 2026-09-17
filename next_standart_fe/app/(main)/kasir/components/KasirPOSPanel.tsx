@@ -719,8 +719,8 @@ export const KasirPOSPanel: React.FC<KasirPOSPanelProps> = ({
             {isReadOnly ? (
               selectedPromos.length > 0 ? (
                 <div className="flex flex-column gap-2">
-                  {selectedPromos.map((p) => (
-                    <div key={p.kode_detail_promo || p.kode_promo} className="surface-card p-2.5 border-round-xl border-2 border-teal-500 bg-teal-50/50 shadow-1 flex align-items-center justify-content-between text-xs font-bold text-teal-900">
+                  {selectedPromos.map((p, idx) => (
+                    <div key={p.kode_detail_promo ? `sel_dp_${p.kode_detail_promo}` : `sel_prm_${p.kode_promo}_${p.kode_item || idx}`} className="surface-card p-2.5 border-round-xl border-2 border-teal-500 bg-teal-50/50 shadow-1 flex align-items-center justify-content-between text-xs font-bold text-teal-900">
                       <span className="overflow-hidden text-ellipsis white-space-nowrap">
                         {p.nama_item || p.nama_promo}
                       </span>
@@ -738,7 +738,7 @@ export const KasirPOSPanel: React.FC<KasirPOSPanelProps> = ({
                 {promoList.length === 0 ? (
                   <div className="text-xs text-slate-400 p-2 italic text-center">Tidak ada promo aktif hari ini</div>
                 ) : (
-                  promoList.map((p) => {
+                  promoList.map((p, idx) => {
                     const isChecked = selectedPromos.some((sp) => sp.kode_detail_promo === p.kode_detail_promo);
 
                     // Disable jika kode_item promo tidak ada di cart
@@ -747,7 +747,7 @@ export const KasirPOSPanel: React.FC<KasirPOSPanelProps> = ({
 
                     return (
                       <div
-                        key={p.kode_detail_promo}
+                        key={p.kode_detail_promo ? `opt_dp_${p.kode_detail_promo}` : `opt_prm_${p.kode_promo}_${p.kode_item || idx}`}
                         onClick={() => {
                           if (isPromoDisabled) return;
                           if (isChecked) {

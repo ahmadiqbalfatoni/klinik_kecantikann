@@ -40,15 +40,15 @@ export const PaymentDonutPanel: React.FC<PaymentDonutPanelProps> = ({
   const getMethodStyle = (name: string, idx: number) => {
     const n = name.toUpperCase();
     if (n.includes('QRIS')) {
-      return { color: '#1F6F52', label: 'QRIS' }; // Deep Emerald
+      return { color: '#10b981', label: 'QRIS' }; // Primary Emerald
     }
     if (n.includes('DEBIT') || n.includes('TRANSFER')) {
       return { color: '#B3873F', label: 'Debit' }; // Amber Gold
     }
     if (n.includes('TUNAI') || n.includes('CASH')) {
-      return { color: '#52B788', label: 'Tunai' }; // High-contrast Jade Green (kontras jelas di atas putih)
+      return { color: '#34d399', label: 'Tunai' }; // Light Emerald Green
     }
-    const fallbacks = ['#1F6F52', '#B3873F', '#52B788', '#2D6A4F'];
+    const fallbacks = ['#10b981', '#B3873F', '#34d399', '#059669'];
     return { color: fallbacks[idx % fallbacks.length], label: name };
   };
 
@@ -88,9 +88,9 @@ export const PaymentDonutPanel: React.FC<PaymentDonutPanelProps> = ({
     dominantItem.visualPct -= totalVisual - 100;
   }
 
-  // SVG Donut geometry (diameter ~150-160px, ring stroke 22px)
-  const radius = 58;
-  const strokeWidth = 22;
+  // SVG Donut geometry (diameter ~140px, ring stroke 18px)
+  const radius = 50;
+  const strokeWidth = 18;
   const circumference = 2 * Math.PI * radius;
   let accumulatedPercent = 0;
 
@@ -109,22 +109,22 @@ export const PaymentDonutPanel: React.FC<PaymentDonutPanelProps> = ({
       </div>
 
       {/* 2. DONUT + LEGEND (SEJAJAR VERTIKAL DI TENGAH CARD) */}
-      <div className="flex flex-column sm:flex-row align-items-center justify-content-between my-auto py-3 gap-4">
+      <div className="flex flex-column sm:flex-row align-items-center justify-content-between my-auto py-2 gap-3 sm:gap-4">
         {/* DONUT SVG DENGAN CENTER LABEL & INTERACTIVE HOVER */}
         <div
           className="relative flex-shrink-0 flex justify-content-center align-items-center"
-          style={{ width: '168px', height: '168px' }}
+          style={{ width: '144px', height: '144px' }}
         >
           <svg
-            width="168"
-            height="168"
-            viewBox="0 0 170 170"
+            width="144"
+            height="144"
+            viewBox="0 0 144 144"
             className="transform -rotate-90 overflow-visible"
           >
             {/* Background ring */}
             <circle
-              cx="85"
-              cy="85"
+              cx="72"
+              cy="72"
               r={radius}
               fill="transparent"
               stroke="#F3F4F6"
@@ -145,8 +145,8 @@ export const PaymentDonutPanel: React.FC<PaymentDonutPanelProps> = ({
               return (
                 <circle
                   key={idx}
-                  cx="85"
-                  cy="85"
+                  cx="72"
+                  cy="72"
                   r={radius}
                   fill="transparent"
                   stroke={item.color}
@@ -159,7 +159,7 @@ export const PaymentDonutPanel: React.FC<PaymentDonutPanelProps> = ({
                     transition: 'all 0.25s cubic-bezier(0.4, 0, 0.2, 1)',
                     opacity: hoveredIndex === null || isItemHovered ? 1 : 0.45,
                     transform: isItemHovered ? 'scale(1.04)' : 'scale(1)',
-                    transformOrigin: '85px 85px',
+                    transformOrigin: '72px 72px',
                   }}
                   onMouseEnter={() => setHoveredIndex(idx)}
                   onMouseLeave={() => setHoveredIndex(null)}
@@ -172,8 +172,8 @@ export const PaymentDonutPanel: React.FC<PaymentDonutPanelProps> = ({
           <div
             className="absolute flex flex-column align-items-center justify-content-center pointer-events-none text-center"
             style={{
-              width: '92px',
-              height: '92px',
+              width: '80px',
+              height: '80px',
               borderRadius: '50%',
               zIndex: 2,
             }}
@@ -183,9 +183,10 @@ export const PaymentDonutPanel: React.FC<PaymentDonutPanelProps> = ({
                 <span
                   className="font-bold tabular-nums"
                   style={{
-                    color: '#154F3B',
-                    fontSize: '13px',
+                    color: '#1e293b',
+                    fontSize: '12px',
                     lineHeight: 1.2,
+                    whiteSpace: 'nowrap',
                   }}
                 >
                   {formatRupiah(currentHoveredItem.nominal)}
@@ -194,8 +195,9 @@ export const PaymentDonutPanel: React.FC<PaymentDonutPanelProps> = ({
                   className="font-semibold mt-0.5 truncate max-w-full px-1"
                   style={{
                     color: currentHoveredItem.color,
-                    fontSize: '11px',
+                    fontSize: '10.5px',
                     lineHeight: 1.2,
+                    whiteSpace: 'nowrap',
                   }}
                 >
                   {currentHoveredItem.displayName} ({currentHoveredItem.realPct}%)
@@ -206,9 +208,10 @@ export const PaymentDonutPanel: React.FC<PaymentDonutPanelProps> = ({
                 <span
                   className="font-bold tabular-nums"
                   style={{
-                    color: '#154F3B',
-                    fontSize: '14px',
+                    color: '#1e293b',
+                    fontSize: '13px',
                     lineHeight: 1.2,
+                    whiteSpace: 'nowrap',
                   }}
                 >
                   {formatRupiah(finalTotal)}
@@ -217,7 +220,7 @@ export const PaymentDonutPanel: React.FC<PaymentDonutPanelProps> = ({
                   className="mt-0.5 font-medium"
                   style={{
                     color: '#6F7A74',
-                    fontSize: '10px',
+                    fontSize: '9.5px',
                     lineHeight: 1.2,
                   }}
                 >
@@ -226,47 +229,10 @@ export const PaymentDonutPanel: React.FC<PaymentDonutPanelProps> = ({
               </>
             )}
           </div>
-
-          {/* TOOLTIP FLOATING SAAT HOVER */}
-          {currentHoveredItem && (
-            <div
-              style={{
-                position: 'absolute',
-                bottom: '-6px',
-                left: '50%',
-                transform: 'translateX(-50%)',
-                backgroundColor: '#202A26',
-                color: '#FFFFFF',
-                padding: '4px 10px',
-                borderRadius: '6px',
-                fontSize: '11px',
-                fontWeight: 500,
-                whiteSpace: 'nowrap',
-                boxShadow: '0 4px 12px rgba(0,0,0,0.18)',
-                zIndex: 10,
-                pointerEvents: 'none',
-                display: 'flex',
-                alignItems: 'center',
-                gap: '6px',
-              }}
-            >
-              <span
-                style={{
-                  width: '6px',
-                  height: '6px',
-                  borderRadius: '50%',
-                  backgroundColor: currentHoveredItem.color,
-                }}
-              />
-              <span>
-                {currentHoveredItem.displayName} · {formatRupiah(currentHoveredItem.nominal)} · {currentHoveredItem.realPct}%
-              </span>
-            </div>
-          )}
         </div>
 
         {/* DAFTAR LEGEND DENGAN PROGRESS BAR & SINKRONISASI HOVER */}
-        <div className="flex-1 w-full flex flex-column gap-3">
+        <div className="flex-1 min-w-0 w-full flex flex-column gap-2.5">
           {visualItems.map((item, idx) => {
             const isItemHovered = hoveredIndex === idx;
 
@@ -275,7 +241,7 @@ export const PaymentDonutPanel: React.FC<PaymentDonutPanelProps> = ({
                 key={idx}
                 className="flex flex-column gap-1.5 p-2 rounded-lg cursor-pointer"
                 style={{
-                  backgroundColor: isItemHovered ? '#F9FAFB' : 'transparent',
+                  backgroundColor: isItemHovered ? '#F8FAF9' : 'transparent',
                   borderRadius: '8px',
                   transition: 'background-color 0.2s ease, transform 0.2s ease',
                   transform: isItemHovered ? 'translateX(3px)' : 'none',
@@ -284,46 +250,64 @@ export const PaymentDonutPanel: React.FC<PaymentDonutPanelProps> = ({
                 onMouseLeave={() => setHoveredIndex(null)}
               >
                 <div
-                  className="flex justify-content-between align-items-center"
-                  style={{ fontSize: '13px', lineHeight: 1.3 }}
+                  className="flex justify-content-between align-items-center gap-2"
+                  style={{ minWidth: 0 }}
                 >
-                  <div className="flex align-items-center" style={{ gap: '8px' }}>
+                  <div className="flex align-items-center gap-2 min-w-0 flex-shrink-0">
                     <span
                       style={{
-                        width: '12px',
-                        height: '12px',
+                        width: '10px',
+                        height: '10px',
                         borderRadius: '3px',
                         backgroundColor: item.color,
                         display: 'inline-block',
                         flexShrink: 0,
                       }}
                     />
-                    <span className="font-semibold text-900" style={{ color: '#202A26' }}>
+                    <span
+                      className="font-semibold text-xs truncate"
+                      style={{ color: '#202A26', whiteSpace: 'nowrap' }}
+                    >
                       {item.displayName}
                     </span>
                   </div>
-                  <div className="tabular-nums flex align-items-center" style={{ gap: '6px', color: '#6F7A74' }}>
-                    <strong className="font-bold text-900" style={{ color: '#202A26', fontSize: '13px' }}>
+
+                  <div
+                    className="tabular-nums flex align-items-center gap-1.5 flex-shrink-0"
+                    style={{ whiteSpace: 'nowrap' }}
+                  >
+                    <strong
+                      className="font-bold text-xs"
+                      style={{ color: '#202A26', whiteSpace: 'nowrap' }}
+                    >
                       {formatRupiah(item.nominal)}
                     </strong>
-                    <span style={{ color: '#9CA3AF' }}>·</span>
-                    <span className="font-bold" style={{ color: item.color, fontSize: '13px' }}>
+                    <span style={{ color: '#9CA3AF', fontSize: '11px' }}>·</span>
+                    <span
+                      className="font-bold text-xs"
+                      style={{
+                        color: item.color,
+                        minWidth: '28px',
+                        textAlign: 'right',
+                        whiteSpace: 'nowrap',
+                      }}
+                    >
                       {item.realPct}%
                     </span>
                   </div>
                 </div>
 
-                {/* Progress bar proporsional tebal 7px (minimum 4% agar persentase kecil tetap tampak jelas) */}
+                {/* Progress bar proporsional tebal 6px (minimum 4% agar persentase kecil tetap tampak jelas) */}
                 <div
                   className="w-full overflow-hidden"
-                  style={{ height: '7px', backgroundColor: '#F1F5F9', borderRadius: '4px' }}
+                  style={{ height: '6px', backgroundColor: '#F1F5F9', borderRadius: '3px' }}
                 >
                   <div
                     style={{
                       width: `${Math.max(item.realPct, 4)}%`,
                       backgroundColor: item.color,
                       height: '100%',
-                      borderRadius: '4px',
+                      borderRadius: '3px',
                       transition: 'width 0.4s ease',
                     }}
                   />
@@ -340,11 +324,11 @@ export const PaymentDonutPanel: React.FC<PaymentDonutPanelProps> = ({
         style={{
           borderTop: '1px solid #E5E7EB',
           paddingTop: '16px',
-          marginTop: '20px',
+          marginTop: '16px',
         }}
       >
         <span style={{ color: '#6F7A74' }}>Total transaksi tercatat</span>
-        <span className="font-bold tabular-nums text-sm" style={{ color: '#154F3B' }}>
+        <span className="font-bold tabular-nums text-sm" style={{ color: '#1e293b', whiteSpace: 'nowrap' }}>
           {formatRupiah(finalTotal)}
         </span>
       </div>

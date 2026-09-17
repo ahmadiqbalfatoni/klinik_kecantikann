@@ -4,12 +4,14 @@ import Joi from "joi";
 import DB from "../../../../core/config/knex.js";
 import { Logging, ChangesLog, validatePayload } from "../../components/tools/servertool.js";
 import { formatDateSystem } from "../../components/tools/date_tools.js";
+import { getBranchScope } from "../../components/tools/branch_scope.js";
 
 const router = express.Router();
 
 router.post("/", async (req, res) => {
   const oPayload = req.body;
   const username = req?.auth?.username || "";
+  const branchCode = getBranchScope(req, oPayload.kode_cabang);
 
   try {
     const cValidation = await validatePayload(
@@ -21,10 +23,13 @@ router.post("/", async (req, res) => {
     if (cValidation) return res.status(422).json({ status: status.BAD_REQUEST, message: cValidation, datetime: formatDateSystem() });
 
     await DB.transaction(async (trx) => {
-      const records = await trx("mst_promo").whereIn("kode_promo", oPayload.kode_promo).forUpdate();
+      let qRecords = trx("mst_promo").whereIn("kode_promo", oPayload.kode_promo);
+      if (branchCode) qRecords = qRecords.where("kode_cabang", branchCode);
+      const records = await qRecords.forUpdate();
       if (!records || records.length < 1) { const e = new Error("Data tidak ditemukan"); e.statusCode = 404; throw e; }
 
-      await trx("mst_promo").whereIn("kode_promo", oPayload.kode_promo).del();
+      const validCodes = records.map((r) => r.kode_promo);
+      await trx("mst_promo").whereIn("kode_promo", validCodes).del();
       for (const record of records) {
         await ChangesLog({ description: `Hapus Promo ${record.kode_promo}`, tableName: "mst_promo", referenceCode: record.kode_promo, action: "DELETE", dataBefore: record, dataAfter: null, user: username, tz: oPayload.tz || "UTC" }, trx);
       }

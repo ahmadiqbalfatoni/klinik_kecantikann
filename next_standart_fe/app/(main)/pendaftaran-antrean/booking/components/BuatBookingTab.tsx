@@ -1155,7 +1155,7 @@ export const BuatBookingTab: React.FC<Props> = ({ toast, onSuccessCreated }) => 
   };
 
   return (
-    <div className="p-2 sm:p-3">
+    <div className="p-1 sm:p-2">
 
       {/* Dialog Detail / Bukti Booking Setelah Berhasil */}
       <DialogDetailBooking
@@ -1865,52 +1865,35 @@ export const BuatBookingTab: React.FC<Props> = ({ toast, onSuccessCreated }) => 
                               ) : null}
                             </div>
 
-                            {/* Info Petugas Pendamping — Tinggi Konsisten 24px, 1 Baris Elegan */}
-                            <div className="flex align-items-center mb-1.5" style={{ minHeight: '24px' }}>
+                            {/* Info Petugas Pendamping — Rapi, Elegan & Jelas */}
+                            <div className="flex align-items-center mb-2" style={{ minHeight: '26px' }}>
                               {hasCompanions ? (
-                                <div className="flex align-items-center gap-1.5 min-w-0 w-full">
-                                  <div
-                                    className="companion-tooltip-target inline-flex align-items-center gap-1.5 text-[11px] min-w-0 cursor-pointer overflow-hidden p-1 border-round hover:surface-100 transition-colors"
-                                    data-pr-tooltip={`Pendamping: ${fullCompanionNames}`}
-                                    data-pr-position="top"
-                                    onClick={(e) => {
-                                      e.stopPropagation();
-                                      setActiveCompanionData({
-                                        pj: slot.nama_petugas,
-                                        jam: `${slot.jam_mulai} - ${slot.jam_selesai} WIB`,
-                                        ruangan: slot.nama_ruangan,
-                                        companions: companions,
-                                      });
-                                      companionOpRef.current?.toggle(e);
-                                    }}
+                                <div
+                                  className="companion-tooltip-target inline-flex align-items-center gap-1.5 text-[11px] min-w-0 cursor-pointer overflow-hidden px-2 py-0.5 border-round-md bg-emerald-50 text-emerald-800 border-1 border-emerald-200 hover:bg-emerald-100 transition-colors"
+                                  data-pr-tooltip={`Daftar Pendamping: ${fullCompanionNames}`}
+                                  data-pr-position="top"
+                                  onClick={(e) => {
+                                    e.stopPropagation();
+                                    setActiveCompanionData({
+                                      pj: slot.nama_petugas,
+                                      jam: `${slot.jam_mulai} - ${slot.jam_selesai} WIB`,
+                                      ruangan: slot.nama_ruangan,
+                                      companions: companions,
+                                    });
+                                    companionOpRef.current?.toggle(e);
+                                  }}
+                                >
+                                  <Users size={12} className="text-emerald-700 flex-shrink-0" />
+                                  <span className="font-semibold text-emerald-800 flex-shrink-0">
+                                    +{totalCompanions} pendamping
+                                  </span>
+                                  <span
+                                    className="text-emerald-700 text-overflow-ellipsis overflow-hidden white-space-nowrap min-w-0"
+                                    title={fullCompanionNames}
                                   >
-                                    <span className="font-semibold text-primary-700 bg-primary-50 px-1.5 py-0.5 border-round flex-shrink-0 text-[11px]">
-                                      + {totalCompanions} petugas pendamping
-                                    </span>
-                                    <span
-                                      className="text-500 text-overflow-ellipsis overflow-hidden white-space-nowrap min-w-0 text-[11px]"
-                                      title={fullCompanionNames}
-                                    >
-                                      ({companionSummary})
-                                    </span>
-                                    <button
-                                      type="button"
-                                      className="p-0 border-none bg-transparent text-primary hover:text-primary-700 flex align-items-center flex-shrink-0 cursor-pointer ml-0.5"
-                                      title="Lihat daftar lengkap pendamping"
-                                      onClick={(e) => {
-                                        e.stopPropagation();
-                                        setActiveCompanionData({
-                                          pj: slot.nama_petugas,
-                                          jam: `${slot.jam_mulai} - ${slot.jam_selesai} WIB`,
-                                          ruangan: slot.nama_ruangan,
-                                          companions: companions,
-                                        });
-                                        companionOpRef.current?.toggle(e);
-                                      }}
-                                    >
-                                      <Info size={13} />
-                                    </button>
-                                  </div>
+                                    ({companionSummary})
+                                  </span>
+                                  <Info size={12} className="text-emerald-600 flex-shrink-0 ml-0.5 opacity-80" />
                                 </div>
                               ) : (
                                 <span className="text-[11px] text-400 italic">Tanpa petugas pendamping</span>
@@ -2186,7 +2169,7 @@ export const BuatBookingTab: React.FC<Props> = ({ toast, onSuccessCreated }) => 
 
         {/* KOLOM KANAN: RINCIAN RESERVASI & PEMBAYARAN DP */}
         <div className="col-12 lg:col-4">
-          <div className="card surface-card border-1 surface-border border-round-xl p-4 shadow-1 sticky" style={{ top: '5.5rem' }}>
+          <div className="card surface-card border-1 surface-border border-round-xl p-4 shadow-1 sticky" style={{ top: '0.5rem' }}>
             <div className="flex align-items-center justify-content-between mb-3">
               <div className="flex align-items-center gap-2">
                 <CreditCard size={22} className="text-primary" />

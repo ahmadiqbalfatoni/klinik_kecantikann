@@ -4,12 +4,14 @@ import Joi from "joi";
 import DB from "../../../../core/config/knex.js";
 import { Logging, ChangesLog, validatePayload } from "../../components/tools/servertool.js";
 import { formatDateSystem } from "../../components/tools/date_tools.js";
+import { getBranchScope } from "../../components/tools/branch_scope.js";
 
 const router = express.Router();
 
 router.post("/", async (req, res) => {
   const oPayload = req.body;
   const username = req?.auth?.username || "";
+  const branchCode = getBranchScope(req, oPayload.kode_cabang);
 
   try {
     const cValidation = await validatePayload(
@@ -24,7 +26,9 @@ router.post("/", async (req, res) => {
     if (cValidation) return res.status(422).json({ status: status.BAD_REQUEST, message: cValidation, datetime: formatDateSystem() });
 
     await DB.transaction(async (trx) => {
-      const prev = await trx("mst_ruangan").where("kode_ruangan", oPayload.kode_ruangan).forUpdate().first();
+      let qPrev = trx("mst_ruangan").where("kode_ruangan", oPayload.kode_ruangan);
+      if (branchCode) qPrev = qPrev.andWhere("kode_cabang", branchCode);
+      const prev = await qPrev.forUpdate().first();
       if (!prev) { const e = new Error("Data tidak ditemukan"); e.statusCode = 404; throw e; }
 
       const oData = {

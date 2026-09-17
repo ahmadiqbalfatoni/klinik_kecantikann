@@ -30,10 +30,13 @@ const Page = () => {
     const formik = useFormik<initValue>({
         initialValues: {
             msNamaPerusahaan: '',
+            msIzinOperasional: '',
             msAlamatPerusahaan: '',
             msKotaPerusahaan: '',
             msTeleponPerusahaan: '',
-            msNamaPimpinan: '',
+            msWaKlinik: '',
+            msEmailPerusahaan: '',
+            msWebsitePerusahaan: '',
             msLogoPerusahaan: '',
         },
         validate: (data: initValue) => {
@@ -54,10 +57,13 @@ const Page = () => {
             const res = await postData(apiEndpoint, {
                 kode: [
                     'msNamaPerusahaan',
+                    'msIzinOperasional',
                     'msAlamatPerusahaan',
                     'msKotaPerusahaan',
                     'msTeleponPerusahaan',
-                    'msNamaPimpinan',
+                    'msWaKlinik',
+                    'msEmailPerusahaan',
+                    'msWebsitePerusahaan',
                     'msLogoPerusahaan',
                 ]
             });

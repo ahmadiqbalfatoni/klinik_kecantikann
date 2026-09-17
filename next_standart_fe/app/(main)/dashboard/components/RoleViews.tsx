@@ -815,7 +815,7 @@ export const BeauticianView: React.FC<{ data: any; onRefresh: () => void; loadin
                   <div key={idx} className="col-6 p-1">
                     <div className="border-round-xl overflow-hidden border-1 border-slate-200 relative shadow-sm">
                       <Image
-                        src={f.url_foto ? `http://localhost:8000${f.url_foto}` : '/layout/images/placeholder.png'}
+                        src={f.url_foto ? (f.url_foto.startsWith('http') ? f.url_foto : f.url_foto) : '/layout/images/placeholder.png'}
                         alt={f.nama_pasien || 'Foto Pasien'}
                         width="100%"
                         height="90"

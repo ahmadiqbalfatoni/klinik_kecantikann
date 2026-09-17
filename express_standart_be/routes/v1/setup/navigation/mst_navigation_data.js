@@ -55,10 +55,9 @@ router.post("/", async (req, res) => {
 
 
         const role = String(oPayload?.role || 'master').toLowerCase();
-        const targetRole = role === 'superadmin' || role === 'admin' ? 'master' : role;
 
         const masterRecord = await DB("mst_navigation").where('role', 'master').first();
-        const roleRecord = await DB("mst_navigation").where('role', targetRole).first();
+        const roleRecord = role !== 'master' ? await DB("mst_navigation").where('role', role).first() : null;
 
         const masterMenu = masterRecord?.menu ? JSON.parse(masterRecord.menu) : [];
         const roleMenu = roleRecord?.menu ? JSON.parse(roleRecord.menu) : masterMenu;
@@ -69,7 +68,7 @@ router.post("/", async (req, res) => {
             datetime: formatDateSystem(),
             data: roleMenu,
             master_menu: masterMenu,
-            is_custom: Boolean(roleRecord && targetRole !== 'master')
+            is_custom: Boolean(roleRecord)
         });
     } catch (error) {
         const oResult = {

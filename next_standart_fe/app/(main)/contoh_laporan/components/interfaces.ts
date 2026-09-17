@@ -86,14 +86,19 @@ export interface State {
 
     // Filter MultiSelect & Dropdown yang diminta
     selectedStatus: string[] | null;        // Filter Status Tiket ('menunggu', 'pengecekan', dll)
-    selectedJenisTiket: string[] | null;    // Filter Jenis Tiket ('reguler', 'garansi')
-    selectedPembayaran: string[] | null;    // Filter Status Pembayaran ('belum_bayar', 'sebagian', 'lunas')
+    selectedJenisTiket: string | null;      // Filter Jenis Tiket Dropdown ('Reguler', 'Garansi', 'Premium')
+    selectedPembayaran: string | null;      // Filter Status Pembayaran Dropdown ('Belum Bayar', 'DP', 'Lunas')
 
     // Dropdown / Master data load options (untuk filter dinamis)
     teknisiLoad: boolean;
-    showTeknisi: boolean
-    ketTeknisi?: string
-    selectedTeknisi: string | null
+    showTeknisi: boolean;
+    ketTeknisi?: string;
+    selectedTeknisi: string | null;         // Filter Teknisi Dropdown ('TEK001', dst)
+
+    optionsStatus?: DropdownOption[];
+    optionsJenisTiket?: DropdownOption[];
+    optionsPembayaran?: DropdownOption[];
+    optionsTeknisi?: DropdownOption[];
 
     // Pagination & Sorting State (Lazy Loading)
     first: number;

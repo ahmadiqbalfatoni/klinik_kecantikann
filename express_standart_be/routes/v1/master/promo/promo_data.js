@@ -3,6 +3,7 @@ import DB from "../../../../core/config/knex.js";
 import { formatDateSystem } from "../../components/tools/date_tools.js";
 import { Logging } from "../../components/tools/servertool.js";
 import { status } from "../../components/tools/general.js";
+import { getBranchScope } from "../../components/tools/branch_scope.js";
 
 const router = express.Router();
 
@@ -16,7 +17,9 @@ router.post("/", async (req, res) => {
   const hasPagination = oPayload.page !== undefined || oPayload.perPage !== undefined;
 
   try {
+    const branchCode = getBranchScope(req, oPayload.kode_cabang);
     const baseQuery = DB("mst_promo as p").modify((qb) => {
+      if (branchCode) qb.where("p.kode_cabang", branchCode);
       if (keyword) {
         const lower = keyword.toLowerCase();
         qb.where(function () {

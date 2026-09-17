@@ -59,6 +59,8 @@ const authOptions: NextAuthConfig = {
                 token.name = user.name;
                 token.username = user.username;
                 token.remember_me = user.remember_me;
+                token.kode_cabang = user.kode_cabang || null;
+                token.nama_cabang = user.nama_cabang || null;
 
                 token.access_token = user.access_token;
                 token.refresh_token = user.refresh_token;
@@ -102,6 +104,8 @@ const authOptions: NextAuthConfig = {
             session.user.user_code = token.user_code;
             session.user.name = token.name;
             session.user.username = token.username;
+            session.user.kode_cabang = token.kode_cabang || null;
+            session.user.nama_cabang = token.nama_cabang || null;
             session.remember_me = token.remember_me;
 
             session.access_token = token.access_token;
@@ -123,6 +127,7 @@ const authOptions: NextAuthConfig = {
             }
         }
     },
+    secret: process.env.AUTH_SECRET || process.env.NEXTAUTH_SECRET || "random",
     debug: process.env.NODE_ENV === 'development',
 };
 

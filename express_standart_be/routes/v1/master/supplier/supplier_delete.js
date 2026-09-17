@@ -4,10 +4,12 @@ import Joi from "joi";
 import DB from "../../../../core/config/knex.js";
 import { Logging, ChangesLog, validatePayload } from "../../components/tools/servertool.js";
 import { formatDateSystem } from "../../components/tools/date_tools.js";
+import { getBranchScope } from "../../components/tools/branch_scope.js";
 const router = express.Router();
 router.post("/", async (req, res) => {
   const oPayload = req.body;
   const username = req?.auth?.username || "";
+  const branchCode = getBranchScope(req, oPayload.kode_cabang);
   try {
     const cValidation = await validatePayload(
       { kode_supplier: Joi.array().items(Joi.string()).min(1).required().label("Kode Supplier") },
@@ -16,11 +18,14 @@ router.post("/", async (req, res) => {
     );
     if (cValidation) return res.status(422).json({ status: status.BAD_REQUEST, message: cValidation, datetime: formatDateSystem() });
     await DB.transaction(async (trx) => {
-      const records = await trx("mst_supplier").whereIn("kode_supplier", oPayload.kode_supplier).forUpdate();
+      let qRecords = trx("mst_supplier").whereIn("kode_supplier", oPayload.kode_supplier);
+      if (branchCode) qRecords = qRecords.where("kode_cabang", branchCode);
+      const records = await qRecords.forUpdate();
       if (!records || records.length < 1) { const e = new Error("Data tidak ditemukan"); e.statusCode = 404; throw e; }
-      const used = await trx("mst_produk").whereIn("kode_supplier", oPayload.kode_supplier).first();
+      const validCodes = records.map((r) => r.kode_supplier);
+      const used = await trx("mst_produk").whereIn("kode_supplier", validCodes).first();
       if (used) { const e = new Error("Tidak dapat menghapus, supplier ini masih digunakan oleh data produk"); e.statusCode = 422; throw e; }
-      await trx("mst_supplier").whereIn("kode_supplier", oPayload.kode_supplier).del();
+      await trx("mst_supplier").whereIn("kode_supplier", validCodes).del();
       for (const record of records) {
         await ChangesLog({ description: `Hapus Supplier ${record.kode_supplier}`, tableName: "mst_supplier", referenceCode: record.kode_supplier, action: "DELETE", dataBefore: record, dataAfter: null, user: username, tz: oPayload.tz || "UTC" }, trx);
       }

@@ -1,5 +1,6 @@
 import express from "express";
 import { status } from "../../components/tools/general.js";
+import { getBranchScope } from "../../components/tools/branch_scope.js";
 import Joi from "joi";
 import DB from "../../../../core/config/knex.js";
 import { Logging, ChangesLog, validatePayload } from "../../components/tools/servertool.js";
@@ -8,6 +9,7 @@ const router = express.Router();
 router.post("/", async (req, res) => {
   const oPayload = req.body;
   const username = req?.auth?.username || "";
+  const branchCode = getBranchScope(req, oPayload?.kode_cabang);
   try {
     const cValidation = await validatePayload(
       { nama: Joi.string().max(100).required().label("Nama Kategori"), deskripsi: Joi.string().max(255).allow("", null).label("Deskripsi"), status: Joi.string().valid("aktif", "nonaktif").required().label("Status") },
@@ -21,7 +23,7 @@ router.post("/", async (req, res) => {
       let n = 1;
       if (last?.kode_kategori_produk) { n = (parseInt(last.kode_kategori_produk.replace("KATPRD-", "")) || 0) + 1; }
       kode = `KATPRD-${String(n).padStart(3, "0")}`;
-      const oData = { kode_kategori_produk: kode, nama: oPayload.nama, deskripsi: oPayload.deskripsi || null, status: oPayload.status, tz: oPayload.tz || "UTC", created_by: username, created_at: formatDateSystem(), updated_by: username, updated_at: formatDateSystem() };
+      const oData = { kode_cabang: branchCode, kode_kategori_produk: kode, nama: oPayload.nama, deskripsi: oPayload.deskripsi || null, status: oPayload.status, tz: oPayload.tz || "UTC", created_by: username, created_at: formatDateSystem(), updated_by: username, updated_at: formatDateSystem() };
       await trx("mst_kategori_produk").insert(oData);
       await ChangesLog({ description: `Tambah Kategori Produk ${kode}`, tableName: "mst_kategori_produk", referenceCode: kode, action: "CREATE", dataBefore: null, dataAfter: oData, user: username, tz: oPayload.tz || "UTC" }, trx);
     });

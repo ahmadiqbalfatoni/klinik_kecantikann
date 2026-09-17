@@ -14,12 +14,14 @@ import Joi from "joi";
 import DB from "../../../../core/config/knex.js";
 import { Logging, ChangesLog, validatePayload } from "../../components/tools/servertool.js";
 import { formatDateSystem } from "../../components/tools/date_tools.js";
+import { getBranchScope } from "../../components/tools/branch_scope.js";
 
 const router = express.Router();
 
 router.post("/", async (req, res) => {
   const oPayload = req.body;
   const username = req?.auth?.username || "";
+  const branchCode = getBranchScope(req, oPayload?.kode_cabang);
 
   try {
     const cValidation = await validatePayload(
@@ -44,9 +46,9 @@ router.post("/", async (req, res) => {
     }
 
     await DB.transaction(async (trx) => {
-      const records = await trx("mst_pasien")
-        .whereIn("no_rm", oPayload.no_rm)
-        .forUpdate();
+      let findQuery = trx("mst_pasien").whereIn("no_rm", oPayload.no_rm);
+      if (branchCode) findQuery = findQuery.where("kode_cabang", branchCode);
+      const records = await findQuery.forUpdate();
 
       if (!records || records.length < 1) {
         const error = new Error("Data pasien tidak ditemukan");
@@ -54,8 +56,9 @@ router.post("/", async (req, res) => {
         throw error;
       }
 
+      const validRMs = records.map((r) => r.no_rm);
       await trx("mst_pasien")
-        .whereIn("no_rm", oPayload.no_rm)
+        .whereIn("no_rm", validRMs)
         .del();
 
       for (const record of records) {

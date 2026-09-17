@@ -16,6 +16,7 @@ import { Dialog } from 'primereact/dialog';
 import postData from '@/lib/axios/postData';
 import { showError, showSuccess } from '@/lib/tools/generalTools';
 import { DialogJadwalMingguanRuangan, RoomTabOption } from '../../booking/components/DialogJadwalMingguanRuangan';
+import { DialogSemuaBookingRuangan } from './DialogSemuaBookingRuangan';
 import {
   LayananCard,
   ServiceItem,
@@ -114,6 +115,32 @@ export const FormPendaftaranKunjungan: React.FC<Props> = ({ toast, onSuccess }) 
 
   // 5. Submit State
   const [submitting, setSubmitting] = useState(false);
+  const [showWarningBookingDialog, setShowWarningBookingDialog] = useState(false);
+  const [warningBookingData, setWarningBookingData] = useState<{
+    kode_ruangan?: string;
+    nama_ruangan?: string;
+    estimasi_selesai?: string;
+    batas_aman?: string;
+    jam_booking?: string;
+    nama_pasien_booking?: string;
+    no_rm_booking?: string;
+    kode_booking?: string;
+    total_beban_menit?: number;
+    durasi_walkin_menit?: number;
+    sisa_antrean_menit?: number;
+    buffer_menit?: number;
+    antrean_berjalan_count?: number;
+    total_booking_hari_ini?: number;
+    is_lanjutan_konsultasi?: boolean;
+    durasi_konsultasi_menit?: number;
+    sisa_antrean_konsul_menit?: number;
+    antrean_konsul_count?: number;
+    durasi_tindakan_menit?: number;
+  } | null>(null);
+
+  // 5b. Dialog Semua Jadwal Booking Hari Ini
+  const [selectedRuanganForBookings, setSelectedRuanganForBookings] = useState<RuanganGroup | null>(null);
+  const [dialogAllBookingsVisible, setDialogAllBookingsVisible] = useState(false);
 
   // 6. Dialog Jadwal Mingguan Ruangan
   const [showJadwalRuanganDialog, setShowJadwalRuanganDialog] = useState(false);
@@ -483,7 +510,7 @@ export const FormPendaftaranKunjungan: React.FC<Props> = ({ toast, onSuccess }) 
   };
 
   // SUBMIT PENDAFTARAN KUNJUNGAN (LANGSUNG TERBITKAN ANTREAN TANPA PILIH JAM / DP)
-  const handleSubmitPendaftaran = async () => {
+  const handleSubmitPendaftaran = async (isOverride: boolean = false) => {
     if (!selectedPasien) {
       showError(toast, 'Harap pilih pasien terlebih dahulu di Langkah 1');
       return;
@@ -528,12 +555,22 @@ export const FormPendaftaranKunjungan: React.FC<Props> = ({ toast, onSuccess }) 
         no_rm: selectedPasien.no_rm,
         items: itemsPayload,
         kode_jadwal: selectedSlot.kode_jadwal,
+        override_peringatan_booking: isOverride,
       };
 
       const res = await postData('/master/pendaftaran-pasien-ambil-antrian-layanan', payload);
 
+      // Cek apakah terkena peringatan benturan booking (Two-Step Confirmation)
+      if (res.data?.status === 'WARN_BOOKING_COLLISION' || res.data?.peringatan === true) {
+        setWarningBookingData(res.data?.data_peringatan || {});
+        setShowWarningBookingDialog(true);
+        return;
+      }
+
       if (['00', '0000', 200].includes(res.data?.status) || res.status === 200) {
         showSuccess(toast, res.data?.message || 'Pendaftaran kunjungan & antrean berhasil diterbitkan');
+        setShowWarningBookingDialog(false);
+        setWarningBookingData(null);
         const resultData = res.data?.data;
 
         if (resultData?.antrian_layanan && resultData.antrian_layanan.length > 0) {
@@ -801,6 +838,30 @@ export const FormPendaftaranKunjungan: React.FC<Props> = ({ toast, onSuccess }) 
               Pilih satu atau beberapa layanan/paket dalam ruangan yang sama untuk menentukan slot jadwal petugas.
             </p>
           </div>
+
+          {/* Tombol Lihat Semua Jadwal Booking untuk Ruangan yang Sedang Aktif */}
+          {(() => {
+            const activeRoomIndex = claimablePackages.length > 0 ? activeTabIndex - 1 : activeTabIndex;
+            const currentActiveRuang = activeRoomIndex >= 0 ? ruangans[activeRoomIndex] : null;
+            if (!currentActiveRuang) return null;
+            const bookingCount = currentActiveRuang.daftar_booking_hari_ini?.length || currentActiveRuang.total_booking_hari_ini || 0;
+            if (bookingCount === 0) return null;
+
+            return (
+              <Button
+                type="button"
+                label={`Lihat Semua Jadwal Booking (${bookingCount})`}
+                icon="pi pi-calendar"
+                size="small"
+                severity="warning"
+                className="text-xs p-button-sm border-round-lg font-semibold shadow-1 self-start sm:self-center"
+                onClick={() => {
+                  setSelectedRuanganForBookings(currentActiveRuang);
+                  setDialogAllBookingsVisible(true);
+                }}
+              />
+            );
+          })()}
         </div>
 
         {loadingRuangan ? (
@@ -889,14 +950,23 @@ export const FormPendaftaranKunjungan: React.FC<Props> = ({ toast, onSuccess }) 
                   (item) => !!selectedMap[`${item.jenis}_${item.kode_layanan}`]
                 ).length;
                 const roomTitle = ruang.nama_ruangan || `Ruangan ${ruang.kode_ruangan}`;
-                const countSuffix = ruangSelectedCount > 0 ? ` (${ruangSelectedCount})` : '';
+
+                const tabHeader = (
+                  <div className="flex align-items-center gap-2">
+                    <i className={`pi ${isRuangActive ? 'pi-check-circle text-primary font-bold' : 'pi-building text-600'}`} />
+                    <span className="font-medium">{roomTitle}</span>
+                    {ruangSelectedCount > 0 && (
+                      <Tag value={ruangSelectedCount} severity="info" className="text-xs px-2 py-0" />
+                    )}
+                  </div>
+                );
 
                 panels.push(
                   <TabPanel
                     key={ruang.kode_ruangan}
-                    header={`${roomTitle}${countSuffix}`}
-                    leftIcon={`pi ${isRuangActive ? 'pi-check-circle' : 'pi-building'} mr-2`}
+                    header={tabHeader}
                   >
+
                     {isRuangDisabled && (
                       <div className="flex align-items-center gap-2 p-3 mb-3 bg-orange-50 border-round-lg border-1 border-orange-200">
                         <i className="pi pi-info-circle text-orange-500" />
@@ -1153,10 +1223,10 @@ export const FormPendaftaranKunjungan: React.FC<Props> = ({ toast, onSuccess }) 
 
                         {/* Petugas Pendamping */}
                         {hasCompanions && (
-                          <div className="flex align-items-center gap-1.5 pl-4 mb-2 text-xs text-green-700 font-semibold">
-                            <span
-                              className="cursor-pointer hover:underline flex align-items-center gap-1"
-                              title={fullCompanionNames}
+                          <div className="flex align-items-center mb-2" style={{ minHeight: '26px' }}>
+                            <div
+                              className="inline-flex align-items-center gap-1.5 text-[11px] min-w-0 cursor-pointer overflow-hidden px-2 py-0.5 border-round-md bg-emerald-50 text-emerald-800 border-1 border-emerald-200 hover:bg-emerald-100 transition-colors"
+                              title={`Daftar Pendamping: ${fullCompanionNames}`}
                               onClick={(e) => {
                                 e.stopPropagation();
                                 setActiveCompanionData({
@@ -1168,9 +1238,18 @@ export const FormPendaftaranKunjungan: React.FC<Props> = ({ toast, onSuccess }) 
                                 companionOpRef.current?.toggle(e);
                               }}
                             >
-                              + {totalCompanions} petugas pendamping ({companionSummary})
-                              <i className="pi pi-info-circle text-[11px] text-green-600 opacity-80" />
-                            </span>
+                              <Users size={12} className="text-emerald-700 flex-shrink-0" />
+                              <span className="font-semibold text-emerald-800 flex-shrink-0">
+                                +{totalCompanions} pendamping
+                              </span>
+                              <span
+                                className="text-emerald-700 text-overflow-ellipsis overflow-hidden white-space-nowrap min-w-0"
+                                title={fullCompanionNames}
+                              >
+                                ({companionSummary})
+                              </span>
+                              <Info size={12} className="text-emerald-600 flex-shrink-0 ml-0.5 opacity-80" />
+                            </div>
                           </div>
                         )}
 
@@ -1232,7 +1311,7 @@ export const FormPendaftaranKunjungan: React.FC<Props> = ({ toast, onSuccess }) 
             className="border-round-lg font-bold px-4 py-2.5 shadow-2"
             disabled={!selectedPasien || selectedList.length === 0 || !selectedSlot || submitting}
             loading={submitting}
-            onClick={handleSubmitPendaftaran}
+            onClick={() => handleSubmitPendaftaran(false)}
           />
         </div>
       </div>
@@ -1257,6 +1336,158 @@ export const FormPendaftaranKunjungan: React.FC<Props> = ({ toast, onSuccess }) 
         onHide={() => setShowJadwalRuanganDialog(false)}
         rooms={jadwalDialogRooms}
       />
+
+      {/* DIALOG PERINGATAN BENTURAN JADWAL BOOKING (TWO-STEP CONFIRMATION) */}
+      <Dialog
+        visible={showWarningBookingDialog}
+        onHide={() => setShowWarningBookingDialog(false)}
+        style={{ width: '90vw', maxWidth: '560px' }}
+        modal
+        closable={!submitting}
+        header={
+          <div className="flex align-items-center gap-2">
+            <div
+              className="flex align-items-center justify-content-center bg-amber-100 text-amber-600 border-round-lg p-2 flex-shrink-0"
+              style={{ width: 40, height: 40 }}
+            >
+              <i className="pi pi-exclamation-triangle text-2xl" />
+            </div>
+            <div>
+              <span className="font-bold text-base text-900 block">Peringatan Benturan Jadwal Booking</span>
+              <span className="text-xs text-500">Estimasi antrean berpotensi melewati jadwal reservasi</span>
+            </div>
+          </div>
+        }
+        footer={
+          <div className="flex justify-content-end gap-2 pt-2">
+            <Button
+              label="Batalkan"
+              icon="pi pi-times"
+              severity="secondary"
+              outlined
+              disabled={submitting}
+              onClick={() => setShowWarningBookingDialog(false)}
+            />
+            <Button
+              label="Tetap Lanjutkan (Override)"
+              icon="pi pi-check"
+              severity="warning"
+              loading={submitting}
+              onClick={async () => {
+                await handleSubmitPendaftaran(true);
+              }}
+            />
+          </div>
+        }
+      >
+        {warningBookingData && (
+          <div className="flex flex-column gap-3 py-2">
+            <div className="p-3 bg-amber-50 border-round-xl border-1 border-amber-200">
+              <div className="flex align-items-center justify-content-between">
+                <div>
+                  <div className="text-xs font-semibold text-amber-800 mb-1">Ruangan Tujuan:</div>
+                  <div className="text-base font-bold text-amber-900">{warningBookingData.nama_ruangan}</div>
+                </div>
+                {warningBookingData.total_booking_hari_ini && warningBookingData.total_booking_hari_ini > 1 && (
+                  <Tag
+                    value={`Total ${warningBookingData.total_booking_hari_ini} Booking Hari Ini`}
+                    severity="warning"
+                    className="text-xs font-semibold"
+                  />
+                )}
+              </div>
+            </div>
+
+            <div className="grid">
+              <div className="col-6">
+                <div className="p-3 bg-red-50 border-round-xl border-1 border-red-200 h-full">
+                  <span className="text-xs text-red-700 block mb-1">
+                    <i className="pi pi-calendar-times mr-1" />
+                    Jadwal Pasien Booking:
+                  </span>
+                  <div className="text-xl font-extrabold text-red-700">
+                    Pukul {warningBookingData.jam_booking} WIB
+                  </div>
+                  <div className="text-xs font-semibold text-red-900 mt-1">
+                    {warningBookingData.nama_pasien_booking}
+                  </div>
+                  <div className="text-[11px] text-red-600">
+                    Kode: {warningBookingData.kode_booking}
+                  </div>
+                </div>
+              </div>
+
+              <div className="col-6">
+                <div className="p-3 bg-blue-50 border-round-xl border-1 border-blue-200 h-full">
+                  <span className="text-xs text-blue-700 block mb-1">
+                    <i className="pi pi-clock mr-1" />
+                    Estimasi Selesai Antrean:
+                  </span>
+                  <div className="text-xl font-extrabold text-blue-800">
+                    ± {warningBookingData.estimasi_selesai} WIB
+                  </div>
+                  <div className="text-xs text-blue-700 mt-1">
+                    Batas Aman (+{warningBookingData.buffer_menit}m):
+                  </div>
+                  <div className="text-xs font-bold text-blue-900">
+                    ± {warningBookingData.batas_aman} WIB
+                  </div>
+                </div>
+              </div>
+            </div>
+
+            <div className="p-3 surface-50 border-round-xl border-1 surface-border">
+              <span className="text-xs font-bold text-700 block mb-2">Rincian Beban Antrean:</span>
+              {warningBookingData.is_lanjutan_konsultasi ? (
+                <>
+                  {(warningBookingData.sisa_antrean_konsul_menit || 0) > 0 && (
+                    <div className="flex justify-content-between text-xs text-600 mb-1">
+                      <span>Sisa antrean di Ruang Konsultasi ({warningBookingData.antrean_konsul_count || 0} pasien):</span>
+                      <span className="font-semibold text-900">{warningBookingData.sisa_antrean_konsul_menit} menit</span>
+                    </div>
+                  )}
+                  <div className="flex justify-content-between text-xs text-600 mb-1">
+                    <span>1. Estimasi sesi konsultasi dokter:</span>
+                    <span className="font-semibold text-900">{warningBookingData.durasi_konsultasi_menit || 10} menit</span>
+                  </div>
+                  <div className="flex justify-content-between text-xs text-600 mb-1">
+                    <span>2. Sisa antrean berjalan di {warningBookingData.nama_ruangan} ({warningBookingData.antrean_berjalan_count || 0} pasien):</span>
+                    <span className="font-semibold text-900">{warningBookingData.sisa_antrean_menit || 0} menit</span>
+                  </div>
+                  <div className="flex justify-content-between text-xs text-600 mb-1">
+                    <span>3. Durasi tindakan layanan ({warningBookingData.nama_ruangan}):</span>
+                    <span className="font-semibold text-900">{warningBookingData.durasi_tindakan_menit || warningBookingData.durasi_walkin_menit || 30} menit</span>
+                  </div>
+                </>
+              ) : (
+                <>
+                  <div className="flex justify-content-between text-xs text-600 mb-1">
+                    <span>Sisa antrean berjalan ({warningBookingData.antrean_berjalan_count || 0} pasien):</span>
+                    <span className="font-semibold text-900">{warningBookingData.sisa_antrean_menit || 0} menit</span>
+                  </div>
+                  <div className="flex justify-content-between text-xs text-600 mb-1">
+                    <span>Durasi tindakan layanan pasien baru:</span>
+                    <span className="font-semibold text-900">{warningBookingData.durasi_walkin_menit || 0} menit</span>
+                  </div>
+                </>
+              )}
+              <div className="flex justify-content-between text-xs text-600 mb-1">
+                <span>Buffer proteksi booking:</span>
+                <span className="font-semibold text-900">+{warningBookingData.buffer_menit || 15} menit</span>
+              </div>
+              <div className="border-top-1 surface-border pt-1 mt-1 flex justify-content-between text-xs font-bold text-900">
+                <span>Total estimasi waktu:</span>
+                <span className="text-amber-700">{(warningBookingData.total_beban_menit || 0) + (warningBookingData.buffer_menit || 15)} menit</span>
+              </div>
+            </div>
+
+            <div className="p-3 bg-yellow-50 border-round-xl border-1 border-yellow-300 text-xs text-yellow-900 line-height-3">
+              <i className="pi pi-info-circle mr-1 font-bold text-yellow-700" />
+              <strong>Catatan:</strong> Jika Anda memilih <strong>Tetap Lanjutkan (Override)</strong>, nomor antrean tetap akan diterbitkan dan sistem akan mencatat jejak audit override peringatan booking.
+            </div>
+          </div>
+        )}
+      </Dialog>
 
       {/* OVERLAY PANEL PENDAMPING */}
       <OverlayPanel ref={companionOpRef} className="shadow-4 border-round-xl">
@@ -1285,6 +1516,14 @@ export const FormPendaftaranKunjungan: React.FC<Props> = ({ toast, onSuccess }) 
           </div>
         )}
       </OverlayPanel>
+
+      {/* Dialog Semua Jadwal Booking Hari Ini */}
+      <DialogSemuaBookingRuangan
+        visible={dialogAllBookingsVisible}
+        onHide={() => setDialogAllBookingsVisible(false)}
+        ruangan={selectedRuanganForBookings}
+        todayDateStr={formatDateToYMD(tanggalKunjungan)}
+      />
 
     </div>
   );

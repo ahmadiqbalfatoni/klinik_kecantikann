@@ -21,7 +21,8 @@ router.post("/", async (req, res) => {
       let n = 1;
       if (last?.kode_supplier) { n = (parseInt(last.kode_supplier.replace("SUP-", "")) || 0) + 1; }
       kode = `SUP-${String(n).padStart(3, "0")}`;
-      const oData = { kode_supplier: kode, nama: oPayload.nama, alamat: oPayload.alamat || null, no_hp: oPayload.no_hp || null, email: oPayload.email || null, status: oPayload.status, tz: oPayload.tz || "UTC", created_by: username, created_at: formatDateSystem(), updated_by: username, updated_at: formatDateSystem() };
+      const branchCode = oPayload.kode_cabang || req?.auth?.kode_cabang || "CBG-001";
+      const oData = { kode_cabang: branchCode, kode_supplier: kode, nama: oPayload.nama, alamat: oPayload.alamat || null, no_hp: oPayload.no_hp || null, email: oPayload.email || null, status: oPayload.status, tz: oPayload.tz || "UTC", created_by: username, created_at: formatDateSystem(), updated_by: username, updated_at: formatDateSystem() };
       await trx("mst_supplier").insert(oData);
       await ChangesLog({ description: `Tambah Supplier ${kode}`, tableName: "mst_supplier", referenceCode: kode, action: "CREATE", dataBefore: null, dataAfter: oData, user: username, tz: oPayload.tz || "UTC" }, trx);
     });

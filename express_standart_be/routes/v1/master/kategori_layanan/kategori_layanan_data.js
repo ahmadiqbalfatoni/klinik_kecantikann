@@ -12,6 +12,7 @@ import DB from "../../../../core/config/knex.js";
 import { formatDateSystem } from "../../components/tools/date_tools.js";
 import { Logging } from "../../components/tools/servertool.js";
 import { status } from "../../components/tools/general.js";
+import { getBranchScope } from "../../components/tools/branch_scope.js";
 
 const router = express.Router();
 
@@ -19,6 +20,7 @@ router.post("/", async (req, res) => {
   const { body } = req;
   const oPayload = body;
   const username = req?.auth?.username || "";
+  const branchCode = getBranchScope(req, oPayload?.kode_cabang);
 
   const keyword = oPayload.keyword || "";
   const filterStatus = oPayload.status || null;
@@ -34,6 +36,14 @@ router.post("/", async (req, res) => {
           this.whereRaw("LOWER(k.kode_kategori_layanan) LIKE ?", [`%${lower}%`])
             .orWhereRaw("LOWER(k.nama) LIKE ?", [`%${lower}%`])
             .orWhereRaw("LOWER(k.deskripsi) LIKE ?", [`%${lower}%`]);
+        });
+      }
+      if (branchCode) {
+        qb.where(function () {
+          this.whereNull("k.kode_cabang")
+            .orWhere("k.kode_cabang", "")
+            .orWhere("k.kode_cabang", "GLOBAL")
+            .orWhere("k.kode_cabang", branchCode);
         });
       }
       if (filterStatus) {

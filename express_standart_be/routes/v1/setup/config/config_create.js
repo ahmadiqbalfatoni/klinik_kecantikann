@@ -112,6 +112,18 @@ router.post("/", upload.any(), async (req, res) => {
         const file = files[0];
 
         if (file) {
+            const userRole = (req?.auth?.role || "").toLowerCase();
+            const isSuperAdmin = userRole === "superadmin";
+
+            if (!isSuperAdmin) {
+                if (fs.existsSync(file.path)) fs.unlinkSync(file.path);
+                return res.status(403).json({
+                    status: status.GAGAL,
+                    message: "Akses ditolak: Hanya Superadmin (Kantor Pusat) yang dapat mengubah logo klinik.",
+                    datetime: formatDateSystem(),
+                });
+            }
+
             const uploadDir = path.join(process.cwd(), "public", "uploads", "config", "logo_perusahaan");
             if (!fs.existsSync(uploadDir)) {
                 fs.mkdirSync(uploadDir, { recursive: true });

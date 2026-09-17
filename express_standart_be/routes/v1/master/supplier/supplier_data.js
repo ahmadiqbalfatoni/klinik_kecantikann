@@ -3,6 +3,7 @@ import DB from "../../../../core/config/knex.js";
 import { formatDateSystem } from "../../components/tools/date_tools.js";
 import { Logging } from "../../components/tools/servertool.js";
 import { status } from "../../components/tools/general.js";
+import { getBranchScope } from "../../components/tools/branch_scope.js";
 const router = express.Router();
 router.post("/", async (req, res) => {
   const oPayload = req.body;
@@ -13,7 +14,9 @@ router.post("/", async (req, res) => {
   const perPage = parseInt(oPayload.perPage) || 10;
   const hasPagination = oPayload.page !== undefined || oPayload.perPage !== undefined;
   try {
+    const branchCode = getBranchScope(req, oPayload.kode_cabang);
     const baseQuery = DB("mst_supplier as s").modify((qb) => {
+      if (branchCode) qb.where("s.kode_cabang", branchCode);
       if (keyword) { const lower = keyword.toLowerCase(); qb.where(function () { this.whereRaw("LOWER(s.kode_supplier) LIKE ?", [`%${lower}%`]).orWhereRaw("LOWER(s.nama) LIKE ?", [`%${lower}%`]).orWhereRaw("LOWER(s.email) LIKE ?", [`%${lower}%`]); }); }
       if (filterStatus) qb.where("s.status", filterStatus);
     });

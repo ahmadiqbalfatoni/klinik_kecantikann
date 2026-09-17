@@ -4,12 +4,14 @@ import Joi from "joi";
 import DB from "../../../../core/config/knex.js";
 import { Logging, ChangesLog, validatePayload } from "../../components/tools/servertool.js";
 import { formatDateSystem } from "../../components/tools/date_tools.js";
+import { getBranchScope } from "../../components/tools/branch_scope.js";
 
 const router = express.Router();
 
 router.post("/", async (req, res) => {
   const oPayload = req.body;
   const username = req?.auth?.username || "";
+  const branchCode = getBranchScope(req, oPayload.kode_cabang);
 
   try {
     const cValidation = await validatePayload(
@@ -21,10 +23,13 @@ router.post("/", async (req, res) => {
     if (cValidation) return res.status(422).json({ status: status.BAD_REQUEST, message: cValidation, datetime: formatDateSystem() });
 
     await DB.transaction(async (trx) => {
-      const records = await trx("mst_jadwal_karyawan").whereIn("kode_jadwal", oPayload.kode_jadwal).forUpdate();
+      let qRecords = trx("mst_jadwal_karyawan").whereIn("kode_jadwal", oPayload.kode_jadwal);
+      if (branchCode) qRecords = qRecords.where("kode_cabang", branchCode);
+      const records = await qRecords.forUpdate();
       if (!records || records.length < 1) { const e = new Error("Data tidak ditemukan"); e.statusCode = 404; throw e; }
 
-      await trx("mst_jadwal_karyawan").whereIn("kode_jadwal", oPayload.kode_jadwal).del();
+      const validCodes = records.map((r) => r.kode_jadwal);
+      await trx("mst_jadwal_karyawan").whereIn("kode_jadwal", validCodes).del();
       for (const record of records) {
         await ChangesLog({ description: `Hapus Jadwal Karyawan ${record.kode_jadwal}`, tableName: "mst_jadwal_karyawan", referenceCode: record.kode_jadwal, action: "DELETE", dataBefore: record, dataAfter: null, user: username, tz: oPayload.tz || "UTC" }, trx);
       }

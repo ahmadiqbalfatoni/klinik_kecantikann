@@ -13,17 +13,20 @@ import DB from "../../../../core/config/knex.js";
 import { formatDateSystem } from "../../components/tools/date_tools.js";
 import { Logging } from "../../components/tools/servertool.js";
 import { status } from "../../components/tools/general.js";
+import { getBranchScope } from "../../components/tools/branch_scope.js";
 
 const router = express.Router();
 
 const handleGetOptions = async (req, res) => {
   const oPayload = { ...req.query, ...req.body };
   const username = req?.auth?.username || "";
+  const branchCode = getBranchScope(req, oPayload.kode_cabang);
 
   try {
     // 1. Fetch ALL ruangan aktif from DB
-    const vaRuangan = await DB("mst_ruangan")
-      .where("status", "aktif")
+    const qRuangan = DB("mst_ruangan").where("status", "aktif");
+    if (branchCode) qRuangan.where("kode_cabang", branchCode);
+    const vaRuangan = await qRuangan
       .select("kode_ruangan", "nama_ruangan", "is_konsultasi")
       .orderBy("id", "asc");
 
@@ -34,11 +37,19 @@ const handleGetOptions = async (req, res) => {
     const todayDay = HARI_MAP[new Date(year, month - 1, day).getDay()];
 
     // 3. Ambil jadwal aktif hari ini dari mst_jadwal_karyawan
-    const activeSchedulesToday = await DB("mst_jadwal_karyawan as j")
+    const qSchedules = DB("mst_jadwal_karyawan as j")
       .leftJoin("mst_karyawan as k", "j.no_sip", "k.no_sip")
       .leftJoin("mst_ruangan as r", "j.kode_ruangan", "r.kode_ruangan")
       .where("j.status", "aktif")
-      .where("j.hari", todayDay)
+      .where("j.hari", todayDay);
+
+    if (branchCode) {
+      qSchedules.where(function () {
+        this.where("j.kode_cabang", branchCode).orWhere("k.kode_cabang", branchCode);
+      });
+    }
+
+    const activeSchedulesToday = await qSchedules
       .select(
         "j.id",
         "j.kode_jadwal",
@@ -71,10 +82,14 @@ const handleGetOptions = async (req, res) => {
     const hasPetugasKonsulToday = schedulesKonsul.length > 0;
 
     // 4. Fetch layanan aktif
-    const vaLayanan = await DB("mst_layanan as l")
+    const qLayanan = DB("mst_layanan as l")
       .leftJoin("mst_kategori_layanan as k", "l.kode_kategori_layanan", "k.kode_kategori_layanan")
       .leftJoin("mst_ruangan as r", "l.kode_ruangan", "r.kode_ruangan")
-      .where("l.status", "aktif")
+      .where("l.status", "aktif");
+
+    if (branchCode) qLayanan.where("l.kode_cabang", branchCode);
+
+    const vaLayanan = await qLayanan
       .select(
         "l.kode_layanan",
         "l.kode_kategori_layanan",
@@ -102,11 +117,177 @@ const handleGetOptions = async (req, res) => {
       });
 
     // 5. Fetch paket layanan aktif
-    const vaPaket = await DB("mst_paket_layanan as p")
+    const qPaket = DB("mst_paket_layanan as p")
       .leftJoin("mst_ruangan as r", "p.kode_ruangan", "r.kode_ruangan")
-      .where("p.status", "aktif")
+      .where("p.status", "aktif");
+
+    if (branchCode) qPaket.where("p.kode_cabang", branchCode);
+
+    const vaPaket = await qPaket
       .select("p.kode_paket_layanan", "p.nama", "p.harga_paket", "p.masa_berlaku_hari", "p.tanggal_mulai", "p.tanggal_selesai", "p.tipe", "p.kode_ruangan", "r.nama_ruangan as nama_ruangan", "r.is_konsultasi as is_konsultasi")
       .orderBy("p.id", "asc");
+
+    // 5b. Fetch antrean aktif hari ini per ruangan
+    const qQueues = DB("trx_antrian_layanan")
+      .where("created_at", ">=", `${todayStr} 00:00:00`)
+      .whereIn("status", ["dipanggil", "menunggu"]);
+
+    if (branchCode) qQueues.where("kode_cabang", branchCode);
+
+    const activeQueuesToday = await qQueues
+      .select("kode_ruangan")
+      .count("id as total")
+      .groupBy("kode_ruangan");
+
+    const activeQueuesMap = new Map();
+    activeQueuesToday.forEach((q) => {
+      activeQueuesMap.set(q.kode_ruangan, parseInt(q.total || 0, 10));
+    });
+
+    // 5c. Fetch booking terkonfirmasi hari ini per ruangan
+    const nowTime = new Date();
+    const currentTimeStr = nowTime.toTimeString().slice(0, 8);
+    const qBookings = DB("trx_booking as b")
+      .leftJoin("mst_pasien as p", "b.no_rm", "p.no_rm")
+      .leftJoin("mst_jadwal_karyawan as j", "b.kode_jadwal", "j.kode_jadwal")
+      .leftJoin("mst_karyawan as k", "j.no_sip", "k.no_sip")
+      .where("b.tanggal_booking", todayStr)
+      .where("b.status", "dikonfirmasi");
+
+    if (branchCode) qBookings.where("b.kode_cabang", branchCode);
+
+    const confirmedBookingsToday = await qBookings
+      .select(
+        "b.kode_booking",
+        "b.kode_ruangan as b_kode_ruangan",
+        "j.kode_ruangan as j_kode_ruangan",
+        "b.jam_booking",
+        "b.jenis_layanan",
+        "b.kode_layanan",
+        "p.nama as nama_pasien",
+        "b.no_rm",
+        "k.nama as nama_petugas",
+        "k.jabatan as jabatan_petugas",
+        "j.kode_jadwal",
+        "j.jam_mulai",
+        "j.jam_selesai",
+        "j.no_sip",
+        "j.is_penanggung_jawab"
+      )
+      .orderBy("b.jam_booking", "asc");
+
+    // Ambil detail item booking untuk mendapatkan durasi dan nama layanan
+    const bookingCodes = confirmedBookingsToday.map((b) => b.kode_booking);
+    const bookingDetailsMap = new Map();
+    if (bookingCodes.length > 0) {
+      const details = await DB("trx_detail_booking")
+        .whereIn("kode_booking", bookingCodes)
+        .select("kode_booking", "nama_layanan", "durasi_menit");
+
+      details.forEach((d) => {
+        if (!bookingDetailsMap.has(d.kode_booking)) {
+          bookingDetailsMap.set(d.kode_booking, {
+            total_durasi: 0,
+            items: [],
+          });
+        }
+        const bDet = bookingDetailsMap.get(d.kode_booking);
+        bDet.total_durasi += parseInt(d.durasi_menit || 30, 10);
+        if (d.nama_layanan && !bDet.items.includes(d.nama_layanan)) {
+          bDet.items.push(d.nama_layanan);
+        }
+      });
+    }
+
+    const roomBookingsMap = new Map();
+    confirmedBookingsToday.forEach((b) => {
+      const roomCode = b.b_kode_ruangan || b.j_kode_ruangan;
+      if (!roomCode) return;
+      if (!roomBookingsMap.has(roomCode)) {
+        roomBookingsMap.set(roomCode, {
+          total: 0,
+          nearestUpcoming: null,
+          allBookings: [],
+        });
+      }
+      const entry = roomBookingsMap.get(roomCode);
+      entry.total += 1;
+
+      const jamStr = String(b.jam_booking || "").slice(0, 8);
+      const bDet = bookingDetailsMap.get(b.kode_booking);
+      let durasiMenit = 30;
+      let layananSummary = "-";
+
+      if (bDet && bDet.items.length > 0) {
+        durasiMenit = bDet.total_durasi;
+        layananSummary = bDet.items.join(", ");
+      } else {
+        const foundL = vaLayanan.find((l) => l.kode_layanan === b.kode_layanan);
+        if (foundL) {
+          durasiMenit = parseInt(foundL.durasi_menit || 30, 10);
+          layananSummary = foundL.nama || "-";
+        } else {
+          const foundP = vaPaket.find((p) => p.kode_paket_layanan === b.kode_layanan);
+          if (foundP) {
+            durasiMenit = 60;
+            layananSummary = foundP.nama || "-";
+          }
+        }
+      }
+
+      // Ambil petugas pendamping (is_penanggung_jawab = 0) pada sesi dan ruangan yang sama
+      const bMulai = b.jam_mulai ? String(b.jam_mulai).slice(0, 5) : null;
+      const bSelesai = b.jam_selesai ? String(b.jam_selesai).slice(0, 5) : null;
+      const bJamStr = jamStr.slice(0, 5);
+      const roomSchedules = roomSchedulesMap.get(roomCode) || [];
+
+      const companions = roomSchedules
+        .filter((s) => {
+          if (s.kode_jadwal && b.kode_jadwal && s.kode_jadwal === b.kode_jadwal) return false;
+          if (s.no_sip && b.no_sip && s.no_sip === b.no_sip) return false;
+          const sMulai = s.jam_mulai ? String(s.jam_mulai).slice(0, 5) : "00:00";
+          const sSelesai = s.jam_selesai ? String(s.jam_selesai).slice(0, 5) : "23:59";
+
+          if (bMulai && bSelesai) {
+            return sMulai === bMulai && sSelesai === bSelesai;
+          }
+          return bJamStr >= sMulai && bJamStr <= sSelesai;
+        })
+        .map((s) => ({
+          kode_jadwal: s.kode_jadwal,
+          no_sip: s.no_sip,
+          nama_petugas: s.nama_petugas || "Petugas Medis",
+          jabatan_petugas: s.jabatan_petugas || "Terapis / Petugas",
+        }));
+
+      const bookingItem = {
+        kode_booking: b.kode_booking,
+        jam_booking: jamStr.slice(0, 5),
+        jam_booking_full: jamStr,
+        nama_pasien: b.nama_pasien || b.no_rm,
+        no_rm: b.no_rm,
+        nama_petugas: b.nama_petugas || "-",
+        jabatan_petugas: b.jabatan_petugas || "",
+        jam_mulai: bMulai,
+        jam_selesai: bSelesai,
+        durasi_menit: durasiMenit,
+        layanan_summary: layananSummary,
+        is_upcoming: jamStr >= currentTimeStr,
+        petugas_pendamping: companions,
+        daftar_petugas_pendamping: companions,
+        jumlah_pendamping: companions.length,
+      };
+
+      entry.allBookings.push(bookingItem);
+
+      if (jamStr >= currentTimeStr && !entry.nearestUpcoming) {
+        entry.nearestUpcoming = {
+          jam_booking: jamStr.slice(0, 5),
+          nama_pasien: b.nama_pasien || b.no_rm,
+          kode_booking: b.kode_booking,
+        };
+      }
+    });
 
     // Map layanan & paket grouped by ruangan (initialized with ALL DB rooms)
     const ruanganMap = new Map();
@@ -114,6 +295,8 @@ const handleGetOptions = async (req, res) => {
       const roomSchedules = roomSchedulesMap.get(rng.kode_ruangan) || [];
       const hasPetugas = roomSchedules.length > 0;
       const pjStaff = roomSchedules.find((s) => s.is_penanggung_jawab === 1) || roomSchedules[0];
+      const bookingInfo = roomBookingsMap.get(rng.kode_ruangan);
+      const antreanCount = activeQueuesMap.get(rng.kode_ruangan) || 0;
 
       ruanganMap.set(rng.kode_ruangan, {
         kode_ruangan: rng.kode_ruangan,
@@ -132,17 +315,26 @@ const handleGetOptions = async (req, res) => {
             }
           : null,
         petugas_jaga_names: roomSchedules.map((s) => s.nama_petugas).filter(Boolean),
+        antrean_aktif_count: antreanCount,
+        jam_booking_terdekat: bookingInfo?.nearestUpcoming?.jam_booking || null,
+        nama_pasien_booking_terdekat: bookingInfo?.nearestUpcoming?.nama_pasien || null,
+        total_booking_hari_ini: bookingInfo?.total || 0,
+        daftar_booking_hari_ini: bookingInfo?.allBookings || [],
         items: [],
       });
     });
 
     // Fetch active promos for today
-    const activePromos = await DB("mst_promo as p")
+    const qPromos = DB("mst_promo as p")
       .join("mst_detail_promo as dp", "p.kode_promo", "dp.kode_promo")
       .where("p.status", "aktif")
       .where("dp.status", "aktif")
       .whereRaw("DATE(p.tanggal_mulai) <= ?", [todayStr])
-      .whereRaw("DATE(p.tanggal_selesai) >= ?", [todayStr])
+      .whereRaw("DATE(p.tanggal_selesai) >= ?", [todayStr]);
+
+    if (branchCode) qPromos.where("p.kode_cabang", branchCode);
+
+    const activePromos = await qPromos
       .select(
         "p.kode_promo",
         "p.nama as nama_promo",
@@ -268,6 +460,7 @@ const handleGetOptions = async (req, res) => {
       const itemData = applyPromo(rawItem);
 
       if (!rngObj) {
+        const bookingInfo = roomBookingsMap.get(kodeRuang);
         rngObj = {
           kode_ruangan: kodeRuang,
           nama_ruangan: lay.nama_ruangan || "Ruangan Lainnya",
@@ -277,6 +470,11 @@ const handleGetOptions = async (req, res) => {
           petugas_jaga_count: targetSchedules.length,
           petugas_pj: null,
           petugas_jaga_names: [],
+          antrean_aktif_count: activeQueuesMap.get(kodeRuang) || 0,
+          jam_booking_terdekat: bookingInfo?.nearestUpcoming?.jam_booking || null,
+          nama_pasien_booking_terdekat: bookingInfo?.nearestUpcoming?.nama_pasien || null,
+          total_booking_hari_ini: bookingInfo?.total || 0,
+          daftar_booking_hari_ini: bookingInfo?.allBookings || [],
           items: [],
         };
         ruanganMap.set(kodeRuang, rngObj);
@@ -339,6 +537,7 @@ const handleGetOptions = async (req, res) => {
       const kodeRuang = pkt.kode_ruangan || "LAINNYA";
       let rngObj = ruanganMap.get(kodeRuang);
       if (!rngObj) {
+        const bookingInfo = roomBookingsMap.get(kodeRuang);
         rngObj = {
           kode_ruangan: kodeRuang,
           nama_ruangan: pkt.nama_ruangan || "Ruangan Lainnya",
@@ -348,6 +547,11 @@ const handleGetOptions = async (req, res) => {
           petugas_jaga_count: targetSchedules.length,
           petugas_pj: null,
           petugas_jaga_names: [],
+          antrean_aktif_count: activeQueuesMap.get(kodeRuang) || 0,
+          jam_booking_terdekat: bookingInfo?.nearestUpcoming?.jam_booking || null,
+          nama_pasien_booking_terdekat: bookingInfo?.nearestUpcoming?.nama_pasien || null,
+          total_booking_hari_ini: bookingInfo?.total || 0,
+          daftar_booking_hari_ini: bookingInfo?.allBookings || [],
           items: [],
         };
         ruanganMap.set(kodeRuang, rngObj);

@@ -25,6 +25,7 @@ import {
   validatePayload,
 } from "../../components/tools/servertool.js";
 import { formatDateSystem } from "../../components/tools/date_tools.js";
+import { getBranchScope } from "../../components/tools/branch_scope.js";
 
 const router = express.Router();
 
@@ -32,6 +33,7 @@ router.post("/", async (req, res) => {
   const { body } = req;
   const oPayload = body;
   const username = req?.auth?.username || "";
+  const branchCode = getBranchScope(req, oPayload?.kode_cabang);
 
   try {
     if (!oPayload || Object.keys(oPayload).length < 1) {
@@ -70,8 +72,10 @@ router.post("/", async (req, res) => {
     let recordsBeforeDelete = [];
 
     await DB.transaction(async (trx) => {
-      recordsBeforeDelete = await trx("trx_antrian_awal")
-        .whereIn("kode_antrian_awal", oPayload.kode_antrian)
+      let qRecords = trx("trx_antrian_awal")
+        .whereIn("kode_antrian_awal", oPayload.kode_antrian);
+      if (branchCode) qRecords = qRecords.where("kode_cabang", branchCode);
+      recordsBeforeDelete = await qRecords
         .forUpdate();
 
       if (!recordsBeforeDelete || recordsBeforeDelete.length < 1) {
@@ -93,8 +97,9 @@ router.post("/", async (req, res) => {
         throw error;
       }
 
+      const validCodes = recordsBeforeDelete.map((r) => r.kode_antrian_awal);
       await trx("trx_antrian_awal")
-        .whereIn("kode_antrian_awal", oPayload.kode_antrian)
+        .whereIn("kode_antrian_awal", validCodes)
         .del();
 
       for (const record of recordsBeforeDelete) {

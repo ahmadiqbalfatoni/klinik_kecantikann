@@ -4,12 +4,14 @@ import Joi from "joi";
 import DB from "../../../../core/config/knex.js";
 import { Logging, ChangesLog, validatePayload } from "../../components/tools/servertool.js";
 import { formatDateSystem } from "../../components/tools/date_tools.js";
+import { getBranchScope } from "../../components/tools/branch_scope.js";
 
 const router = express.Router();
 
 router.post("/", async (req, res) => {
   const oPayload = req.body;
   const username = req?.auth?.username || "";
+  const branchCode = getBranchScope(req, oPayload.kode_cabang);
 
   try {
     const cValidation = await validatePayload(
@@ -32,7 +34,9 @@ router.post("/", async (req, res) => {
     const isPJ = oPayload.is_penanggung_jawab === true || oPayload.is_penanggung_jawab === 1 || oPayload.is_penanggung_jawab === "1" || oPayload.is_penanggung_jawab === "true";
 
     await DB.transaction(async (trx) => {
-      const prev = await trx("mst_jadwal_karyawan").where("kode_jadwal", oPayload.kode_jadwal).forUpdate().first();
+      let prevQuery = trx("mst_jadwal_karyawan").where("kode_jadwal", oPayload.kode_jadwal);
+      if (branchCode) prevQuery = prevQuery.andWhere("kode_cabang", branchCode);
+      const prev = await prevQuery.forUpdate().first();
       if (!prev) { const e = new Error("Data tidak ditemukan"); e.statusCode = 404; throw e; }
 
       const targetRuangan = oPayload.kode_ruangan !== undefined ? oPayload.kode_ruangan : prev.kode_ruangan;
@@ -43,15 +47,16 @@ router.post("/", async (req, res) => {
 
       if (isPJ && targetRuangan && targetHari) {
         // Unset PJ HANYA berlaku untuk baris lain dalam SESI YANG SAMA (jam_mulai & jam_selesai sama persis)
-        await trx("mst_jadwal_karyawan")
+        let unsetQuery = trx("mst_jadwal_karyawan")
           .where({
             kode_ruangan: targetRuangan,
             hari: targetHari
           })
           .whereRaw("LEFT(jam_mulai, 5) = ?", [targetJamMulai])
           .whereRaw("LEFT(jam_selesai, 5) = ?", [targetJamSelesai])
-          .whereNot("kode_jadwal", oPayload.kode_jadwal)
-          .update({
+          .whereNot("kode_jadwal", oPayload.kode_jadwal);
+        if (branchCode) unsetQuery = unsetQuery.andWhere("kode_cabang", branchCode);
+        await unsetQuery.update({
             is_penanggung_jawab: 0,
             kuota: effectiveKuota,
             updated_by: username,
@@ -59,7 +64,7 @@ router.post("/", async (req, res) => {
           });
       } else if (!isPJ && targetRuangan && targetHari) {
         // Cari PJ pada SESI YANG SAMA untuk mewarisi kuota
-        const pjRow = await trx("mst_jadwal_karyawan")
+        let pjQuery = trx("mst_jadwal_karyawan")
           .where({
             kode_ruangan: targetRuangan,
             hari: targetHari,
@@ -67,8 +72,9 @@ router.post("/", async (req, res) => {
           })
           .whereRaw("LEFT(jam_mulai, 5) = ?", [targetJamMulai])
           .whereRaw("LEFT(jam_selesai, 5) = ?", [targetJamSelesai])
-          .whereNot("kode_jadwal", oPayload.kode_jadwal)
-          .first();
+          .whereNot("kode_jadwal", oPayload.kode_jadwal);
+        if (branchCode) pjQuery = pjQuery.andWhere("kode_cabang", branchCode);
+        const pjRow = await pjQuery.first();
         if (pjRow && pjRow.kuota !== undefined) {
           effectiveKuota = pjRow.kuota;
         }
@@ -76,7 +82,7 @@ router.post("/", async (req, res) => {
 
       // Cek apakah ada jadwal lain yang sama persis (ruangan, hari, no_sip, jam_mulai, jam_selesai)
       const targetNoSip = oPayload.no_sip !== undefined ? oPayload.no_sip : prev.no_sip;
-      const existing = await trx("mst_jadwal_karyawan")
+      let existingQuery = trx("mst_jadwal_karyawan")
         .where({
           kode_ruangan: targetRuangan,
           hari: targetHari,
@@ -84,8 +90,9 @@ router.post("/", async (req, res) => {
         })
         .whereRaw("LEFT(jam_mulai, 5) = ?", [targetJamMulai])
         .whereRaw("LEFT(jam_selesai, 5) = ?", [targetJamSelesai])
-        .whereNot("kode_jadwal", oPayload.kode_jadwal)
-        .first();
+        .whereNot("kode_jadwal", oPayload.kode_jadwal);
+      if (branchCode) existingQuery = existingQuery.andWhere("kode_cabang", branchCode);
+      const existing = await existingQuery.first();
 
       if (existing) {
         const err = new Error("Karyawan ini sudah memiliki jadwal pada ruangan, hari, dan jam yang sama.");

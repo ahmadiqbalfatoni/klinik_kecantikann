@@ -87,7 +87,7 @@ export const TopTreatmentsPanel: React.FC<TopTreatmentsPanelProps> = ({ treatmen
                     <div
                       style={{
                         width: `${widthPct}%`,
-                        backgroundColor: isFirst ? '#1F6F52' : '#AFD8C4',
+                        backgroundColor: isFirst ? 'var(--primary-color, #10b981)' : 'var(--primary-200, #98e1c9)',
                         height: '100%',
                         borderRadius: '3px',
                         transition: 'width 0.5s ease',
