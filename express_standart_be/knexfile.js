@@ -56,6 +56,8 @@ const getConnectionConfig = ({ dbms, host, port, username, password, database })
 };
 
 
+const dbUrl = process.env.DATABASE_URL || process.env.MYSQL_URL || process.env.MYSQL_PRIVATE_URL;
+
 let resolvedConnection;
 if (dbUrl) {
   try {
